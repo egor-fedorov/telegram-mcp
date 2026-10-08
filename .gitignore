@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+*.session*
+.env*
+!.env.example
+config.toml
+.DS_Store

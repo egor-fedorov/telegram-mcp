@@ -1,0 +1,15 @@
+# Copy to the path shown by `telegram-mcp login`, or pass --config explicitly.
+# Credentials can instead be supplied through TELEGRAM_API_ID / TELEGRAM_API_HASH.
+# api_id = 12345
+# api_hash = "your-local-value"
+# session_path = "/absolute/private/path/account.session"
+
+# Default: no message access. Folder names are discovered via list_folders or configure.
+allowed_folder_ids = []
+allowed_chat_ids = []
+allow_all_chats = false
+rpc_timeout_seconds = 20
+max_dialogs = 10000
+rpc_pages_per_call = 12
+cursor_ttl_seconds = 900
+max_cursors = 128

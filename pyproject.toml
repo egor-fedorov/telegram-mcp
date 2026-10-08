@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "telegram-context-mcp"
+version = "0.1.0"
+description = "Local, read-only Telegram MCP server with folder-aware retrieval"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "mcp>=2.2,<3",
+  "pydantic>=2.10,<3",
+  "telethon>=1.42,<2",
+  "platformdirs>=4,<5",
+]
+
+[project.scripts]
+telegram-mcp = "telegram_mcp.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-asyncio>=0.25", "ruff", "ty"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/telegram_mcp"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
+
+[tool.ty.environment]
+python-version = "3.12"
