@@ -1,5 +1,8 @@
 # Telegram Context MCP
 
+[![CI](https://github.com/egor-fedorov/telegram-mcp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/egor-fedorov/telegram-mcp/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 A local MCP server for reading Telegram through your user account.
 Python 3.12, Telethon, the official MCP Python SDK 2, Pydantic, uv.
 
@@ -278,6 +281,22 @@ requests to Telegram. They cover public-channel discovery, folders, pagination, 
 context, access, Telethon structures, configuration, and the actual MCP protocol,
 including a separate STDIO process.
 Both modern MCP mode and compatibility with the initialize handshake are tested.
+
+GitHub Actions runs the same checks on pull requests and pushes to `main`, using
+Python from `.python-version` and dependencies from `uv.lock`. CI needs no Telegram
+account or repository secrets.
+
+## Contributing
+
+Changes go through focused pull requests to `main`. See [CONTRIBUTING.md](CONTRIBUTING.md)
+for setup, branch naming, checks, and the merge process. Use
+[Issues](https://github.com/egor-fedorov/telegram-mcp/issues) for bugs and feature proposals,
+and [SECURITY.md](SECURITY.md) for private vulnerability reporting.
+
+## License
+
+The code is available under the [MIT License](LICENSE). This license does not grant
+rights to Telegram content retrieved through the server.
 
 ## First-version boundaries
 

@@ -180,14 +180,18 @@ for basic retrieval.
 ## Working process
 
 1. Select a bounded work item from the next milestone and clarify its acceptance criteria.
-2. Implement it on a separate `codex/...` branch, preserving existing contracts or
-   explicitly documenting any required change.
-3. Add checks for new behavior, run `make check` for code changes, and review the result.
+2. Implement it on a separate Conventional Branch such as `feature/topic-navigation`
+   or `bugfix/cursor-recovery`, preserving existing contracts or explicitly documenting
+   any required change. Use `chore/` for documentation and maintenance work.
+3. Add checks for new behavior, run `make check`, and open a focused pull request to
+   `main` with a Conventional Commits title. Review the diff and GitHub CI results.
 4. Commit agreed changes and update completed roadmap items with the implementation.
-   Mark a milestone done only when its acceptance criteria are met.
+   Squash-merge after the `checks` job passes, then create the next branch from updated
+   `main`. Mark a milestone done only when its acceptance criteria are met.
 5. Before starting the next milestone, add its detailed description here. If task
    tracking grows, move individual work items to Issues and retain goals, ordering,
    and issue links in this roadmap.
 
 Track `ROADMAP.md` in Git. Do not include credentials, private conversations, or
 transient execution logs in this document.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the complete contribution workflow.

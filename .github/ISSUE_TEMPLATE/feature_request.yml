@@ -1,0 +1,27 @@
+name: Feature request
+description: Propose a focused improvement and explain the use case.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check ROADMAP.md for the current direction. Describe the need using synthetic
+        examples; do not include credentials, session files, or private Telegram content.
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Use case
+      description: What task is difficult or impossible today, and who needs the improvement?
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Proposed behavior and scope
+      description: Describe the smallest useful change, what success looks like, and anything that should remain outside scope.
+    validations:
+      required: true
+  - type: input
+    id: roadmap
+    attributes:
+      label: Related roadmap item or issue
+      description: Link an existing issue or name a milestone, or state that this is a new direction.
