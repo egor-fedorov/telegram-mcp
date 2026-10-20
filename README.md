@@ -1,28 +1,30 @@
 # Telegram Context MCP
 
-Локальный MCP-сервер для чтения Telegram от имени вашего пользовательского аккаунта.
-Python 3.12, Telethon, официальный MCP Python SDK 2, Pydantic, uv.
+A local MCP server for reading Telegram through your user account.
+Python 3.12, Telethon, the official MCP Python SDK 2, Pydantic, uv.
 
-## Инструменты
+See [ROADMAP.md](ROADMAP.md) for the development plan and the next stage.
 
-| Инструмент | Назначение |
+## Tools
+
+| Tool | Purpose |
 | --- | --- |
-| `get_status` | Авторизация, соединение, разрешённые источники |
-| `list_folders` | Папки, ID, порядок, правила включения/исключения |
-| `list_chats` | Чаты; фильтрация по названию, типу, папкам |
-| `get_chat` | Описание и связанная группа обсуждений |
-| `search_messages` | Поиск по словам, чатам, папкам, датам, автору, типу содержимого |
-| `get_history` | История за период, в прямом или обратном порядке |
-| `get_messages` | Сообщения по ссылкам/ID с авторами, датами и метаданными вложений |
-| `get_context` | Сообщения до/после и цепочка родительских ответов |
-| `get_thread` | Комментарии к посту канала или ответы в ветке группы |
+| `get_status` | Authorization, connection, permitted sources |
+| `list_folders` | Folders, IDs, order, inclusion/exclusion rules |
+| `list_chats` | Chats filtered by name, type, or folders |
+| `get_chat` | Description and linked discussion group |
+| `search_messages` | Keyword search by chats, folders, dates, sender, or content type |
+| `get_history` | History over a time range, in chronological or reverse order |
+| `get_messages` | Messages by links/IDs with authors, dates, and attachment metadata |
+| `get_context` | Messages before/after an anchor and a chain of parent replies |
+| `get_thread` | Comments on a channel post or replies in a group thread |
 
-Сводки и ответы составляет Codex на основе исходных сообщений.
-Текст сообщений рассматривается как данные, а не как инструкции агенту.
+Codex produces summaries and answers from the source messages.
+Message text is treated as data, not as instructions to the agent.
 
-## Установка и вход
+## Installation and login
 
-Из каталога проекта:
+From the project directory:
 
 ```sh
 uv sync --locked
@@ -31,52 +33,53 @@ uv run --locked telegram-mcp configure
 uv run --locked telegram-mcp status
 ```
 
-1. Получите `api_id` и `api_hash` в разделе API development tools на
+1. Obtain `api_id` and `api_hash` from the API development tools section at
    [my.telegram.org](https://my.telegram.org).
-2. `login` запросит их локально, затем номер, код входа и пароль 2FA, если он включён.
-   Код и пароль 2FA в конфигурацию не сохраняются.
-3. `configure` покажет ID папок и предложит выбрать разрешённые папки/чаты,
-   затем отдельно включить чтение явно указанных публичных каналов (`y`/`n`).
-   Enter сохраняет текущее значение каждой настройки.
-   Начальное состояние: чтение сообщений не разрешено ни для одного чата.
-4. `status` должен показать `authorized: true` и выбранные источники.
+2. `login` prompts for them locally, followed by your phone number, login code,
+   and 2FA password if enabled. The code and 2FA password are not saved in the configuration.
+3. `configure` displays folder IDs and prompts you to select permitted folders/chats,
+   then separately opt in to reading explicitly specified public channels (`y`/`n`).
+   Enter preserves the current value of each setting.
+   By default, message access is not permitted for any chat.
+4. `status` should show `authorized: true` and your selected sources.
 
-Вход выполняйте лично в терминале; не передавайте коды в чат с моделью.
-Локальная команда `catalog` показывает метаданные всех диалогов и папок аккаунта,
-чтобы выбрать ID для конфигурации. Тексты сообщений она не выводит:
+Log in yourself in a terminal; do not share login codes in a chat with the model.
+The local `catalog` command displays metadata for all account dialogs and folders
+so you can choose IDs for the configuration. It does not output message text:
 
 ```sh
 uv run --locked telegram-mcp catalog
 ```
 
-Конфигурация и Telegram-сессия сохраняются вне репозитория в пользовательских
-каталогах `platformdirs`. Команда `login` печатает точный путь конфигурации.
-Файлы конфигурации и сессии создаются с правами `0600`. Сессия содержит ключ доступа
-аккаунта. Ограничения чтения реализует сервер; сама сессия имеет права пользовательского клиента.
+The configuration and Telegram session are stored outside the repository in user
+paths provided by `platformdirs`. The `login` command prints the exact configuration path.
+Configuration and session files are created with `0600` permissions. The session contains
+an account access key. The server enforces read restrictions; the session itself has
+user-client permissions.
 
-Для собственного пути используйте `--config /absolute/private/config.toml` перед
-именем команды. Поддерживаются переменные `TELEGRAM_MCP_CONFIG`, `TELEGRAM_API_ID`,
-`TELEGRAM_API_HASH`, `TELEGRAM_SESSION_PATH`. Они перекрывают значения из TOML.
-Пример — `config.example.toml`; ID чатов задаются строками.
-`allow_all_chats = true` включает доступ ко всем чатам вместо allowlist.
-`allow_public_channel_reads = true` отдельно разрешает явно указанные публичные
-каналы вне allowlist; по умолчанию настройка выключена. Она не расширяет
-`list_chats`, поиск без `chat_ids`, доступ к личным диалогам или группам.
-Публичность канала проверяется по свежим метаданным: это broadcast-канал с основным
-или активным дополнительным username. Сервер не вступает в каналы автоматически.
-Изменения конфигурации применяются после перезапуска MCP-сервера.
+To use a custom path, place `--config /absolute/private/config.toml` before the command
+name. The environment variables `TELEGRAM_MCP_CONFIG`, `TELEGRAM_API_ID`,
+`TELEGRAM_API_HASH`, and `TELEGRAM_SESSION_PATH` are supported and override TOML values.
+See `config.example.toml`; chat IDs are strings.
+`allow_all_chats = true` grants access to all chats instead of using an allowlist.
+`allow_public_channel_reads = true` separately permits explicitly specified public
+channels outside the allowlist; this setting is disabled by default. It does not expand
+`list_chats`, searches without `chat_ids`, or access to private dialogs or groups.
+Public-channel status is checked using fresh metadata: the chat must be a broadcast channel
+with a primary or active additional username. The server does not automatically join channels.
+Configuration changes take effect after restarting the MCP server.
 
-## Подключение к Codex
+## Connecting to Codex
 
-В Settings → MCP servers → Add server выберите STDIO:
+In Settings → MCP servers → Add server, select STDIO:
 
-Ниже `/absolute/path/to/telegram-mcp` — пример: замените его абсолютным путём
-к вашей копии проекта.
+Below, `/absolute/path/to/telegram-mcp` is a placeholder: replace it with the absolute path
+to your copy of the project.
 
 - Command: `/absolute/path/to/telegram-mcp/.venv/bin/telegram-mcp`
 - Arguments: `serve`
 
-Или добавьте в существующий `config.toml` Codex, сохранив остальные настройки:
+Alternatively, add this to your existing Codex `config.toml`, preserving other settings:
 
 ```toml
 [mcp_servers.telegram]
@@ -90,31 +93,31 @@ enabled_tools = [
 ]
 ```
 
-При перемещении проекта обновите абсолютный путь. Сервер запускается и без входа:
-инструменты будут видны, а `get_status` вернёт `AUTH_REQUIRED`.
-Диагностические логи идут в stderr; stdout занят MCP-протоколом.
+Update the absolute path if you move the project. The server starts even before login:
+tools remain discoverable, and `get_status` returns `AUTH_REQUIRED`.
+Diagnostic logs go to stderr; stdout is reserved for the MCP protocol.
 
-Одна Telegram-сессия используется одним процессом одновременно. При `SESSION_IN_USE`
-закройте предыдущий MCP-процесс перед запуском другой команды с той же сессией.
-Это также относится к `login`, `configure`, `catalog`, `status` в другом терминале.
-В работающем Codex используйте MCP-инструмент `get_status`.
+Only one process can use a Telegram session at a time. If you receive `SESSION_IN_USE`,
+stop the previous MCP process before running another command with the same session.
+This also applies to `login`, `configure`, `catalog`, and `status` in another terminal.
+Use the `get_status` MCP tool while Codex is running.
 
-`get_status` проверяет авторизацию новым запросом к Telegram. Поле `authorized`
-равно `true`, если авторизация подтверждена, `false`, если её нет или она отозвана,
-и `null`, если проверить её не удалось, например из-за сети. Поле `error` объясняет
-причину; `connected` описывает соединение отдельно. Ответ также включает
-`allow_public_channel_reads` и остальные настройки доступа.
+`get_status` checks authorization with a fresh request to Telegram. The `authorized`
+field is `true` if authorization is confirmed, `false` if it is missing or revoked,
+and `null` if the check cannot be completed, for example because of a network error.
+The `error` field explains the reason; `connected` reports connection state separately.
+The response also includes `allow_public_channel_reads` and the other access settings.
 
-## Использование
+## Usage
 
-Для «найди папку Работа и покажи её каналы» вызовите `list_folders(query="Работа")`,
-затем `list_chats` с полученным `folder_id` и `chat_type="channel"`.
+To find the folder named `Work` and list its channels, call `list_folders(query="Work")`,
+then `list_chats` with its ID in `folder_ids` and `chat_type="channel"`.
 
-Пример аргументов `search_messages` (ID папок здесь условные):
+Example `search_messages` arguments (the folder IDs are illustrative):
 
 ```json
 {
-  "query": "монетизация",
+  "query": "monetization",
   "folder_ids": [2, 5],
   "date_from": "2026-09-01T00:00:00+03:00",
   "date_to": "2026-09-08T00:00:00+03:00",
@@ -122,9 +125,9 @@ enabled_tools = [
 }
 ```
 
-`get_history` принимает ровно один параметр источника: прежний `chat_id` или новый
-`chat_ref` (числовой ID, `@username`, `https://t.me/username`, `https://t.me/s/username`).
-`get_chat` поддерживает те же ссылки. Например, для истории известного канала:
+`get_history` accepts exactly one source parameter: the existing `chat_id` or the new
+`chat_ref` (a numeric ID, `@username`, `https://t.me/username`, or `https://t.me/s/username`).
+`get_chat` supports the same references. For example, to read a known channel's history:
 
 ```json
 {
@@ -136,96 +139,95 @@ enabled_tools = [
 }
 ```
 
-Канал должен входить в разрешённый scope либо быть публичным при включённой
-`allow_public_channel_reads`. В `search_messages` дополнительный доступ работает
-только для явных `chat_ids`, с сохранением пересечения с выбранными папками.
-Если Telegram ещё не знает entity для числового ID, сначала используйте username
-или ссылку. При продолжении история остаётся привязана к исходному каноническому
-ID. Если username перешёл к другому каналу, продолжение вернёт `CURSOR_MISMATCH`,
-а не переключится на новый источник.
+The channel must be within the permitted scope, or it must be public with
+`allow_public_channel_reads` enabled. In `search_messages`, this additional access applies
+only to explicit `chat_ids`, which still intersect with any selected folders.
+If Telegram does not yet have an entity for a numeric ID, use a username or link first.
+When continuing, history remains bound to the original canonical ID. If the username has
+been reassigned to another channel, continuation returns `CURSOR_MISMATCH` instead of
+switching to the new source.
 
-`get_messages`, `get_context` и `get_thread` принимают Telegram-ссылку, строку
-`chat_id:message_id` или объект `{"chat_id": "…", "message_id": 123}`.
-Поддерживаются публичные/приватные ссылки, ссылки на сообщения в темах и `?comment=…`.
-Числовые chat_id возвращаются в формате Telethon marked peer ID; message_id —
-идентификатор сообщения Telegram, не внутренний ID TDLib.
+`get_messages`, `get_context`, and `get_thread` accept a Telegram link, a
+`chat_id:message_id` string, or an object such as `{"chat_id": "…", "message_id": 123}`.
+Public/private links, links to messages in topics, and `?comment=…` are supported.
+Numeric chat_id values use Telethon marked peer IDs; message_id is the Telegram
+message identifier, not an internal TDLib ID.
 
-`get_messages` загружает сообщения пакетами по чатам, сохраняя входной порядок
-и дубликаты. Ошибки содержат `input_index` — индекс исходного элемента с нуля,
-а после разрешения ссылки также `message_ref`. `MESSAGE_UNAVAILABLE` означает,
-что сообщение недоступно; это не подтверждение удаления. Сбой одного чата
-не отменяет результаты остальных.
+`get_messages` fetches messages in batches grouped by chat, preserving input order
+and duplicates. Issues include `input_index`, the zero-based index of the original item,
+and, once the reference has been resolved, `message_ref`. `MESSAGE_UNAVAILABLE` means
+the message is unavailable; it does not confirm deletion. A failure in one chat does
+not discard results from other chats.
 
-`forward_origin` хранит первоначальный источник пересылки и подпись автора
-`post_author`. Сведения об источнике сохранённой пересылки хранятся отдельно:
-`saved_from_ref`, `saved_from_sender_id`, `saved_from_name`, `saved_at`.
-Неизвестные поля равны `null`; дополнительные запросы к источникам пересылок
-не выполняются.
+`forward_origin` stores the original forwarding source and the author's signature
+in `post_author`. Information about the source of a saved forward is stored separately:
+`saved_from_ref`, `saved_from_sender_id`, `saved_from_name`, and `saved_at`.
+Unknown fields are `null`; no additional requests are made to forwarding sources.
 
-## Правила выборки
+## Retrieval rules
 
-- Папки объединяются без дублей. `chat_ids` пересекаются с выбранными папками.
-  Пропущенный селектор означает отсутствие дополнительного фильтра; пустой список — ошибка.
-- Ограничения сервера применяются дополнительно, включая связанные обсуждения и
-  родительские ответы. Для комментариев к каналу разрешите и связанную группу.
-  Разрешение публичного канала действует только в текущем запросе и не даёт
-  доступа к связанной группе или ответам из другого чата.
-- Правила папок учитывают категории, закреплённые/явно добавленные чаты, исключения,
-  архив, mute/unread и непрочитанные упоминания по правилам Telegram Desktop.
-- Даты содержат часовой пояс; интервал `[date_from, date_to)`.
-  История/поиск фиксируют верхнюю временную границу первого запроса.
-- Поиск использует нативный поиск Telegram по словам. Границы периода и тип содержимого
-  дополнительно фильтруются сервером. Семантического индекса пока нет.
-- Для пагинации фиксируется состав чатов. При продолжении проверяются актуальные
-  права доступа, включая публичность каналов вне allowlist. Отзыв доступа завершает
-  вызов ошибкой. При сбое проверки каталога/доступа сохранённые сообщения не выдаются;
-  исходный курсор можно повторить после устранения причины.
-- `scope.complete` означает, что вся выборка пройдена без ошибок. Продолжайте вызовы
-  с `next_cursor`, пока он не станет null. Сохраняйте исходные фильтры; `limit` можно менять.
-- При большом числе чатов возможна пустая страница с `next_cursor`: сервер загружает
-  начальные страницы источников, чтобы сохранить общий порядок сообщений по времени.
-- Сбои отдельных чатов попадают в `issues`. При временных ошибках `RATE_LIMITED`,
-  `CONNECTION_ERROR`, `TELEGRAM_UNAVAILABLE` сохраняются позиция и `next_cursor`,
-  а `scope.complete` остаётся `false`. Повторите исходные аргументы с этим курсором;
-  при FloodWait сначала выждите `retry_after_seconds`. Сервер не ждёт внутри вызова
-  и не повторяет неуспешный поток в том же ответе.
-- Объединённая выдача приостанавливается, если временно недоступный источник мешает
-  гарантировать общий порядок. После успешного продолжения его временная ошибка
-  исчезает. Постоянные ошибки остаются в результате, другие источники продолжаются;
-  для повторной попытки постоянного сбоя нужен новый запрос.
-- Курсор действует 15 минут и привязан к процессу. Хранятся до 128 checkpoints
-  с бюджетом 64 MiB сериализованных данных; старые вытесняются. После истечения
-  срока, вытеснения или перезапуска начните запрос заново. Если FloodWait дольше
-  срока жизни курсора, дождитесь окончания ожидания и начните новую выборку.
-- Тексты имеют общий бюджет ответа. `text_total_length`, `text_offset`, `next_text_offset`
-  позволяют дочитать сообщение через `get_messages`. Смещения текста — Unicode code points;
-  `entities` сохраняют Telegram UTF-16 offsets относительно полного оригинала.
-- Это не транзакционный архив: сообщения могут измениться или исчезнуть во время обхода.
+- Folders form a union without duplicates. `chat_ids` intersect with selected folders.
+  An omitted selector means no additional filter; an empty list is an error.
+- Server restrictions apply in addition to these filters, including linked discussions
+  and parent replies. To read channel comments, permit the linked group as well.
+  Public-channel permission applies only to the current request and does not grant
+  access to the linked group or replies from another chat.
+- Folder rules account for categories, pinned/explicitly included chats, exclusions,
+  archive status, mute/unread state, and unread mentions according to Telegram Desktop rules.
+- Dates must include a timezone; the interval is `[date_from, date_to)`.
+  History/search fixes the upper time boundary on the first request.
+- Search uses Telegram's native keyword search. The server additionally filters by
+  date range and content type. There is no semantic index yet.
+- Pagination freezes the selected set of chats. Continuation checks current access,
+  including the public status of channels outside the allowlist. Revoked access causes
+  the call to fail. If catalog/access checks fail, buffered messages are not returned;
+  retry the original cursor after resolving the cause.
+- `scope.complete` means the entire selection has been traversed without errors.
+  Keep calling with `next_cursor` until it becomes null. Preserve the original filters;
+  `limit` may change.
+- With many chats, an empty page may include `next_cursor`: the server is loading
+  initial source pages to preserve the global ordering of messages by time.
+- Individual chat failures appear in `issues`. Temporary errors `RATE_LIMITED`,
+  `CONNECTION_ERROR`, and `TELEGRAM_UNAVAILABLE` preserve the position and `next_cursor`,
+  while `scope.complete` remains `false`. Repeat the original arguments with this cursor;
+  for FloodWait, first wait for `retry_after_seconds`. The server does not wait inside
+  the call or retry the failed stream within the same response.
+- Merged output pauses if a temporarily unavailable source prevents the server from
+  guaranteeing global order. Once continuation succeeds, that source's temporary issue
+  disappears. Permanent issues remain in the result while other sources continue;
+  retrying a permanent failure requires a new request.
+- Cursors last 15 minutes and are bound to the process. Up to 128 checkpoints are stored
+  within a 64 MiB serialized-data budget; older checkpoints are evicted. Start again after
+  expiry, eviction, or a restart. If FloodWait exceeds the cursor lifetime, wait until
+  the cooldown ends and start a new selection.
+- Message text shares a total response budget. `text_total_length`, `text_offset`, and
+  `next_text_offset` let you retrieve remaining text through `get_messages`. Text offsets
+  count Unicode code points; `entities` retain Telegram UTF-16 offsets into the full original.
+- This is not a transactional archive: messages may change or disappear during traversal.
 
-## Проверки
+## Checks
 
 ```sh
 make check
 ```
 
-Запускаются Ruff format/check, `ty check` и pytest. Тесты работают без аккаунта
-и без запросов к Telegram: папки, пагинация, даты, контекст, доступ, структуры Telethon,
-конфигурация и настоящий MCP-протокол, включая отдельный STDIO-процесс.
-Проверяются современный режим MCP и совместимость с initialize handshake.
+This runs Ruff format/check, `ty check`, and pytest. Tests use no account and make no
+requests to Telegram. They cover folders, pagination, dates, context, access, Telethon
+structures, configuration, and the actual MCP protocol, including a separate STDIO process.
+Both modern MCP mode and compatibility with the initialize handshake are tested.
 
-## Границы первой версии
+## First-version boundaries
 
-Реализовано чтение облачных чатов. Автоматическое вступление, платные запросы,
-отправка, скачивание вложений, распознавание голосовых,
-управление папками и семантический индекс остаются расширениями. Вложения представлены
-метаданными. Секретные чаты не поддерживаются. Проверка на настоящих чатах требует
-вашего локального входа.
+Reading cloud chats is implemented. Automatic joining, paid requests, sending,
+attachment downloads, voice transcription, folder management, and a semantic index
+remain possible extensions. Attachments are represented by metadata. Secret chats are
+not supported. Testing against real chats requires your local login.
 
-Используйте интеграцию для материалов, которые вы вправе передавать модели.
-[Условия Telegram для контента и AI](https://telegram.org/tos/content-licensing)
-применяются и к данным, полученным через API.
+Use this integration for material you are entitled to share with the model.
+[Telegram's content and AI terms](https://telegram.org/tos/content-licensing)
+also apply to data obtained through the API.
 
-## Источники
+## Sources
 
 - [Telethon](https://docs.telethon.dev/en/stable/)
 - [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk)
