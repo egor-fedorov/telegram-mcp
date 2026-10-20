@@ -13,7 +13,7 @@ from urllib.parse import parse_qs, urlparse
 
 from telethon import TelegramClient, errors, functions, types, utils
 
-from telegram_mcp.backend import Batch, DiscoveryBatch
+from telegram_mcp.backend import Batch, DiscoveryBatch, TopicBatch, TopicOffset
 from telegram_mcp.config import Settings
 from telegram_mcp.models import (
     Attachment,
@@ -21,7 +21,9 @@ from telegram_mcp.models import (
     ContentType,
     Entity,
     Folder,
+    ForumTopic,
     ForwardOrigin,
+    Issue,
     Message,
     MessageRef,
     PublicChannel,
@@ -68,6 +70,17 @@ def public_channel_from_entity(entity: Any) -> PublicChannel | None:
     )
 
 
+def is_supported_forum(entity: Any) -> bool:
+    return bool(
+        isinstance(entity, types.Channel)
+        and entity.megagroup
+        and entity.forum
+        and not entity.broadcast
+        and not entity.monoforum
+        and not (entity.banned_rights and entity.banned_rights.view_messages)
+    )
+
+
 def chat_from_entity(entity: Any, dialog: Any = None, default_muted: bool = False) -> Chat:
     if isinstance(entity, types.User):
         kind = "saved" if entity.is_self else "bot" if entity.bot else "private"
@@ -88,10 +101,43 @@ def chat_from_entity(entity: Any, dialog: Any = None, default_muted: bool = Fals
         is_muted=muted,
         is_archived=bool(dialog and dialog.archived),
         is_supergroup=bool(getattr(entity, "megagroup", False)),
+        is_forum=is_supported_forum(entity),
         is_community=type(entity).__name__ in ("Community", "CommunityForbidden"),
         unread_count=int(dialog.unread_count if dialog else 0),
         unread_mentions_count=int(getattr(dialog, "unread_mentions_count", 0)),
         marked_unread=bool(dialog and getattr(dialog.dialog, "unread_mark", False)),
+    )
+
+
+def forum_topic_from_tl(raw: types.ForumTopic | types.ForumTopicDeleted, chat: Chat) -> ForumTopic:
+    if isinstance(raw, types.ForumTopicDeleted):
+        return ForumTopic(id=raw.id, chat_id=chat.id, is_deleted=True)
+    short = bool(raw.short)
+    if raw.id == 1:
+        url = None
+    elif chat.username:
+        url = f"https://t.me/{chat.username}/{raw.id}"
+    else:
+        native_id, _ = utils.resolve_id(int(chat.id))
+        url = f"https://t.me/c/{native_id}/{raw.id}"
+    return ForumTopic(
+        id=raw.id,
+        chat_id=chat.id,
+        title=raw.title,
+        created_at=utc(raw.date) if raw.date is not None else None,
+        is_general=raw.id == 1,
+        is_closed=bool(raw.closed),
+        is_hidden=None if short else bool(raw.hidden),
+        is_pinned=None if short else bool(raw.pinned),
+        is_short=short,
+        unread_count=None if short else raw.unread_count,
+        icon_color=raw.icon_color,
+        icon_emoji_id=str(raw.icon_emoji_id) if raw.icon_emoji_id is not None else None,
+        root_message_ref=MessageRef(chat_id=chat.id, message_id=raw.id) if raw.id != 1 else None,
+        top_message_ref=MessageRef(chat_id=chat.id, message_id=raw.top_message)
+        if not short and raw.top_message > 0
+        else None,
+        url=url,
     )
 
 
@@ -469,6 +515,86 @@ class TelegramBackend:
         ]
         return DiscoveryBatch(channels, telegram_total_count=getattr(response, "count", None))
 
+    async def fetch_topics(
+        self,
+        chat_id: str,
+        *,
+        offset: TopicOffset,
+        limit: int = 30,
+        query: str | None = None,
+    ) -> TopicBatch:
+        chat = await self.resolve_chat(chat_id)
+        if not chat.is_forum:
+            raise ToolError("FORUM_UNAVAILABLE", "This chat is not a supported supergroup forum.")
+        client = await self.ensure()
+        entity = await self.call(client.get_input_entity(int(chat_id)))
+        response = await self.call(
+            client(
+                functions.messages.GetForumTopicsRequest(
+                    peer=entity,
+                    q=query,
+                    offset_date=offset.date,
+                    offset_id=offset.message_id,
+                    offset_topic=offset.topic_id,
+                    limit=limit,
+                )
+            )
+        )
+        topics: list[ForumTopic] = []
+        issues: list[Issue] = []
+        for raw in response.topics:
+            if (
+                not isinstance(raw, (types.ForumTopic, types.ForumTopicDeleted))
+                or raw.id <= 0
+                or isinstance(raw, types.ForumTopic)
+                and not raw.short
+                and peer_id(raw.peer) != chat_id
+            ):
+                issues.append(
+                    ToolError(
+                        "PAGINATION_INCOMPLETE",
+                        "Telegram returned an unrelated topic or invalid topic data.",
+                    ).issue(chat_id)
+                )
+                continue
+            topics.append(forum_topic_from_tl(raw, chat))
+        order_by_create_date = bool(response.order_by_create_date)
+        if not response.topics:
+            return TopicBatch(topics, None, True, order_by_create_date, response.count, issues)
+        tail = response.topics[-1]
+        date = None
+        if (
+            isinstance(tail, types.ForumTopic)
+            and tail.id > 0
+            and not tail.short
+            and peer_id(tail.peer) == chat_id
+        ):
+            if order_by_create_date:
+                date = tail.date
+            else:
+                date = next(
+                    (
+                        message.date
+                        for message in response.messages
+                        if not isinstance(message, types.MessageEmpty)
+                        and getattr(message, "id", None) == tail.top_message
+                        and getattr(message, "peer_id", None) is not None
+                        and peer_id(message.peer_id) == chat_id
+                        and isinstance(getattr(message, "date", None), datetime)
+                    ),
+                    None,
+                )
+        if date is None:
+            issues.append(
+                ToolError(
+                    "PAGINATION_INCOMPLETE",
+                    "The final topic has insufficient metadata to continue safely.",
+                ).issue(chat_id)
+            )
+            return TopicBatch(topics, None, True, order_by_create_date, response.count, issues)
+        next_offset = TopicOffset(utc(date), max(0, tail.top_message), tail.id)
+        return TopicBatch(topics, next_offset, False, order_by_create_date, response.count, issues)
+
     async def chat_details(self, chat: Chat) -> dict[str, object]:
         client = await self.ensure()
         entity = await self.call(client.get_input_entity(int(chat.id)))
@@ -588,10 +714,15 @@ class TelegramBackend:
         content_type: ContentType | None = None,
         oldest_first: bool = False,
         thread_id: int | None = None,
+        pinned_only: bool = False,
     ) -> Batch:
+        if pinned_only and thread_id is not None:
+            raise ToolError("INVALID_ARGUMENT", "Pinned-message retrieval is chat-wide.")
         client = await self.ensure()
         chat = await self.resolve_chat(chat_id)
         kwargs: dict[str, Any] = {"limit": limit, "offset_id": offset, "reverse": oldest_first}
+        if pinned_only:
+            kwargs["filter"] = types.InputMessagesFilterPinned()
         if query is not None:
             kwargs["search"] = query
         if sender_id is not None:

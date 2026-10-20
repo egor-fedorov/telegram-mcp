@@ -22,6 +22,8 @@ EXPECTED_TOOLS = {
     "get_chat",
     "search_messages",
     "get_history",
+    "list_topics",
+    "get_pinned_messages",
     "get_messages",
     "get_context",
     "get_thread",

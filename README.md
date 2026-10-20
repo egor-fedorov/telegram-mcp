@@ -20,6 +20,8 @@ See [ROADMAP.md](ROADMAP.md) for the development plan and the next stage.
 | `get_similar_channels` | Find similar public channels for one specified public source; metadata only |
 | `search_messages` | Keyword search by chats, folders, dates, sender, or content type |
 | `get_history` | History over a time range, in chronological or reverse order |
+| `list_topics` | Forum topics with navigation references, optional title query, and pagination |
+| `get_pinned_messages` | Chat-wide pinned messages, newest first |
 | `get_messages` | Messages by links/IDs with authors, dates, and attachment metadata |
 | `get_context` | Messages before/after an anchor and a chain of parent replies |
 | `get_thread` | Comments on a channel post or replies in a group thread |
@@ -103,7 +105,7 @@ tool_timeout_sec = 120
 enabled_tools = [
   "get_status", "list_folders", "list_chats", "get_chat", "search_messages",
   "get_history", "get_messages", "get_context", "get_thread",
-  "search_public_channels", "get_similar_channels"
+  "search_public_channels", "get_similar_channels", "list_topics", "get_pinned_messages"
 ]
 ```
 
@@ -229,6 +231,56 @@ in `post_author`. Information about the source of a saved forward is stored sepa
 `saved_from_ref`, `saved_from_sender_id`, `saved_from_name`, and `saved_at`.
 Unknown fields are `null`; no additional requests are made to forwarding sources.
 
+### Navigate forum topics and pinned messages
+
+`list_topics(chat_ref, query=None, limit=30, cursor=None)` lists topics in a permitted
+forum supergroup. `Chat.is_forum` identifies forum chats. The chat must satisfy ordinary
+read access through the allowlist, a permitted folder, or `allow_all_chats`.
+Neither public-channel reads nor discovery grants access to a forum.
+An allowed chat that is not a supported forum returns `FORUM_UNAVAILABLE`.
+Bot forums and monoforums are outside this step.
+
+`get_pinned_messages(chat_ref, limit=30, cursor=None)` reads pins across an entire chat,
+newest first. It follows the existing history access policy, including explicit public
+broadcast channels when `allow_public_channel_reads` is enabled. Pins from a forum are
+chat-wide, not limited to an individual topic.
+
+Both tools require a nonblank `chat_ref`: a numeric ID, `@username`, or channel/chat link
+such as `https://t.me/example_forum` or `https://t.me/s/example_channel`. The reference is
+trimmed. Limits range from 1 to 100. An optional topic `query` is trimmed and must contain
+1 to 1,000 characters; omit it to list all topics.
+
+For example, after allowing the forum locally:
+
+1. Call `list_topics(chat_ref="@example_forum", query="Roadmap", limit=30)`.
+2. Present topic titles and URLs. Fetch a topic's `top_message_ref` with `get_messages`
+   to inspect its latest referenced message. For an ordinary topic, pass its
+   `root_message_ref` to `get_thread` to read the supported thread replies.
+3. Call `get_pinned_messages(chat_ref="@example_forum", limit=30)` to read chat-wide pins.
+   Follow its `next_cursor`; use `get_messages` with `next_text_offset` to finish truncated text.
+
+`TopicPage` contains `topics`, `next_cursor`, `scope`, `issues`, `telegram_total_count`,
+and `order`. Topics retain Telegram's native ordering: `creation_date` or `last_message_date`
+when known. Each `ForumTopic` contains its topic `id`, `chat_id`, available `title` and
+`created_at`, general/closed/hidden/pinned flags, unread count, icon metadata, navigation
+references, and URL. Deleted or short records are marked by `is_deleted` or `is_short`;
+unavailable fields remain `null` rather than invented values. General has topic ID `1`,
+`is_general=true`, and both `root_message_ref` and `url` are `null`; use its
+`top_message_ref` when available.
+
+A short or empty topic page can still have a cursor. Each call fetches at most one
+Telegram topic page; continue with the same source and query until `next_cursor` is null.
+Continuation remains tied to the canonical chat ID and rechecks access and forum type
+before returning buffered topics. Temporary page-fetch failures preserve a cursor and
+report their cause in `issues`; respect any `retry_after_seconds` before continuing.
+A failed access check prevents buffered results from being returned.
+
+Pinned messages use the ordinary `Page` contract, text budget, and recovery behavior.
+Topic lists and pin selections can change during traversal; cursors do not provide an
+immutable snapshot. Dedicated topic history, including General, and topic-specific pins
+are planned for the next M2 step. `get_thread` is not a substitute for that complete
+topic-history capability.
+
 ## Retrieval rules
 
 - Folders form a union without duplicates. `chat_ids` intersect with selected folders.
@@ -277,9 +329,9 @@ make check
 ```
 
 This runs Ruff format/check, `ty check`, and pytest. Tests use no account and make no
-requests to Telegram. They cover public-channel discovery, folders, pagination, dates,
-context, access, Telethon structures, configuration, and the actual MCP protocol,
-including a separate STDIO process.
+requests to Telegram. They cover public-channel discovery, topic and pin navigation,
+folders, pagination, dates, context, access, Telethon structures, configuration, and
+the actual MCP protocol, including a separate STDIO process.
 Both modern MCP mode and compatibility with the initialize handshake are tested.
 
 GitHub Actions runs the same checks on pull requests and pushes to `main`, using
@@ -300,9 +352,11 @@ rights to Telegram content retrieved through the server.
 
 ## First-version boundaries
 
-Reading cloud chats and discovering public channels are implemented. Automatic joining,
-paid requests, sending, attachment downloads, voice transcription, folder management,
-and a semantic index remain possible extensions. Attachments are represented by metadata.
+Reading cloud chats, discovering public channels, forum topic navigation, and chat-wide
+pinned-message retrieval are implemented. Dedicated topic history and topic-specific pins
+remain planned. Automatic joining, paid requests, sending, attachment downloads,
+voice transcription, folder management, and a semantic index remain possible extensions.
+Attachments are represented by metadata.
 Secret chats are not supported. Testing against real chats requires your local login.
 
 Use this integration for material you are entitled to share with the model.

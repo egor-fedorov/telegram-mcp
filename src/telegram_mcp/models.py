@@ -22,6 +22,7 @@ class Chat(Model):
     is_muted: bool = False
     is_archived: bool = False
     is_supergroup: bool = False
+    is_forum: bool = False
     is_community: bool = False
     unread_count: int = 0
     unread_mentions_count: int = 0
@@ -70,6 +71,25 @@ class MessageRef(Model):
     @property
     def key(self) -> str:
         return f"{self.chat_id}:{self.message_id}"
+
+
+class ForumTopic(Model):
+    id: int = Field(gt=0)
+    chat_id: str
+    title: str | None = None
+    created_at: AwareDatetime | None = None
+    is_general: bool = False
+    is_closed: bool | None = None
+    is_hidden: bool | None = None
+    is_pinned: bool | None = None
+    is_deleted: bool = False
+    is_short: bool = False
+    unread_count: int | None = Field(default=None, ge=0)
+    icon_color: int | None = None
+    icon_emoji_id: str | None = None
+    root_message_ref: MessageRef | None = None
+    top_message_ref: MessageRef | None = None
+    url: str | None = None
 
 
 class Sender(Model):
@@ -149,6 +169,15 @@ class Page(Model):
     issues: list[Issue] = Field(default_factory=list)
     order: Literal["newest_first", "oldest_first"] = "newest_first"
     thread_root: MessageRef | None = None
+
+
+class TopicPage(Model):
+    topics: list[ForumTopic]
+    next_cursor: str | None = None
+    scope: Scope
+    issues: list[Issue] = Field(default_factory=list)
+    telegram_total_count: int | None = None
+    order: Literal["creation_date", "last_message_date"] | None = None
 
 
 class ChatPage(Model):

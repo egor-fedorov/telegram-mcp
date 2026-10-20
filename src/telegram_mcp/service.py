@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Literal
 
-from telegram_mcp.backend import Backend, DiscoveryBatch
+from telegram_mcp.backend import Backend, DiscoveryBatch, TopicOffset
 from telegram_mcp.config import Settings
 from telegram_mcp.cursors import CursorStore
 from telegram_mcp.folders import allowed_ids, select_chats
@@ -18,6 +18,7 @@ from telegram_mcp.models import (
     ContextResult,
     DiscoveryResult,
     Folder,
+    ForumTopic,
     Issue,
     Message,
     MessageRef,
@@ -25,6 +26,7 @@ from telegram_mcp.models import (
     Page,
     Scope,
     ToolError,
+    TopicPage,
 )
 
 
@@ -52,6 +54,21 @@ class ChatState:
     chats: list[Chat]
     index: int
     scope: Scope
+
+
+@dataclass
+class TopicState:
+    scope: Scope
+    offset: TopicOffset = field(default_factory=TopicOffset)
+    buffer: list[ForumTopic] = field(default_factory=list)
+    seen_ids: set[int] = field(default_factory=set)
+    seen_offsets: set[TopicOffset] = field(default_factory=lambda: {TopicOffset()})
+    exhausted: bool = False
+    order_by_create_date: bool | None = None
+    telegram_total_count: int | None = None
+    issues: list[Issue] = field(default_factory=list)
+    transient_issue: Issue | None = None
+    retry_at: float = 0
 
 
 def fingerprint(values: object) -> str:
@@ -208,6 +225,123 @@ class Service:
         chat = public.get(chat.id, chat)
         return {"chat": chat.model_dump(mode="json"), **await self.backend.chat_details(chat)}
 
+    async def list_topics(
+        self,
+        chat_ref: str,
+        query: str | None = None,
+        limit: int = 30,
+        cursor: str | None = None,
+    ) -> TopicPage:
+        check_limit(limit)
+        chat_ref = chat_ref.strip()
+        if not chat_ref:
+            raise ToolError("INVALID_ARGUMENT", "chat_ref must not be empty.")
+        if query is not None:
+            query = query.strip()
+            if not 1 <= len(query) <= 1000:
+                raise ToolError(
+                    "INVALID_ARGUMENT", "query must contain 1 to 1000 characters after trimming."
+                )
+        _, _, allowed = await self.catalog()
+        chat = await self.backend.resolve_chat(chat_ref, refresh=True)
+        fp = fingerprint([chat_ref, chat.id, query])
+        if cursor:
+            state = self.cursors.get(cursor, "topics", fp)
+            if not isinstance(state, TopicState):
+                raise ToolError("INVALID_CURSOR", "Wrong cursor type.")
+        else:
+            state = TopicState(Scope(chat_ids=[chat.id], resolved_at=datetime.now(UTC)))
+        # Public-channel permissions cannot authorize forum groups or their buffered metadata.
+        self.require_access(chat.id, allowed)
+        if chat.type != "group" or not chat.is_supergroup or not chat.is_forum:
+            raise ToolError("FORUM_UNAVAILABLE", "This chat is not a supported forum supergroup.")
+
+        if not state.buffer and not state.exhausted and time.monotonic() >= state.retry_at:
+            try:
+                batch = await self.backend.fetch_topics(
+                    chat.id, offset=state.offset, limit=limit, query=query
+                )
+                if (
+                    state.order_by_create_date is not None
+                    and batch.order_by_create_date != state.order_by_create_date
+                    and (batch.topics or not batch.exhausted)
+                ):
+                    raise ToolError(
+                        "PAGINATION_CHANGED", "Topic order changed. Restart the topic listing."
+                    )
+                if not batch.exhausted and (
+                    batch.next_offset is None or batch.next_offset in state.seen_offsets
+                ):
+                    raise ToolError(
+                        "PAGINATION_STALLED", "Telegram returned a non-advancing topic page."
+                    )
+                if state.order_by_create_date is None or batch.topics or not batch.exhausted:
+                    state.order_by_create_date = batch.order_by_create_date
+                state.telegram_total_count = batch.telegram_total_count
+                state.issues.extend(batch.issues)
+                state.exhausted = batch.exhausted
+                if batch.next_offset is not None:
+                    state.offset = batch.next_offset
+                    state.seen_offsets.add(batch.next_offset)
+                for topic in batch.topics:
+                    if topic.id not in state.seen_ids:
+                        state.buffer.append(topic)
+                        state.seen_ids.add(topic.id)
+                state.transient_issue = None
+                state.retry_at = 0
+            except ToolError as exc:
+                if exc.retryable:
+                    state.transient_issue = exc.issue(chat.id)
+                    state.retry_at = time.monotonic() + (exc.retry_after or 0)
+                else:
+                    state.issues.append(exc.issue(chat.id))
+                    state.transient_issue = None
+                    state.exhausted = True
+        topics = state.buffer[:limit]
+        state.buffer = state.buffer[limit:]
+        issues = list(state.issues)
+        if state.transient_issue is not None:
+            issue = state.transient_issue
+            if issue.retry_after_seconds is not None:
+                issue = issue.model_copy(
+                    update={
+                        "retry_after_seconds": max(0, math.ceil(state.retry_at - time.monotonic()))
+                    }
+                )
+            issues.append(issue)
+        pending = bool(state.buffer) or not state.exhausted
+        token = self.cursors.put("topics", fp, state) if pending else None
+        order = (
+            None
+            if state.order_by_create_date is None
+            else "creation_date"
+            if state.order_by_create_date
+            else "last_message_date"
+        )
+        return TopicPage(
+            topics=topics,
+            next_cursor=token,
+            scope=state.scope.model_copy(
+                update={
+                    "pending_chat_ids": [chat.id] if pending else [],
+                    "complete": not pending and not issues,
+                }
+            ),
+            issues=issues,
+            telegram_total_count=state.telegram_total_count,
+            order=order,
+        )
+
+    async def get_pinned_messages(
+        self, chat_ref: str, limit: int = 30, cursor: str | None = None
+    ) -> Page:
+        chat_ref = chat_ref.strip()
+        if not chat_ref:
+            raise ToolError("INVALID_ARGUMENT", "chat_ref must not be empty.")
+        return await self.query(
+            source_ref=chat_ref, limit=limit, cursor=cursor, kind="pinned", pinned_only=True
+        )
+
     async def resolve(self, ref: str | MessageRef, allowed: set[str]) -> MessageRef:
         resolved = await self.backend.resolve_message(ref)
         await self.allow_explicit(resolved.chat_id, allowed, {})
@@ -360,6 +494,7 @@ class Service:
         kind: str = "search",
         source_ref: str | None = None,
         allow_public: bool = True,
+        pinned_only: bool = False,
     ) -> Page:
         check_limit(limit)
         if kind == "search" and (query is None or not query.strip()):
@@ -388,6 +523,7 @@ class Service:
                 thread_id,
                 source_ref,
                 allow_public,
+                pinned_only,
             ]
         )
         if cursor:
@@ -454,6 +590,7 @@ class Service:
                             content_type=content_type,
                             oldest_first=oldest,
                             thread_id=thread_id,
+                            pinned_only=pinned_only,
                         )
                         if not batch.exhausted and batch.next_offset == stream.offset:
                             raise ToolError(

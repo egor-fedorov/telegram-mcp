@@ -21,6 +21,7 @@ from telegram_mcp.models import (
     MessageResult,
     Page,
     ToolError,
+    TopicPage,
 )
 from telegram_mcp.service import Service
 
@@ -155,6 +156,47 @@ def create_server(service: Service) -> MCPServer[None]:
         Unknown numeric IDs may require resolving a username or URL first.
         """
         return await service.get_chat(chat_ref)
+
+    @server.tool(annotations=readonly)
+    @expose_tool_errors
+    async def list_topics(
+        chat_ref: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)],
+        query: Annotated[
+            str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1000)
+        ]
+        | None = None,
+        limit: Limit = 30,
+        cursor: str | None = None,
+    ) -> TopicPage:
+        """List topics in a permitted forum supergroup by ID, @username or t.me[/s] link.
+
+        query optionally searches topic names. Public discovery/read permissions do not
+        authorize forum groups. Follow next_cursor with the original selector and query;
+        a short or empty page can still have a cursor. Results preserve Telegram order
+        and report incomplete metadata in issues. Temporary failures retain a cursor;
+        respect retry_after_seconds. Topic order and titles may change during traversal.
+        Read top_message_ref with get_messages, or ordinary root_message_ref with
+        get_thread. General (ID 1) has no root_message_ref. Bot forums and monoforums
+        are unsupported. Listing topics does not mark them read or modify them.
+        """
+        return await service.list_topics(chat_ref, query, limit, cursor)
+
+    @server.tool(annotations=readonly)
+    @expose_tool_errors
+    async def get_pinned_messages(
+        chat_ref: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)],
+        limit: Limit = 30,
+        cursor: str | None = None,
+    ) -> Page:
+        """Read a chat's pinned messages, newest first, by ID, @username or t.me[/s] link.
+
+        Pins are chat-wide; this tool has no topic selector. Existing read permissions,
+        explicit public broadcast-channel access, text budgets, and cursor recovery apply.
+        Follow next_cursor with the same chat_ref; respect retry_after_seconds on temporary
+        failures. Pin membership can change during traversal. No messages are pinned,
+        unpinned, or marked read by this tool.
+        """
+        return await service.get_pinned_messages(chat_ref, limit, cursor)
 
     @server.tool(annotations=readonly)
     @expose_tool_errors

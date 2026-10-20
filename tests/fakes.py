@@ -3,7 +3,7 @@ from urllib.parse import urlparse
 
 from pydantic import ValidationError
 
-from telegram_mcp.backend import Batch, DiscoveryBatch
+from telegram_mcp.backend import Batch, DiscoveryBatch, TopicBatch, TopicOffset
 from telegram_mcp.models import Chat, ContentType, Folder, Message, MessageRef, ToolError
 
 BASE = datetime(2026, 9, 1, tzinfo=UTC)
@@ -62,6 +62,11 @@ class FakeBackend:
         self.discovery_search_calls: list[tuple[str, int]] = []
         self.discovery_similar_calls: list[str] = []
         self.discovery_faults: dict[str, ToolError] = {}
+        self.topic_batches: dict[tuple[str, TopicOffset], TopicBatch] = {}
+        self.topic_faults: dict[str, ToolError] = {}
+        self.topic_fetches: list[tuple[str, TopicOffset, int, str | None]] = []
+        self.pinned_message_keys: set[str] = set()
+        self.fetch_pinned_flags: list[bool] = []
 
     async def status(self) -> dict[str, object]:
         self.backend_calls.append("status")
@@ -152,6 +157,29 @@ class FakeBackend:
         self.thread_calls += 1
         return MessageRef(chat_id=discussion_chat_id, message_id=10)
 
+    async def fetch_topics(
+        self,
+        chat_id: str,
+        *,
+        offset: TopicOffset,
+        limit: int = 30,
+        query: str | None = None,
+    ) -> TopicBatch:
+        self.backend_calls.append("fetch_topics")
+        self.topic_fetches.append((chat_id, offset, limit, query))
+        if chat_id in self.topic_faults:
+            raise self.topic_faults[chat_id]
+        return self.topic_batches.get(
+            (chat_id, offset),
+            TopicBatch(
+                topics=[],
+                next_offset=None,
+                exhausted=True,
+                order_by_create_date=False,
+                telegram_total_count=0,
+            ),
+        )
+
     async def fetch(
         self,
         chat_id: str,
@@ -165,16 +193,19 @@ class FakeBackend:
         content_type: ContentType | None = None,
         oldest_first: bool = False,
         thread_id: int | None = None,
+        pinned_only: bool = False,
     ) -> Batch:
         self.backend_calls.append("fetch")
         self.fetches.append(chat_id)
         self.fetch_offsets.append((chat_id, offset))
+        self.fetch_pinned_flags.append(pinned_only)
         if chat_id in self.faults:
             raise self.faults[chat_id]
         candidates = [
             m
             for m in self.stored_messages
             if m.chat.id == chat_id
+            and (not pinned_only or m.message_ref.key in self.pinned_message_keys)
             and (query is None or query in m.text)
             and (sender_id is None or m.sender.id == sender_id)
             and (
