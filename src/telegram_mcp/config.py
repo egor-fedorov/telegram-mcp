@@ -20,6 +20,7 @@ class Settings(Model):
     allowed_folder_ids: list[int] = Field(default_factory=list)
     allow_all_chats: bool = False
     allow_public_channel_reads: bool = False
+    allow_public_channel_discovery: bool = False
     rpc_timeout_seconds: float = Field(default=20, gt=0, le=60)
     max_dialogs: int = Field(default=10000, ge=1, le=100000)
     rpc_pages_per_call: int = Field(default=12, ge=1, le=100)

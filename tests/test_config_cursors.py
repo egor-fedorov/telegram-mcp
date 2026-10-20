@@ -23,23 +23,43 @@ def test_configuration_roundtrip_and_file_permissions(
         session_path=tmp_path / "test.session",
         allowed_folder_ids=[1],
         allow_public_channel_reads=True,
+        allow_public_channel_discovery=True,
     )
     save_settings(settings, path)
     loaded = load_settings(path)
     assert loaded.credentials() == (123, "example-not-a-real-key")
     assert loaded.allowed_folder_ids == [1]
     assert loaded.allow_public_channel_reads is True
+    assert loaded.allow_public_channel_discovery is True
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
     assert "example-not-a-real-key" not in repr(loaded)
 
 
 def test_public_channels_require_explicit_configuration(tmp_path: Path) -> None:
     assert Settings().allow_public_channel_reads is False
+    assert Settings().allow_public_channel_discovery is False
     path = tmp_path / "config.toml"
     path.write_text('allowed_chat_ids = ["1"]\n')
     assert load_settings(path).allow_public_channel_reads is False
+    assert load_settings(path).allow_public_channel_discovery is False
 
 
+def test_discovery_permission_is_independent_of_read_permissions(tmp_path: Path) -> None:
+    path = tmp_path / "config.toml"
+    path.write_text("allow_all_chats = true\nallow_public_channel_reads = true\n")
+    assert load_settings(path).allow_public_channel_discovery is False
+    path.write_text("allow_public_channel_discovery = true\n")
+    settings = load_settings(path)
+    assert settings.allow_public_channel_discovery is True
+    assert settings.allow_public_channel_reads is False
+    assert settings.allow_all_chats is False
+    assert settings.allowed_chat_ids == []
+    assert settings.allowed_folder_ids == []
+
+
+@pytest.mark.parametrize(
+    "setting", ["allow_public_channel_reads", "allow_public_channel_discovery"]
+)
 @pytest.mark.parametrize(
     ("initial", "answers", "expected"),
     [
@@ -55,6 +75,7 @@ def test_public_channels_require_explicit_configuration(tmp_path: Path) -> None:
 async def test_configure_public_channel_opt_in(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    setting: str,
     initial: bool,
     answers: list[str],
     expected: bool,
@@ -62,15 +83,22 @@ async def test_configure_public_channel_opt_in(
     backend = FakeBackend()
     monkeypatch.setattr("telegram_mcp.cli.TelegramBackend", lambda _: backend)
     monkeypatch.setattr("telegram_mcp.cli.sys.stdin.isatty", lambda: True)
-    replies = iter(["", "", *answers])
+    reading = setting == "allow_public_channel_reads"
+    prompt_answers = [*answers, ""] if reading else ["", *answers]
+    replies = iter(["", "", *prompt_answers])
     monkeypatch.setattr("builtins.input", lambda _: next(replies))
-    settings = Settings(allowed_chat_ids=["1"], allow_public_channel_reads=initial)
+    settings = Settings(
+        allowed_chat_ids=["1"],
+        allow_public_channel_reads=initial if reading else not initial,
+        allow_public_channel_discovery=not initial if reading else initial,
+    )
     path = tmp_path / "config.toml"
 
     await configure(settings, path)
 
     loaded = load_settings(path)
-    assert loaded.allow_public_channel_reads is expected
+    assert loaded.allow_public_channel_reads is (expected if reading else not initial)
+    assert loaded.allow_public_channel_discovery is (not initial if reading else expected)
     assert loaded.allowed_chat_ids == ["1"]
     assert backend.closed
 

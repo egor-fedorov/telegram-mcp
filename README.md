@@ -13,6 +13,8 @@ See [ROADMAP.md](ROADMAP.md) for the development plan and the next stage.
 | `list_folders` | Folders, IDs, order, inclusion/exclusion rules |
 | `list_chats` | Chats filtered by name, type, or folders |
 | `get_chat` | Description and linked discussion group |
+| `search_public_channels` | Find public broadcast channels by query; metadata only |
+| `get_similar_channels` | Find similar public channels for one specified public source; metadata only |
 | `search_messages` | Keyword search by chats, folders, dates, sender, or content type |
 | `get_history` | History over a time range, in chronological or reverse order |
 | `get_messages` | Messages by links/IDs with authors, dates, and attachment metadata |
@@ -38,7 +40,8 @@ uv run --locked telegram-mcp status
 2. `login` prompts for them locally, followed by your phone number, login code,
    and 2FA password if enabled. The code and 2FA password are not saved in the configuration.
 3. `configure` displays folder IDs and prompts you to select permitted folders/chats,
-   then separately opt in to reading explicitly specified public channels (`y`/`n`).
+   then separately opt in to reading explicitly specified public channels and discovering
+   public-channel metadata (`y`/`n` for each).
    Enter preserves the current value of each setting.
    By default, message access is not permitted for any chat.
 4. `status` should show `authorized: true` and your selected sources.
@@ -67,6 +70,13 @@ channels outside the allowlist; this setting is disabled by default. It does not
 `list_chats`, searches without `chat_ids`, or access to private dialogs or groups.
 Public-channel status is checked using fresh metadata: the chat must be a broadcast channel
 with a primary or active additional username. The server does not automatically join channels.
+
+`allow_public_channel_discovery = true` permits public-channel search and similar-channel
+metadata. It is disabled by default and independent of all read permissions, including
+`allow_all_chats` and `allow_public_channel_reads`. When disabled, both discovery tools return
+`FEATURE_DISABLED` before contacting Telegram, including authorization or source checks.
+Discovery does not permit reading posts or add a channel to the allowlist. It does not expand
+`list_chats`, message searches without explicit sources, or access to linked discussions.
 Configuration changes take effect after restarting the MCP server.
 
 ## Connecting to Codex
@@ -89,7 +99,8 @@ startup_timeout_sec = 20
 tool_timeout_sec = 120
 enabled_tools = [
   "get_status", "list_folders", "list_chats", "get_chat", "search_messages",
-  "get_history", "get_messages", "get_context", "get_thread"
+  "get_history", "get_messages", "get_context", "get_thread",
+  "search_public_channels", "get_similar_channels"
 ]
 ```
 
@@ -106,9 +117,60 @@ Use the `get_status` MCP tool while Codex is running.
 field is `true` if authorization is confirmed, `false` if it is missing or revoked,
 and `null` if the check cannot be completed, for example because of a network error.
 The `error` field explains the reason; `connected` reports connection state separately.
-The response also includes `allow_public_channel_reads` and the other access settings.
+The response also includes `allow_public_channel_reads`, `allow_public_channel_discovery`,
+and the other access settings.
 
 ## Usage
+
+### Discover, select, and read
+
+Enable `allow_public_channel_discovery` locally, restart the server, and then:
+
+1. Call `search_public_channels(query="technology", limit=20)` to find candidate channels.
+2. Review their titles and public URLs, then select the sources relevant to your question.
+   Call `get_similar_channels(chat_ref="https://t.me/example_channel", limit=20)` to expand
+   the candidates around a selected public channel. Replace the example reference with a
+   returned channel ID, username, or link. Recommendations always require a source;
+   personalized recommendations without a source are not supported.
+3. Use `get_history` with a selected channel's ID or URL and a date range to read its posts,
+   then cite original messages when comparing sources. Reading still requires the existing
+   allowlist, `allow_all_chats`, or `allow_public_channel_reads`; discovery alone is not enough.
+
+Both discovery tools default to `limit=20` and accept limits from 1 to 100. Search queries
+must be nonempty after trimming whitespace and contain at most 1,000 characters. Invalid
+queries and limits are rejected as argument errors; Telegram's rejection of an empty
+or too-short query returns `INVALID_ARGUMENT`.
+Only accessible public broadcast channels are returned. Users, bots, groups, private
+channels, and forbidden channels are excluded. A recommendation source is checked using
+fresh metadata and must satisfy the same public-channel criteria. If a numeric ID cannot
+be resolved, use its username or link.
+
+Each `PublicChannel` contains `id`, `title`, an active `username`, public `url`, and
+`participants_count`. A participant count unavailable in Telegram's response is `null`,
+not zero. Discovery does not invent dialog state such as mute, unread, or folder membership.
+Each `DiscoveryResult` contains:
+
+| Field | Meaning |
+| --- | --- |
+| `channels` | Eligible channels, deduplicated by ID in Telegram's result order |
+| `returned_count` | Actual number of channels returned |
+| `telegram_total_count` | Telegram's recommendation count when provided; otherwise `null` |
+| `locally_truncated` | Whether eligible results were cut to the requested `limit` locally |
+| `exhaustive` | Always `false`; discovery does not cover all matching Telegram channels |
+
+Neither tool has a cursor. Filtering may leave fewer results than requested; the server
+does not issue extra searches to fill the response. Recommendations use Telegram's available
+results and apply `limit` locally. Telegram's total count and server-imposed limits do not
+describe a complete directory, and a missing count does not imply zero results.
+
+Authorization, FloodWait, network, and server failures are reported as errors, not empty
+results. After temporary `RATE_LIMITED`, `CONNECTION_ERROR`, or `TELEGRAM_UNAVAILABLE`
+errors, retry with a new tool call. Expected tool failures include JSON in the MCP error
+text with `code`, `message`, and, when supplied, `retry_after_seconds`; respect that delay.
+Discovery does not join channels, make payments, fetch candidate posts automatically,
+or perform global post search.
+
+### Read permitted sources
 
 To find the folder named `Work` and list its channels, call `list_folders(query="Work")`,
 then `list_chats` with its ID in `folder_ids` and `chat_type="channel"`.
@@ -212,16 +274,17 @@ make check
 ```
 
 This runs Ruff format/check, `ty check`, and pytest. Tests use no account and make no
-requests to Telegram. They cover folders, pagination, dates, context, access, Telethon
-structures, configuration, and the actual MCP protocol, including a separate STDIO process.
+requests to Telegram. They cover public-channel discovery, folders, pagination, dates,
+context, access, Telethon structures, configuration, and the actual MCP protocol,
+including a separate STDIO process.
 Both modern MCP mode and compatibility with the initialize handshake are tested.
 
 ## First-version boundaries
 
-Reading cloud chats is implemented. Automatic joining, paid requests, sending,
-attachment downloads, voice transcription, folder management, and a semantic index
-remain possible extensions. Attachments are represented by metadata. Secret chats are
-not supported. Testing against real chats requires your local login.
+Reading cloud chats and discovering public channels are implemented. Automatic joining,
+paid requests, sending, attachment downloads, voice transcription, folder management,
+and a semantic index remain possible extensions. Attachments are represented by metadata.
+Secret chats are not supported. Testing against real chats requires your local login.
 
 Use this integration for material you are entitled to share with the model.
 [Telegram's content and AI terms](https://telegram.org/tos/content-licensing)

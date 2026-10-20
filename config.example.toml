@@ -11,6 +11,9 @@ allow_all_chats = false
 # Opt in only for explicitly requested public broadcast channels outside the allowlist.
 # Does not widen list_chats, selector-free search, groups, or linked discussions.
 allow_public_channel_reads = false
+# Independently opt in to public-channel search and similar-channel metadata.
+# Discovery never grants permission to read posts or changes the allowlist.
+allow_public_channel_discovery = false
 rpc_timeout_seconds = 20
 max_dialogs = 10000
 rpc_pages_per_call = 12

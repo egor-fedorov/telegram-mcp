@@ -1,4 +1,4 @@
-"""Retrieval policy, immutable pagination snapshots and context assembly."""
+"""Discovery and retrieval policy, pagination snapshots and context assembly."""
 
 import json
 import math
@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Literal
 
-from telegram_mcp.backend import Backend
+from telegram_mcp.backend import Backend, DiscoveryBatch
 from telegram_mcp.config import Settings
 from telegram_mcp.cursors import CursorStore
 from telegram_mcp.folders import allowed_ids, select_chats
@@ -16,6 +16,7 @@ from telegram_mcp.models import (
     ChatPage,
     ContentType,
     ContextResult,
+    DiscoveryResult,
     Folder,
     Issue,
     Message,
@@ -75,6 +76,20 @@ def check_limit(limit: int) -> None:
         raise ToolError("INVALID_ARGUMENT", "limit must be between 1 and 100.")
 
 
+def discovery_result(batch: DiscoveryBatch, limit: int) -> DiscoveryResult:
+    # Keep the first occurrence so native result order and metadata remain stable.
+    unique = {}
+    for channel in batch.channels:
+        unique.setdefault(channel.id, channel)
+    channels = list(unique.values())[:limit]
+    return DiscoveryResult(
+        channels=channels,
+        returned_count=len(channels),
+        telegram_total_count=batch.telegram_total_count,
+        locally_truncated=len(unique) > limit,
+    )
+
+
 class Service:
     def __init__(self, backend: Backend, settings: Settings):
         self.backend = backend
@@ -88,10 +103,36 @@ class Service:
             "mode": "read_only",
             "allow_all_chats": self.settings.allow_all_chats,
             "allow_public_channel_reads": self.settings.allow_public_channel_reads,
+            "allow_public_channel_discovery": self.settings.allow_public_channel_discovery,
             "allowed_chat_ids": self.settings.allowed_chat_ids,
             "allowed_folder_ids": self.settings.allowed_folder_ids,
             "cursor_ttl_seconds": self.settings.cursor_ttl_seconds,
         }
+
+    def require_discovery(self) -> None:
+        if not self.settings.allow_public_channel_discovery:
+            raise ToolError(
+                "FEATURE_DISABLED",
+                "Public-channel discovery requires allow_public_channel_discovery.",
+            )
+
+    async def search_public_channels(self, query: str, limit: int = 20) -> DiscoveryResult:
+        self.require_discovery()
+        check_limit(limit)
+        query = query.strip()
+        if not 1 <= len(query) <= 1000:
+            raise ToolError(
+                "INVALID_ARGUMENT", "query must contain 1 to 1000 characters after trimming."
+            )
+        return discovery_result(await self.backend.search_public_channels(query, limit), limit)
+
+    async def get_similar_channels(self, chat_ref: str, limit: int = 20) -> DiscoveryResult:
+        self.require_discovery()
+        check_limit(limit)
+        chat_ref = chat_ref.strip()
+        if not chat_ref:
+            raise ToolError("INVALID_ARGUMENT", "chat_ref must not be empty.")
+        return discovery_result(await self.backend.get_similar_channels(chat_ref), limit)
 
     async def catalog(self) -> tuple[list[Chat], list[Folder], set[str]]:
         chats, folders = await self.backend.catalog()

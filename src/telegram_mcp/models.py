@@ -30,6 +30,22 @@ class Chat(Model):
     pinned_in_folder_ids: list[int] = Field(default_factory=list)
 
 
+class PublicChannel(Model):
+    id: str
+    title: str
+    username: str
+    url: str
+    participants_count: int | None = Field(default=None, ge=0)
+
+
+class DiscoveryResult(Model):
+    channels: list[PublicChannel]
+    returned_count: int = Field(ge=0)
+    telegram_total_count: int | None = Field(default=None, ge=0)
+    locally_truncated: bool = False
+    exhaustive: Literal[False] = False
+
+
 class Folder(Model):
     id: int
     title: str

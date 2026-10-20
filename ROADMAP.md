@@ -5,8 +5,8 @@ sources, retrieving original messages and files, tracking changes, and optionall
 acting on behalf of the user. Job searches, news research, and work conversations
 use the same tools; the calling agent performs content analysis.
 
-This document records priorities and acceptance criteria. The next milestone is
-described in detail; later milestones will be refined before implementation.
+This document records priorities, milestone scope, and acceptance criteria.
+Planned milestones will be refined before implementation.
 No delivery dates have been assigned. See [README](README.md) for current features
 and setup instructions.
 
@@ -15,7 +15,7 @@ and setup instructions.
 | ID | Status | Outcome | Dependencies |
 | --- | --- | --- | --- |
 | M0 | Done | Reliable retrieval: channel references, explicit public-channel access, batched messages, recovery from temporary failures, and fresh authorization status | Base MCP server |
-| M1 | Next | Public-channel discovery and similar sources, followed by existing retrieval tools | M0 |
+| M1 | Done | Public-channel discovery and similar sources, followed by existing retrieval tools | M0 |
 | M2 | Planned | Forum topic and pinned-message navigation; richer message data, including albums, reactions, polls, and available counters | M0 |
 | M3 | Planned | Downloading selected attachments with size limits and file delivery to the calling client | M0; use album structure from M2 |
 | M4 | Planned | New messages and available changes, persistent checkpoints, and export with source references | M0; M2–M3 for their respective content types |
@@ -23,6 +23,12 @@ and setup instructions.
 M0 was implemented in commit `b167044`. At that checkpoint, `make check` passed:
 Ruff format/check, ty, and 110 offline tests. This completion record does not include
 validation against a live Telegram account.
+
+M1 adds the two discovery tools, an independent opt-in permission, compact metadata,
+and MCP error propagation with retry delays. `make check` passed with 225 offline
+tests, including both MCP modes and existing retrieval contracts. Live Telegram
+validation remains separate. M2 is next for detailed specification; its scope
+remains planned until that step is complete.
 
 The row order expresses priority, not a restriction on independent work. “Planned”
 means an agreed direction, not a complete technical specification.
@@ -113,6 +119,9 @@ Preserve the MCP → Service → Backend → Telethon boundary:
 - Reuse existing timeouts, error classification, and FloodWait handling. On temporary
   failure, return its cause and any retry delay; the caller retries with a new tool
   call. Do not disguise failures as empty results.
+- At the MCP boundary, expose expected domain errors as JSON in error text, including
+  `code`, `message`, and an optional `retry_after_seconds`. Keep unexpected failures
+  redacted by the SDK. This applies consistently to discovery and retrieval tools.
 
 Primary references: [entity search](https://core.telegram.org/method/contacts.search),
 [similar channels](https://core.telegram.org/api/recommend), and
@@ -122,10 +131,10 @@ capabilities and constraints and is outside this milestone.
 
 ### Work items
 
-- [ ] M1.1 — Result models, backend interfaces, and Telethon requests.
-- [ ] M1.2 — Discovery policy, configuration, CLI, and the two MCP tools.
-- [ ] M1.3 — Offline tests, including real MCP protocol dispatch.
-- [ ] M1.4 — README, example configuration, `enabled_tools`, and a
+- [x] M1.1 — Result models, backend interfaces, and Telethon requests.
+- [x] M1.2 — Discovery policy, configuration, CLI, and the two MCP tools.
+- [x] M1.3 — Offline tests, including real MCP protocol dispatch.
+- [x] M1.4 — README, example configuration, `enabled_tools`, and a
   “discover → select → read” example; complete `make check`.
 
 ### Acceptance criteria

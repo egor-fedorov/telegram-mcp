@@ -13,7 +13,7 @@ from urllib.parse import parse_qs, urlparse
 
 from telethon import TelegramClient, errors, functions, types, utils
 
-from telegram_mcp.backend import Batch
+from telegram_mcp.backend import Batch, DiscoveryBatch
 from telegram_mcp.config import Settings
 from telegram_mcp.models import (
     Attachment,
@@ -24,6 +24,7 @@ from telegram_mcp.models import (
     ForwardOrigin,
     Message,
     MessageRef,
+    PublicChannel,
     Sender,
     ToolError,
 )
@@ -47,6 +48,23 @@ def public_username(entity: Any) -> str | None:
             if username.active and username.username
         ),
         None,
+    )
+
+
+def public_channel_from_entity(entity: Any) -> PublicChannel | None:
+    if not isinstance(entity, types.Channel) or not entity.broadcast or entity.megagroup:
+        return None
+    if entity.banned_rights and entity.banned_rights.view_messages:
+        return None
+    username = public_username(entity)
+    if not username:
+        return None
+    return PublicChannel(
+        id=peer_id(entity),
+        title=entity.title,
+        username=username,
+        url=f"https://t.me/{username}",
+        participants_count=entity.participants_count,
     )
 
 
@@ -222,6 +240,10 @@ class TelegramBackend:
         except (errors.ServerError, errors.TimedOutError):
             raise ToolError(
                 "TELEGRAM_UNAVAILABLE", "Telegram is temporarily unavailable. Retry this request."
+            ) from None
+        except (errors.QueryTooShortError, errors.SearchQueryEmptyError):
+            raise ToolError(
+                "INVALID_ARGUMENT", "Telegram rejected an empty or too-short search query."
             ) from None
         except errors.RPCError as exc:
             raise ToolError("TELEGRAM_ERROR", type(exc).__name__) from None
@@ -404,18 +426,48 @@ class TelegramBackend:
         # get_entity performs a fresh GetChannels RPC for a known numeric entity;
         # the access hash may be cached, but public visibility must never be cached.
         entity = await self._resolve_entity(chat_id)
-        if (
-            not isinstance(entity, types.Channel)
-            or not entity.broadcast
-            or entity.megagroup
-            or not public_username(entity)
-        ):
+        if public_channel_from_entity(entity) is None:
             raise ToolError("ACCESS_DENIED", "This chat is not a public broadcast channel.")
         chat = chat_from_entity(entity)
         if chat.id != chat_id:
             raise ToolError("ACCESS_DENIED", "Telegram returned a different channel identity.")
         self.chats[chat.id] = chat
         return chat
+
+    async def search_public_channels(self, query: str, limit: int) -> DiscoveryBatch:
+        client = await self.ensure()
+        response = await self.call(
+            client(functions.contacts.SearchRequest(q=query, limit=limit, broadcasts=True))
+        )
+        entities = {peer_id(entity): entity for entity in response.chats}
+        channels: list[PublicChannel] = []
+        for peer in [*response.my_results, *response.results]:
+            channel = public_channel_from_entity(entities.get(peer_id(peer)))
+            if channel is not None:
+                channels.append(channel)
+        return DiscoveryBatch(channels)
+
+    async def get_similar_channels(self, chat_ref: str) -> DiscoveryBatch:
+        # Resolve fresh under discovery permission; no dialog or message access is needed.
+        entity = await self._resolve_entity(chat_ref)
+        if public_channel_from_entity(entity) is None:
+            raise ToolError("ACCESS_DENIED", "The source must be a public broadcast channel.")
+        try:
+            source = utils.get_input_channel(utils.get_input_peer(entity))
+        except (TypeError, ValueError):
+            raise ToolError(
+                "INVALID_REFERENCE", "The source channel is unavailable. Use its username or link."
+            ) from None
+        client = await self.ensure()
+        response = await self.call(
+            client(functions.channels.GetChannelRecommendationsRequest(channel=source))
+        )
+        channels = [
+            channel
+            for entity in response.chats
+            if (channel := public_channel_from_entity(entity)) is not None
+        ]
+        return DiscoveryBatch(channels, telegram_total_count=getattr(response, "count", None))
 
     async def chat_details(self, chat: Chat) -> dict[str, object]:
         client = await self.ensure()

@@ -90,6 +90,18 @@ async def login(settings: Settings, path: Path) -> None:
         os.close(fd)
 
 
+async def prompt_boolean(prompt: str, current: bool) -> bool:
+    current_label = "yes" if current else "no"
+    while True:
+        value = await asyncio.to_thread(input, f"{prompt} [y/n] (Enter: keep {current_label}): ")
+        value = value.strip().lower()
+        if not value:
+            return current
+        if value in {"y", "yes", "n", "no"}:
+            return value in {"y", "yes"}
+        print("Enter y or n, or press Enter to keep the current setting.")
+
+
 async def configure(settings: Settings, path: Path) -> None:
     if not sys.stdin.isatty():
         raise ToolError(
@@ -117,25 +129,14 @@ async def configure(settings: Settings, path: Path) -> None:
         ).strip()
         if value:
             settings.allowed_chat_ids = [str(int(item.strip())) for item in value.split(",")]
-        while True:
-            current = "yes" if settings.allow_public_channel_reads else "no"
-            value = (
-                (
-                    await asyncio.to_thread(
-                        input,
-                        "Allow explicitly requested public channels outside this scope? "
-                        f"[y/n] (Enter: keep {current}): ",
-                    )
-                )
-                .strip()
-                .lower()
-            )
-            if not value:
-                break
-            if value in {"y", "yes", "n", "no"}:
-                settings.allow_public_channel_reads = value in {"y", "yes"}
-                break
-            print("Enter y or n, or press Enter to keep the current setting.")
+        settings.allow_public_channel_reads = await prompt_boolean(
+            "Allow explicitly requested public channels outside this scope?",
+            settings.allow_public_channel_reads,
+        )
+        settings.allow_public_channel_discovery = await prompt_boolean(
+            "Allow public-channel search and similar-channel metadata (no post reads)?",
+            settings.allow_public_channel_discovery,
+        )
         settings.allow_all_chats = False
         save_settings(settings, path)
         print(f"Scope saved to {path}. Restart the MCP server to apply configuration changes.")
