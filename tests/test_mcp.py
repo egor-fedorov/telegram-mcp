@@ -29,11 +29,19 @@ async def test_mcp_tool_schemas_and_real_dispatch(mode: str) -> None:
     backend = FakeBackend(
         [msg("1", 1)], folders=[Folder(id=1, title="Work", position=0, included_chat_ids=["1"])]
     )
-    server = create_server(Service(backend, Settings(allowed_folder_ids=[1])))
+    server = create_server(
+        Service(backend, Settings(allowed_folder_ids=[1], allow_public_channel_reads=True))
+    )
     async with Client(server, mode=mode) as client:
         listing = await client.list_tools()
         assert {t.name for t in listing.tools} == EXPECTED_TOOLS
         assert all(t.annotations and t.annotations.read_only_hint for t in listing.tools)
+        history_schema = next(t.input_schema for t in listing.tools if t.name == "get_history")
+        assert {"chat_id", "chat_ref"} <= history_schema["properties"].keys()
+        assert "chat_id" not in history_schema.get("required", [])
+        status = await client.call_tool("get_status", {})
+        assert status.structured_content is not None
+        assert status.structured_content["allow_public_channel_reads"] is True
         result = await client.call_tool("search_messages", {"query": "budget", "folder_ids": [1]})
         assert not result.is_error
         assert result.structured_content is not None
@@ -44,6 +52,13 @@ async def test_mcp_tool_schemas_and_real_dispatch(mode: str) -> None:
             "get_history", {"chat_id": "1", "date_from": "2026-09-01T00:00:00"}
         )
         assert bad_date.is_error
+        for selector in ({"chat_id": "1"}, {"chat_ref": "1"}):
+            history = await client.call_tool("get_history", selector)
+            assert not history.is_error
+            assert history.structured_content is not None
+            assert history.structured_content["messages"][0]["message_ref"]["chat_id"] == "1"
+        for selector in ({}, {"chat_id": "1", "chat_ref": "1"}):
+            assert (await client.call_tool("get_history", selector)).is_error
         folder_result = await client.call_tool("list_folders", {})
         assert not folder_result.is_error
         assert (await client.call_tool("get_context", {"ref": "1:1"})).is_error is not True
@@ -64,4 +79,5 @@ async def test_stdio_process_starts_without_credentials(tmp_path: Path, mode: st
         assert not response.is_error
         assert response.structured_content is not None
         assert response.structured_content["authorized"] is False
+        assert response.structured_content["allow_public_channel_reads"] is False
         assert response.structured_content["error"]["code"] == "AUTH_REQUIRED"

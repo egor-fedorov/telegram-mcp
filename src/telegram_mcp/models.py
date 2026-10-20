@@ -82,6 +82,11 @@ class ForwardOrigin(Model):
     name: str | None = None
     message_ref: MessageRef | None = None
     sent_at: datetime | None = None
+    post_author: str | None = None
+    saved_from_ref: MessageRef | None = None
+    saved_from_sender_id: str | None = None
+    saved_from_name: str | None = None
+    saved_at: datetime | None = None
 
 
 class Message(Model):
@@ -110,6 +115,7 @@ class Issue(Model):
     chat_id: str | None = None
     message_ref: MessageRef | None = None
     retry_after_seconds: int | None = None
+    input_index: int | None = Field(default=None, ge=0)
 
 
 class Scope(Model):
@@ -155,11 +161,21 @@ class ToolError(Exception):
         self.detail = message
         self.retry_after = retry_after
 
-    def issue(self, chat_id: str | None = None, ref: MessageRef | None = None) -> Issue:
+    @property
+    def retryable(self) -> bool:
+        return self.code in {"RATE_LIMITED", "CONNECTION_ERROR", "TELEGRAM_UNAVAILABLE"}
+
+    def issue(
+        self,
+        chat_id: str | None = None,
+        ref: MessageRef | None = None,
+        input_index: int | None = None,
+    ) -> Issue:
         return Issue(
             code=self.code,
             message=self.detail,
             chat_id=chat_id,
             message_ref=ref,
             retry_after_seconds=self.retry_after,
+            input_index=input_index,
         )

@@ -175,3 +175,233 @@ async def test_saved_messages_peer_in_folder_uses_account_id() -> None:
     _, folders = await backend.catalog()
     assert folders[0].included_chat_ids == ["123"]
     assert folders[0].pinned_chat_ids == ["123"]
+
+
+def channel(
+    *,
+    broadcast: bool = False,
+    megagroup: bool = False,
+    username: str | None = None,
+    usernames: list[types.Username] | None = None,
+) -> types.Channel:
+    return types.Channel(
+        id=123,
+        title="News",
+        photo=types.ChatPhotoEmpty(),
+        date=BASE,
+        broadcast=broadcast,
+        megagroup=megagroup,
+        username=username,
+        usernames=usernames,
+    )
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        "-1000000000123",
+        "@example",
+        "https://t.me/example",
+        "https://t.me/s/example",
+        "t.me/s/example",
+    ],
+)
+async def test_chat_references_resolve_to_canonical_id(reference: str) -> None:
+    backend = TelegramBackend(Settings())
+    client = SimpleNamespace(
+        get_entity=AsyncMock(return_value=channel(broadcast=True, username="example"))
+    )
+    backend.client = client
+    resolved = await backend.resolve_chat(reference)
+    assert resolved.id == "-1000000000123" and resolved.username == "example"
+    await backend.resolve_chat(resolved.id)
+    assert client.get_entity.await_count == 1
+    await backend.resolve_chat(resolved.id, refresh=True)
+    assert client.get_entity.await_count == 2
+
+
+async def test_unknown_numeric_chat_suggests_username_without_leaking_error() -> None:
+    backend = TelegramBackend(Settings())
+    backend.client = SimpleNamespace(get_entity=AsyncMock(side_effect=ValueError("secret")))
+    with pytest.raises(ToolError, match="username or t.me link") as caught:
+        await backend.resolve_chat("-1000000000123")
+    assert caught.value.code == "INVALID_REFERENCE"
+    assert "secret" not in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    "entity",
+    [
+        channel(broadcast=True, username="example"),
+        channel(broadcast=True, usernames=[types.Username("example", active=True)]),
+    ],
+)
+async def test_public_channel_checks_fresh_entity_and_active_usernames(
+    entity: types.Channel,
+) -> None:
+    backend = TelegramBackend(Settings())
+    backend.chats["-1000000000123"] = Chat(id="-1000000000123", title="Stale", type="group")
+    client = SimpleNamespace(get_entity=AsyncMock(return_value=entity))
+    backend.client = client
+    resolved = await backend.public_channel("-1000000000123")
+    assert resolved.type == "channel" and resolved.username == "example"
+    assert resolved.title == "News"
+    client.get_entity.assert_awaited_once_with(-1000000000123)
+    client.get_entity.return_value = channel(broadcast=True)
+    with pytest.raises(ToolError, match="ACCESS_DENIED"):
+        await backend.public_channel(resolved.id)
+    assert client.get_entity.await_count == 2
+
+
+@pytest.mark.parametrize(
+    "entity",
+    [
+        types.User(id=123, username="example"),
+        types.ChannelForbidden(id=123, access_hash=1, title="Forbidden", broadcast=True),
+        channel(broadcast=False, megagroup=True, username="example"),
+        channel(broadcast=True, megagroup=True, username="example"),
+        channel(broadcast=True, usernames=[types.Username("example", active=False)]),
+        channel(broadcast=True),
+    ],
+)
+async def test_public_exception_rejects_private_and_non_broadcast_entities(entity: object) -> None:
+    backend = TelegramBackend(Settings())
+    backend.client = SimpleNamespace(get_entity=AsyncMock(return_value=entity))
+    with pytest.raises(ToolError, match="ACCESS_DENIED"):
+        await backend.public_channel("-1000000000123")
+
+
+async def test_batch_lookup_deduplicates_and_retains_missing_ids_and_metadata() -> None:
+    backend = TelegramBackend(Settings())
+    backend.chats["-1000000000123"] = Chat(
+        id="-1000000000123", title="News", type="channel", username="example"
+    )
+    message = types.Message(
+        id=10,
+        peer_id=types.PeerChannel(123),
+        date=BASE,
+        edit_date=BASE + timedelta(seconds=1),
+        message="😀bold",
+        entities=[types.MessageEntityBold(offset=2, length=4)],
+    )
+    client = SimpleNamespace(
+        get_messages=AsyncMock(
+            return_value=[None, message, types.MessageEmpty(id=12, peer_id=types.PeerChannel(123))]
+        )
+    )
+    backend.client = client
+    results = await backend.messages("-1000000000123", [11, 10, 10, 12])
+    client.get_messages.assert_awaited_once_with(-1000000000123, ids=[11, 10, 12])
+    assert results[11] is None and results[12] is None
+    found = results[10]
+    assert found is not None
+    assert found.text == "😀bold" and found.text_total_length == 5
+    assert found.entities[0].offset == 2 and found.entities[0].length == 4
+    assert found.sent_at == BASE and found.edited_at == BASE + timedelta(seconds=1)
+    assert found.url == "https://t.me/example/10"
+    assert await backend.messages("-1000000000123", []) == {}
+    assert client.get_messages.await_count == 1
+    client.get_messages.return_value = [message]
+    assert await backend.message(MessageRef(chat_id="-1000000000123", message_id=10)) == found
+
+
+def test_forward_sources_remain_separate_for_saved_and_hidden_senders() -> None:
+    chat = Chat(id="1", title="Saved Messages", type="saved")
+    raw = types.Message(
+        id=10,
+        peer_id=types.PeerUser(1),
+        date=BASE + timedelta(days=2),
+        message="forward",
+        fwd_from=types.MessageFwdHeader(
+            date=BASE,
+            from_id=types.PeerChannel(123),
+            channel_post=7,
+            post_author="Original author",
+            saved_from_peer=types.PeerChannel(456),
+            saved_from_msg_id=8,
+            saved_from_id=types.PeerUser(42),
+            saved_from_name="Saved author",
+            saved_date=BASE + timedelta(days=1),
+        ),
+    )
+    origin = normalize_message(raw, chat).forward_origin
+    assert origin is not None
+    assert origin.sender_id == "-1000000000123" and origin.post_author == "Original author"
+    assert origin.message_ref == MessageRef(chat_id="-1000000000123", message_id=7)
+    assert origin.saved_from_ref == MessageRef(chat_id="-1000000000456", message_id=8)
+    assert origin.saved_from_sender_id == "42" and origin.saved_from_name == "Saved author"
+    assert origin.sent_at == BASE and origin.saved_at == BASE + timedelta(days=1)
+    raw.fwd_from = types.MessageFwdHeader(date=BASE, from_name="Hidden author")
+    hidden = normalize_message(raw, chat).forward_origin
+    assert hidden is not None and hidden.name == "Hidden author"
+    assert hidden.sender_id is None and hidden.message_ref is None and hidden.saved_from_ref is None
+
+
+@pytest.mark.parametrize("oldest_first", [False, True])
+async def test_date_boundaries_and_offsets_across_adapter_pages(oldest_first: bool) -> None:
+    backend = TelegramBackend(Settings())
+    backend.chats["1"] = Chat(id="1", title="Friend", type="private")
+    ids = [1, 2, 3, 4] if oldest_first else [4, 3, 2, 1]
+    raw = [
+        types.Message(
+            id=i, peer_id=types.PeerUser(1), date=BASE + timedelta(seconds=i), message="x"
+        )
+        for i in ids
+    ]
+    client = SimpleNamespace(get_messages=AsyncMock(side_effect=[raw[:2], raw[2:]]))
+    backend.client = client
+    first = await backend.fetch(
+        "1",
+        limit=2,
+        date_from=BASE + timedelta(seconds=2),
+        date_to=BASE + timedelta(seconds=4),
+        oldest_first=oldest_first,
+    )
+    second = await backend.fetch(
+        "1",
+        offset=first.next_offset,
+        limit=2,
+        date_from=BASE + timedelta(seconds=2),
+        date_to=BASE + timedelta(seconds=4),
+        oldest_first=oldest_first,
+    )
+    assert [m.message_ref.message_id for m in first.messages + second.messages] == (
+        [2, 3] if oldest_first else [3, 2]
+    )
+    assert not first.exhausted and second.exhausted
+    assert first.next_offset == ids[1] and second.next_offset == ids[-1]
+    calls = client.get_messages.await_args_list
+    assert calls[0].kwargs["offset_date"] == BASE + timedelta(seconds=1 if oldest_first else 5)
+    assert "offset_date" not in calls[1].kwargs
+    assert calls[1].kwargs["offset_id"] == ids[1]
+
+
+async def test_empty_telegram_messages_advance_pagination() -> None:
+    backend = TelegramBackend(Settings())
+    backend.chats["1"] = Chat(id="1", title="Friend", type="private")
+    backend.client = SimpleNamespace(
+        get_messages=AsyncMock(
+            return_value=[types.MessageEmpty(id=i, peer_id=types.PeerUser(1)) for i in (20, 19)]
+        )
+    )
+    page = await backend.fetch("1", limit=2)
+    assert page.messages == [] and page.next_offset == 19 and not page.exhausted
+
+
+@pytest.mark.parametrize(
+    ("error", "code", "retryable"),
+    [
+        (errors.RpcCallFailError(None), "TELEGRAM_UNAVAILABLE", True),
+        (errors.TimedOutError(None, "timeout"), "TELEGRAM_UNAVAILABLE", True),
+        (ConnectionError("secret"), "CONNECTION_ERROR", True),
+        (errors.SessionExpiredError(None), "AUTH_REQUIRED", False),
+        (errors.ChannelPrivateError(None), "TELEGRAM_ERROR", False),
+    ],
+)
+async def test_error_retryability_is_explicit(error: Exception, code: str, retryable: bool) -> None:
+    backend = TelegramBackend(Settings())
+    with pytest.raises(ToolError) as caught:
+        await backend.call(AsyncMock(side_effect=error)())
+    assert caught.value.code == code and caught.value.retryable is retryable
+    issue = caught.value.issue(input_index=3)
+    assert issue.input_index == 3 and issue.message_ref is None

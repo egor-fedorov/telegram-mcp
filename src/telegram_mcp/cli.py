@@ -117,6 +117,25 @@ async def configure(settings: Settings, path: Path) -> None:
         ).strip()
         if value:
             settings.allowed_chat_ids = [str(int(item.strip())) for item in value.split(",")]
+        while True:
+            current = "yes" if settings.allow_public_channel_reads else "no"
+            value = (
+                (
+                    await asyncio.to_thread(
+                        input,
+                        "Allow explicitly requested public channels outside this scope? "
+                        f"[y/n] (Enter: keep {current}): ",
+                    )
+                )
+                .strip()
+                .lower()
+            )
+            if not value:
+                break
+            if value in {"y", "yes", "n", "no"}:
+                settings.allow_public_channel_reads = value in {"y", "yes"}
+                break
+            print("Enter y or n, or press Enter to keep the current setting.")
         settings.allow_all_chats = False
         save_settings(settings, path)
         print(f"Scope saved to {path}. Restart the MCP server to apply configuration changes.")

@@ -45,6 +45,7 @@ def create_server(service: Service) -> MCPServer[None]:
             "Follow next_cursor until null before claiming a complete search or time-range review. "
             "An empty page with a next_cursor is not an empty search. "
             "Report issues and incomplete scope. "
+            "Temporary failures retain a next_cursor; respect retry_after_seconds before retrying. "
             "Repeat original arguments when continuing a cursor. get_messages supports text_offset "
             "for retrieving truncated text. Entities retain UTF-16 offsets into the original text. "
             "Folder names are not unique; resolve their IDs. "
@@ -55,7 +56,11 @@ def create_server(service: Service) -> MCPServer[None]:
 
     @server.tool(annotations=readonly)
     async def get_status() -> dict[str, object]:
-        """Check Telegram authorization, connection, read-only mode and configured chat scope."""
+        """Check fresh Telegram authorization, connection, read-only mode and configured scope.
+
+        authorized is true if confirmed, false if missing/revoked, or null if the check failed.
+        error explains a failure; connected is reported independently.
+        """
         return await service.get_status()
 
     @server.tool(annotations=readonly)
@@ -81,7 +86,11 @@ def create_server(service: Service) -> MCPServer[None]:
 
     @server.tool(annotations=readonly)
     async def get_chat(chat_ref: str) -> dict[str, object]:
-        """Read permitted chat metadata by numeric ID, exact @username or t.me chat URL."""
+        """Read permitted chat metadata by numeric ID, exact @username or t.me[/s]/username URL.
+
+        Explicit public channels outside the allowlist require allow_public_channel_reads.
+        Unknown numeric IDs may require resolving a username or URL first.
+        """
         return await service.get_chat(chat_ref)
 
     @server.tool(annotations=readonly)
@@ -102,6 +111,8 @@ def create_server(service: Service) -> MCPServer[None]:
         explicit chat_ids intersect that union. Omitted selectors use all permitted dialogs.
         Uses Telegram keyword search, not semantic search. Native sender search and local
         date/content filtering are combined. Partial/empty pages may carry next_cursor.
+        Configured public-channel access applies only to explicit chat_ids, never implicit scope.
+        Temporary failures retain next_cursor; respect retry_after_seconds before continuing.
         """
         return await service.query(
             query=query,
@@ -117,25 +128,30 @@ def create_server(service: Service) -> MCPServer[None]:
 
     @server.tool(annotations=readonly)
     async def get_history(
-        chat_id: ChatID,
+        chat_id: ChatID | None = None,
         date_from: AwareDatetime | None = None,
         date_to: AwareDatetime | None = None,
         order: Literal["newest_first", "oldest_first"] = "newest_first",
         limit: Limit = 30,
         cursor: str | None = None,
+        chat_ref: str | None = None,
     ) -> Page:
         """Read a chat's history over [date_from, date_to), or recent messages if dates are omitted.
 
-        Use oldest_first for chronological reading. Follow next_cursor for a complete period.
+        Supply exactly one of chat_id or chat_ref (numeric ID, @username, or t.me[/s]/username).
+        Use oldest_first for chronological reading. Follow next_cursor for a complete period,
+        repeating the original selector; the cursor remains bound to the resolved chat ID.
+        Public channels outside the allowlist require allow_public_channel_reads.
+        Temporary failures retain next_cursor; respect retry_after_seconds before continuing.
         """
-        return await service.query(
-            chat_ids=[chat_id],
+        return await service.get_history(
+            chat_id=chat_id,
             date_from=date_from,
             date_to=date_to,
             order=order,
             limit=limit,
             cursor=cursor,
-            kind="history",
+            chat_ref=chat_ref,
         )
 
     @server.tool(annotations=readonly)
@@ -147,7 +163,9 @@ def create_server(service: Service) -> MCPServer[None]:
         """Fetch posts by Telegram URL, 'chat_id:message_id', or {chat_id, message_id}.
 
         Includes authors, reply references, attachments and original links. Missing messages
-        produce individual issues. For truncated text call again with next_text_offset.
+        produce individual issues with zero-based input_index. Input order and duplicates are
+        preserved. For truncated text call again with next_text_offset. Public channels outside
+        the allowlist require allow_public_channel_reads; linked discussions need ordinary access.
         """
         return await service.get_messages(refs, text_offset, text_limit)
 

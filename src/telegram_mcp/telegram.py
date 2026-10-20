@@ -39,6 +39,17 @@ def peer_id(peer: Any) -> str:
     return str(utils.get_peer_id(peer))
 
 
+def public_username(entity: Any) -> str | None:
+    return getattr(entity, "username", None) or next(
+        (
+            username.username
+            for username in getattr(entity, "usernames", None) or []
+            if username.active and username.username
+        ),
+        None,
+    )
+
+
 def chat_from_entity(entity: Any, dialog: Any = None, default_muted: bool = False) -> Chat:
     if isinstance(entity, types.User):
         kind = "saved" if entity.is_self else "bot" if entity.bot else "private"
@@ -54,7 +65,7 @@ def chat_from_entity(entity: Any, dialog: Any = None, default_muted: bool = Fals
         id=peer_id(entity),
         title=utils.get_display_name(entity) or "Unknown",
         type=kind,
-        username=getattr(entity, "username", None),
+        username=public_username(entity),
         is_contact=bool(getattr(entity, "contact", False)),
         is_muted=muted,
         is_archived=bool(dialog and dialog.archived),
@@ -141,11 +152,21 @@ def normalize_message(raw: Any, chat: Chat) -> Message:
         from_peer = getattr(fwd, "from_id", None)
         cid = peer_id(from_peer) if from_peer else None
         mid = getattr(fwd, "channel_post", None)
+        saved_peer = getattr(fwd, "saved_from_peer", None)
+        saved_mid = getattr(fwd, "saved_from_msg_id", None)
+        saved_sender = getattr(fwd, "saved_from_id", None)
         origin = ForwardOrigin(
             sender_id=cid,
             name=getattr(fwd, "from_name", None),
             message_ref=MessageRef(chat_id=cid, message_id=mid) if cid and mid else None,
             sent_at=utc(fwd.date) if getattr(fwd, "date", None) else None,
+            post_author=getattr(fwd, "post_author", None),
+            saved_from_ref=MessageRef(chat_id=peer_id(saved_peer), message_id=saved_mid)
+            if saved_peer and saved_mid
+            else None,
+            saved_from_sender_id=peer_id(saved_sender) if saved_sender else None,
+            saved_from_name=getattr(fwd, "saved_from_name", None),
+            saved_at=utc(fwd.saved_date) if getattr(fwd, "saved_date", None) else None,
         )
     link = None
     if chat.type == "channel" or chat.is_supergroup:
@@ -194,9 +215,13 @@ class TelegramBackend:
             raise ToolError(
                 "RATE_LIMITED", f"Telegram requests a wait of {exc.seconds} seconds.", exc.seconds
             ) from None
-        except (errors.AuthKeyUnregisteredError, errors.SessionRevokedError):
+        except (errors.UnauthorizedError, errors.AuthKeyDuplicatedError):
             raise ToolError(
                 "AUTH_REQUIRED", "Telegram session is no longer authorized. Run login."
+            ) from None
+        except (errors.ServerError, errors.TimedOutError):
+            raise ToolError(
+                "TELEGRAM_UNAVAILABLE", "Telegram is temporarily unavailable. Retry this request."
             ) from None
         except errors.RPCError as exc:
             raise ToolError("TELEGRAM_ERROR", type(exc).__name__) from None
@@ -239,6 +264,7 @@ class TelegramBackend:
                         request_retries=1,
                         connection_retries=1,
                         retry_delay=1,
+                        raise_last_call_error=True,
                         device_model="Telegram Context MCP",
                         app_version="0.1.0",
                     )
@@ -247,10 +273,7 @@ class TelegramBackend:
                         "SESSION_ERROR", "Cannot open the local Telegram session database."
                     ) from None
                 await self.call(client.connect())
-                if not await self.call(client.is_user_authorized()):
-                    raise ToolError(
-                        "AUTH_REQUIRED", "Session is not authorized. Run telegram-mcp login."
-                    )
+                await self.call(client(functions.updates.GetStateRequest()))
                 self.client = client
             except BaseException:
                 try:
@@ -275,12 +298,15 @@ class TelegramBackend:
 
     async def status(self) -> dict[str, object]:
         try:
-            await self.ensure()
-            return {"authorized": True, "connected": self.client.is_connected()}
+            existing_client = self.client
+            client = await self.ensure()
+            if existing_client is not None:
+                await self.call(client(functions.updates.GetStateRequest()))
+            return {"authorized": True, "connected": bool(client.is_connected())}
         except ToolError as exc:
             return {
-                "authorized": False,
-                "connected": False,
+                "authorized": False if exc.code == "AUTH_REQUIRED" else None,
+                "connected": bool(self.client is not None and self.client.is_connected()),
                 "error": exc.issue().model_dump(mode="json"),
             }
 
@@ -334,11 +360,10 @@ class TelegramBackend:
         self.chats = {c.id: c for c in chats}
         return chats, folders
 
-    async def resolve_chat(self, ref: str) -> Chat:
-        if ref in self.chats:
-            return self.chats[ref]
-        client = await self.ensure()
+    async def _resolve_entity(self, ref: str) -> Any:
         value = ref.strip()
+        if value.startswith(("t.me/", "telegram.me/", "www.t.me/")):
+            value = "https://" + value
         if value.startswith(("https://", "http://")):
             url = urlparse(value)
             if url.hostname not in ("t.me", "telegram.me", "www.t.me") or url.username:
@@ -346,6 +371,8 @@ class TelegramBackend:
                     "INVALID_REFERENCE", "Use a Telegram chat ID, username or t.me link."
                 )
             value = url.path.strip("/")
+            if value.startswith("s/"):
+                value = value[2:]
             if "/" in value or value.startswith("+"):
                 raise ToolError(
                     "INVALID_REFERENCE", "Invite links and message links are not chat references."
@@ -353,8 +380,40 @@ class TelegramBackend:
         target: int | str = int(value) if re.fullmatch(r"-?[1-9]\d*", value) else value
         if isinstance(target, str) and not re.fullmatch(r"@?[A-Za-z][A-Za-z0-9_]{3,31}|me", target):
             raise ToolError("INVALID_REFERENCE", "Use a numeric chat ID or exact username.")
-        entity = await self.call(client.get_entity(target))
+        client = await self.ensure()
+        try:
+            return await self.call(client.get_entity(target))
+        except ToolError as exc:
+            if isinstance(target, int) and exc.code == "INVALID_REFERENCE":
+                raise ToolError(
+                    "INVALID_REFERENCE",
+                    "Telegram has no entity for this numeric chat ID. Use its username or t.me "
+                    "link first.",
+                ) from None
+            raise
+
+    async def resolve_chat(self, ref: str, *, refresh: bool = False) -> Chat:
+        if not refresh and ref.strip() in self.chats:
+            return self.chats[ref.strip()]
+        entity = await self._resolve_entity(ref)
         chat = chat_from_entity(entity)
+        self.chats[chat.id] = chat
+        return chat
+
+    async def public_channel(self, chat_id: str) -> Chat:
+        # get_entity performs a fresh GetChannels RPC for a known numeric entity;
+        # the access hash may be cached, but public visibility must never be cached.
+        entity = await self._resolve_entity(chat_id)
+        if (
+            not isinstance(entity, types.Channel)
+            or not entity.broadcast
+            or entity.megagroup
+            or not public_username(entity)
+        ):
+            raise ToolError("ACCESS_DENIED", "This chat is not a public broadcast channel.")
+        chat = chat_from_entity(entity)
+        if chat.id != chat_id:
+            raise ToolError("ACCESS_DENIED", "Telegram returned a different channel identity.")
         self.chats[chat.id] = chat
         return chat
 
@@ -418,12 +477,20 @@ class TelegramBackend:
         return MessageRef(chat_id=cid, message_id=mid)
 
     async def message(self, ref: MessageRef) -> Message | None:
+        return (await self.messages(ref.chat_id, [ref.message_id]))[ref.message_id]
+
+    async def messages(self, chat_id: str, message_ids: list[int]) -> dict[int, Message | None]:
+        unique_ids = list(dict.fromkeys(message_ids))
+        result: dict[int, Message | None] = dict.fromkeys(unique_ids)
+        if not unique_ids:
+            return result
         client = await self.ensure()
-        chat = await self.resolve_chat(ref.chat_id)
-        raw = await self.call(client.get_messages(int(ref.chat_id), ids=ref.message_id))
-        if not raw or isinstance(raw, types.MessageEmpty):
-            return None
-        return normalize_message(raw, chat)
+        chat = await self.resolve_chat(chat_id)
+        raw_messages = await self.call(client.get_messages(int(chat_id), ids=unique_ids))
+        for raw in raw_messages:
+            if raw and not isinstance(raw, types.MessageEmpty) and raw.id in result:
+                result[raw.id] = normalize_message(raw, chat)
+        return result
 
     async def discussion_chat(self, chat: Chat) -> str:
         if chat.type == "group":
@@ -487,7 +554,8 @@ class TelegramBackend:
                 kwargs["offset_date"] = date_to + timedelta(seconds=1)
         raw_messages = await self.call(client.get_messages(int(chat_id), **kwargs))
         usable = [m for m in raw_messages if m and not isinstance(m, types.MessageEmpty)]
-        next_offset = usable[-1].id if usable else offset
+        positioned = [m for m in raw_messages if m and getattr(m, "id", 0) > 0]
+        next_offset = positioned[-1].id if positioned else offset
         exhausted = len(raw_messages) < limit
         output: list[Message] = []
         for raw in usable:

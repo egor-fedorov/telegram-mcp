@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 from pydantic import SecretStr
+from telethon import errors, functions
 
 from telegram_mcp.config import Settings
 from telegram_mcp.models import ToolError
@@ -75,3 +76,83 @@ async def test_disconnect_failure_still_releases_lock(tmp_path: Path) -> None:
     with pytest.raises(ToolError, match="CONNECTION_ERROR"):
         await backend.close()
     assert backend.client is None and backend.lock_fd is None
+
+
+async def test_connect_and_status_probe_authorization_without_cached_helper(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session = tmp_path / "test.session"
+    session.touch()
+    backend = TelegramBackend(
+        Settings(api_id=123, api_hash=SecretStr("fake"), session_path=session)
+    )
+    client = AsyncMock()
+    client.is_connected = Mock(return_value=True)
+    constructor = Mock(return_value=client)
+    monkeypatch.setattr("telegram_mcp.telegram.TelegramClient", constructor)
+    try:
+        assert await backend.status() == {"authorized": True, "connected": True}
+        assert client.await_count == 1
+        assert client.await_args is not None
+        assert isinstance(client.await_args.args[0], functions.updates.GetStateRequest)
+        client.is_user_authorized.assert_not_called()
+        settings = constructor.call_args.kwargs
+        assert settings["raise_last_call_error"] is True
+        assert settings["request_retries"] == settings["connection_retries"] == 1
+        assert settings["flood_sleep_threshold"] == 0
+        client.side_effect = errors.SessionRevokedError(None)
+        status = await backend.status()
+        assert status["authorized"] is False and status["connected"] is True
+        error = status["error"]
+        assert isinstance(error, dict) and error["code"] == "AUTH_REQUIRED"
+        assert client.await_count == 2
+    finally:
+        await backend.close()
+
+
+@pytest.mark.parametrize("connected", [True, False])
+async def test_status_connection_failure_is_unknown_authorization(connected: bool) -> None:
+    backend = TelegramBackend(Settings())
+    client = AsyncMock(side_effect=ConnectionError("sensitive-value"))
+    client.is_connected = Mock(return_value=connected)
+    backend.client = client
+    status = await backend.status()
+    assert status["authorized"] is None and status["connected"] is connected
+    error = status["error"]
+    assert isinstance(error, dict) and error["code"] == "CONNECTION_ERROR"
+    assert "sensitive-value" not in str(status)
+
+
+@pytest.mark.parametrize(
+    ("error", "authorized", "code"),
+    [
+        (errors.AuthKeyUnregisteredError(None), False, "AUTH_REQUIRED"),
+        (ConnectionError("secret"), None, "CONNECTION_ERROR"),
+        (errors.RpcCallFailError(None), None, "TELEGRAM_UNAVAILABLE"),
+    ],
+)
+async def test_failed_initial_auth_probe_releases_session_lock(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    error: Exception,
+    authorized: bool | None,
+    code: str,
+) -> None:
+    session = tmp_path / "test.session"
+    session.touch()
+    backend = TelegramBackend(
+        Settings(api_id=123, api_hash=SecretStr("fake"), session_path=session)
+    )
+    client = AsyncMock(side_effect=error)
+    monkeypatch.setattr("telegram_mcp.telegram.TelegramClient", Mock(return_value=client))
+    status = await backend.status()
+    assert status["authorized"] is authorized and status["connected"] is False
+    status_error = status["error"]
+    assert isinstance(status_error, dict) and status_error["code"] == code
+    assert backend.client is None and backend.lock_fd is None
+    client.disconnect.assert_awaited_once()
+    fd = os.open(str(session) + ".lock", os.O_RDWR)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    finally:
+        os.close(fd)

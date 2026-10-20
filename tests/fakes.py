@@ -1,4 +1,7 @@
 from datetime import UTC, datetime, timedelta
+from urllib.parse import urlparse
+
+from pydantic import ValidationError
 
 from telegram_mcp.backend import Batch
 from telegram_mcp.models import Chat, ContentType, Folder, Message, MessageRef, ToolError
@@ -31,17 +34,26 @@ class FakeBackend:
         messages: list[Message] | None = None,
         chats: list[Chat] | None = None,
         folders: list[Folder] | None = None,
+        external_chats: list[Chat] | None = None,
     ):
-        self.messages = messages or []
+        self.stored_messages = messages or []
         self.chats = (
             chats
             if chats is not None
-            else list({m.chat.id: m.chat for m in self.messages}.values())
+            else list({m.chat.id: m.chat for m in self.stored_messages}.values())
         )
+        self.external_chats = external_chats or []
         self.folders = folders or []
         self.reads: list[str] = []
         self.fetches: list[str] = []
         self.faults: dict[str, ToolError] = {}
+        self.catalog_fault: ToolError | None = None
+        self.public_faults: dict[str, ToolError] = {}
+        self.message_faults: dict[str, ToolError] = {}
+        self.public_checks: list[str] = []
+        self.resolve_calls: list[tuple[str, bool]] = []
+        self.batch_reads: list[tuple[str, list[int]]] = []
+        self.fetch_offsets: list[tuple[str, int]] = []
         self.closed = False
         self.thread_calls = 0
 
@@ -52,13 +64,26 @@ class FakeBackend:
         self.closed = True
 
     async def catalog(self) -> tuple[list[Chat], list[Folder]]:
-        return self.chats, self.folders
+        if self.catalog_fault:
+            raise self.catalog_fault
+        return list(self.chats), list(self.folders)
 
-    async def resolve_chat(self, ref: str) -> Chat:
-        for chat in self.chats:
-            if ref in (chat.id, chat.username):
+    async def resolve_chat(self, ref: str, *, refresh: bool = False) -> Chat:
+        self.resolve_calls.append((ref, refresh))
+        normalized = ref.removeprefix("@").removeprefix("https://t.me/").rstrip("/")
+        for chat in self.chats + self.external_chats:
+            if normalized in (chat.id, chat.username):
                 return chat
         raise ToolError("NOT_FOUND", "Unknown chat")
+
+    async def public_channel(self, chat_id: str) -> Chat:
+        self.public_checks.append(chat_id)
+        if chat_id in self.public_faults:
+            raise self.public_faults[chat_id]
+        chat = await self.resolve_chat(chat_id, refresh=True)
+        if chat.type != "channel" or not chat.username:
+            raise ToolError("ACCESS_DENIED", "Chat is not a public broadcast channel.")
+        return chat
 
     async def chat_details(self, chat: Chat) -> dict[str, object]:
         return {"description": "Example", "server_can_send": False}
@@ -66,12 +91,28 @@ class FakeBackend:
     async def resolve_message(self, ref: str | MessageRef) -> MessageRef:
         if isinstance(ref, MessageRef):
             return ref
-        cid, mid = ref.split(":")
-        return MessageRef(chat_id=cid, message_id=int(mid))
+        try:
+            if ref.startswith("https://t.me/"):
+                username, mid = urlparse(ref).path.strip("/").split("/")
+                cid = (await self.resolve_chat(username)).id
+            else:
+                cid, mid = ref.split(":")
+            return MessageRef(chat_id=cid, message_id=int(mid))
+        except (ValueError, ValidationError) as exc:
+            raise ToolError("INVALID_ARGUMENT", "Invalid message reference.") from exc
 
     async def message(self, ref: MessageRef) -> Message | None:
         self.reads.append(ref.key)
-        return next((m for m in self.messages if m.message_ref == ref), None)
+        if ref.chat_id in self.message_faults:
+            raise self.message_faults[ref.chat_id]
+        return next((m for m in self.stored_messages if m.message_ref == ref), None)
+
+    async def messages(self, chat_id: str, message_ids: list[int]) -> dict[int, Message | None]:
+        self.batch_reads.append((chat_id, list(message_ids)))
+        if chat_id in self.message_faults:
+            raise self.message_faults[chat_id]
+        found = {m.message_ref.message_id: m for m in self.stored_messages if m.chat.id == chat_id}
+        return {mid: found.get(mid) for mid in message_ids}
 
     async def discussion_chat(self, chat: Chat) -> str:
         return "-1002" if chat.type == "channel" else chat.id
@@ -95,11 +136,12 @@ class FakeBackend:
         thread_id: int | None = None,
     ) -> Batch:
         self.fetches.append(chat_id)
+        self.fetch_offsets.append((chat_id, offset))
         if chat_id in self.faults:
             raise self.faults[chat_id]
         candidates = [
             m
-            for m in self.messages
+            for m in self.stored_messages
             if m.chat.id == chat_id
             and (query is None or query in m.text)
             and (sender_id is None or m.sender.id == sender_id)
