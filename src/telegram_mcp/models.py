@@ -136,6 +136,7 @@ class Message(Model):
     entities: list[Entity] = Field(default_factory=list)
     reply_to: MessageRef | None = None
     thread_ref: MessageRef | None = None
+    topic_id: int | None = Field(default=None, gt=0, le=2**31 - 1)
     forward_origin: ForwardOrigin | None = None
     attachments: list[Attachment] = Field(default_factory=list)
     album_id: str | None = None
@@ -169,6 +170,7 @@ class Page(Model):
     issues: list[Issue] = Field(default_factory=list)
     order: Literal["newest_first", "oldest_first"] = "newest_first"
     thread_root: MessageRef | None = None
+    topic_id: int | None = Field(default=None, gt=0, le=2**31 - 1)
 
 
 class TopicPage(Model):

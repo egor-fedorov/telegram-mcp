@@ -19,9 +19,9 @@ See [ROADMAP.md](ROADMAP.md) for the development plan and the next stage.
 | `search_public_channels` | Find public broadcast channels by query; metadata only |
 | `get_similar_channels` | Find similar public channels for one specified public source; metadata only |
 | `search_messages` | Keyword search by chats, folders, dates, sender, or content type |
-| `get_history` | History over a time range, in chronological or reverse order |
+| `get_history` | Chat or forum-topic history over a time range, in either order |
 | `list_topics` | Forum topics with navigation references, optional title query, and pagination |
-| `get_pinned_messages` | Chat-wide pinned messages, newest first |
+| `get_pinned_messages` | Chat-wide or forum-topic pinned messages, newest first |
 | `get_messages` | Messages by links/IDs with authors, dates, and attachment metadata |
 | `get_context` | Messages before/after an anchor and a chain of parent replies |
 | `get_thread` | Comments on a channel post or replies in a group thread |
@@ -238,26 +238,45 @@ forum supergroup. `Chat.is_forum` identifies forum chats. The chat must satisfy 
 read access through the allowlist, a permitted folder, or `allow_all_chats`.
 Neither public-channel reads nor discovery grants access to a forum.
 An allowed chat that is not a supported forum returns `FORUM_UNAVAILABLE`.
-Bot forums and monoforums are outside this step.
+Bot forums and monoforums are unsupported.
 
-`get_pinned_messages(chat_ref, limit=30, cursor=None)` reads pins across an entire chat,
-newest first. It follows the existing history access policy, including explicit public
-broadcast channels when `allow_public_channel_reads` is enabled. Pins from a forum are
-chat-wide, not limited to an individual topic.
+`get_history(..., topic_id=None)` reads a chat's history by default. Pass a positive
+`topic_id` from `list_topics` to read only that forum topic, including General with
+`topic_id=1`. Dates and both `newest_first` and `oldest_first` orders work for topics.
+Supply exactly one source, `chat_id` or `chat_ref`, as for chat-wide history.
+Topic IDs must be integers from 1 to 2,147,483,647.
 
-Both tools require a nonblank `chat_ref`: a numeric ID, `@username`, or channel/chat link
-such as `https://t.me/example_forum` or `https://t.me/s/example_channel`. The reference is
-trimmed. Limits range from 1 to 100. An optional topic `query` is trimmed and must contain
-1 to 1,000 characters; omit it to list all topics.
+`get_pinned_messages(chat_ref, limit=30, cursor=None, topic_id=None)` reads pins newest
+first. Omit `topic_id` for chat-wide pins or pass a topic ID to select that forum topic.
+Chat-wide pins follow the existing history access policy, including explicit public
+broadcast channels when `allow_public_channel_reads` is enabled.
+
+Selected-topic history and pins require ordinary permission for a supported forum
+supergroup. Public-channel discovery and read permissions do not grant this access.
+Each continuation checks access, fresh forum metadata and topic availability before
+returning saved messages. `TOPIC_UNAVAILABLE` means the topic could not be retrieved;
+it does not confirm deletion. If these checks fail temporarily, retry with the original
+cursor after any reported wait.
+
+`list_topics` and `get_pinned_messages` require a nonblank `chat_ref`: a numeric ID,
+`@username`, or channel/chat link such as `https://t.me/example_forum` or
+`https://t.me/s/example_channel`. The reference is trimmed. Limits range from 1 to 100.
+An optional topic `query` is trimmed and must contain 1 to 1,000 characters; omit it to
+list all topics.
 
 For example, after allowing the forum locally:
 
 1. Call `list_topics(chat_ref="@example_forum", query="Roadmap", limit=30)`.
-2. Present topic titles and URLs. Fetch a topic's `top_message_ref` with `get_messages`
-   to inspect its latest referenced message. For an ordinary topic, pass its
-   `root_message_ref` to `get_thread` to read the supported thread replies.
-3. Call `get_pinned_messages(chat_ref="@example_forum", limit=30)` to read chat-wide pins.
-   Follow its `next_cursor`; use `get_messages` with `next_text_offset` to finish truncated text.
+2. Call `get_history(chat_ref="@example_forum", topic_id=42, order="oldest_first")`
+   to read a selected topic, or use `topic_id=1` to read General.
+3. Call `get_pinned_messages(chat_ref="@example_forum", topic_id=42)` to read that
+   topic's pins, or omit `topic_id` to read chat-wide pins.
+4. Follow each result's `next_cursor` with the same source, topic, dates and order.
+   Use `get_messages` with `next_text_offset` to finish truncated text.
+
+To inspect a single referenced message, fetch a topic's `top_message_ref` with
+`get_messages`. For ordinary replies, pass a topic's `root_message_ref` to `get_thread`.
+`get_thread` retains its reply-thread behavior and is separate from selected-topic history.
 
 `TopicPage` contains `topics`, `next_cursor`, `scope`, `issues`, `telegram_total_count`,
 and `order`. Topics retain Telegram's native ordering: `creation_date` or `last_message_date`
@@ -265,8 +284,9 @@ when known. Each `ForumTopic` contains its topic `id`, `chat_id`, available `tit
 `created_at`, general/closed/hidden/pinned flags, unread count, icon metadata, navigation
 references, and URL. Deleted or short records are marked by `is_deleted` or `is_short`;
 unavailable fields remain `null` rather than invented values. General has topic ID `1`,
-`is_general=true`, and both `root_message_ref` and `url` are `null`; use its
-`top_message_ref` when available.
+`is_general=true`, and both `root_message_ref` and `url` are `null`; use `topic_id=1`
+with history or pins. Its `top_message_ref`, when available, identifies a real message.
+General never requires treating message ID `1` as a topic root.
 
 A short or empty topic page can still have a cursor. Each call fetches at most one
 Telegram topic page; continue with the same source and query until `next_cursor` is null.
@@ -275,11 +295,15 @@ before returning buffered topics. Temporary page-fetch failures preserve a curso
 report their cause in `issues`; respect any `retry_after_seconds` before continuing.
 A failed access check prevents buffered results from being returned.
 
-Pinned messages use the ordinary `Page` contract, text budget, and recovery behavior.
-Topic lists and pin selections can change during traversal; cursors do not provide an
-immutable snapshot. Dedicated topic history, including General, and topic-specific pins
-are planned for the next M2 step. `get_thread` is not a substitute for that complete
-topic-history capability.
+Selected-topic history and pinned messages use the ordinary `Page` contract, text
+budget, and recovery behavior. `Page.topic_id` identifies a selected topic and is `null`
+for chat-wide requests. A message's `topic_id` records its known forum topic; unknown
+membership remains `null`. A cursor cannot be moved between topics or between chat-wide
+and selected-topic requests. Temporary retrieval failures retain the cursor; respect
+`retry_after_seconds` before retrying.
+
+Topic lists, messages and pin selections can change during traversal; cursors do not
+provide an immutable snapshot.
 
 ## Retrieval rules
 
@@ -329,9 +353,10 @@ make check
 ```
 
 This runs Ruff format/check, `ty check`, and pytest. Tests use no account and make no
-requests to Telegram. They cover public-channel discovery, topic and pin navigation,
-folders, pagination, dates, context, access, Telethon structures, configuration, and
-the actual MCP protocol, including a separate STDIO process.
+requests to Telegram. They cover public-channel discovery, topic navigation, selected-topic
+history (including General), chat-wide and topic-specific pins, folders, pagination,
+dates, context, access, Telethon structures, configuration, and the actual MCP protocol,
+including a separate STDIO process.
 Both modern MCP mode and compatibility with the initialize handshake are tested.
 
 GitHub Actions runs the same checks on pull requests and pushes to `main`, using
@@ -352,10 +377,10 @@ rights to Telegram content retrieved through the server.
 
 ## First-version boundaries
 
-Reading cloud chats, discovering public channels, forum topic navigation, and chat-wide
-pinned-message retrieval are implemented. Dedicated topic history and topic-specific pins
-remain planned. Automatic joining, paid requests, sending, attachment downloads,
-voice transcription, folder management, and a semantic index remain possible extensions.
+Reading cloud chats, discovering public channels, forum topic navigation, selected-topic
+history, and chat-wide or topic-specific pinned-message retrieval are implemented.
+Automatic joining, paid requests, sending, attachment downloads, voice transcription,
+folder management, and a semantic index remain possible extensions.
 Attachments are represented by metadata.
 Secret chats are not supported. Testing against real chats requires your local login.
 

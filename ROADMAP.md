@@ -31,8 +31,12 @@ validation remains separate.
 
 M2.1 adds forum topic listings and chat-wide pinned-message retrieval. `make check`
 passed with 325 offline tests, including both MCP modes, native topic pagination,
-access revocation, and temporary-failure recovery. M2 remains in progress; the next
-PR is M2.2, selected-topic history and topic-specific pins.
+access revocation, and temporary-failure recovery.
+
+M2.2 adds optional topic selection to history and pinned-message retrieval, including
+General, with fresh topic checks and preserved message membership. `make check`
+passed with 490 offline tests. Live Telegram validation remains separate. M2 remains
+in progress; the next PR is M2.3, available counters, reaction summaries, and poll data.
 
 The row order expresses priority, not a restriction on independent work. “Planned”
 means an agreed direction, not a complete technical specification.
@@ -173,7 +177,7 @@ messages. Deliver the following work in separate PRs; M2 is complete only when a
 four work items meet their acceptance criteria.
 
 - [x] M2.1 — List forum topics and retrieve chat-wide pinned messages.
-- [ ] M2.2 — Read a selected topic's history, including General, and filter pins by topic.
+- [x] M2.2 — Read a selected topic's history, including General, and filter pins by topic.
 - [ ] M2.3 — Preserve available message counters, reaction summaries, and poll data.
 - [ ] M2.4 — Retrieve the messages of a selected album using its original grouping.
 
@@ -254,14 +258,90 @@ Primary references: [forum behavior](https://core.telegram.org/api/forum),
 [topic fields](https://core.telegram.org/constructor/forumTopic), and
 [pinned-message filter](https://core.telegram.org/constructor/inputMessagesFilterPinned).
 
-### M2.2–M2.4 acceptance boundaries
+### M2.2: Selected-topic history and pins
+
+Extend the existing tools without changing their default behavior or adding tools:
+
+| Tool | New input | Result |
+| --- | --- | --- |
+| `get_history` | `topic_id: int \| None = None` | The selected forum topic's history over the existing date interval and order |
+| `get_pinned_messages` | `topic_id: int \| None = None` | Pinned messages in the selected forum topic, newest first |
+
+An omitted `topic_id` keeps chat-wide retrieval. When supplied, it must be an integer
+from 1 to 2,147,483,647; booleans, strings, and fractional values are rejected.
+`get_history` retains its exactly-one-of-`chat_id`/`chat_ref` rule and existing positional
+arguments. `get_pinned_messages` retains its required `chat_ref`. General is topic `1`;
+other topic IDs come from `list_topics`.
+
+Add optional `Page.topic_id` to identify the selected topic and `Message.topic_id` to
+preserve the message's topic when supported forum metadata makes it known. A topic ID
+is scoped to its chat, not a global identifier. General does not imply a root-message
+reference to message `1`. Preserve actual reply references and creation/service messages
+returned by Telegram; do not fetch or fabricate a root merely to populate history.
+
+Before each selected-topic call, including continuation, require ordinary read access,
+refresh chat metadata, verify a supported forum supergroup, and resolve the exact topic
+with `messages.GetForumTopicsByIDRequest`. A missing, deleted, or mismatched topic returns
+`TOPIC_UNAVAILABLE`; a non-forum returns `FORUM_UNAVAILABLE`. Closed or hidden topics
+remain readable if Telegram allows them. Public-channel discovery/read settings do not
+authorize forum groups. Failed access or topic checks release no saved buffer, and a
+previous cursor remains reusable after a temporary failure.
+
+Use raw `messages.GetRepliesRequest` with the selected topic ID for history, including
+General. This matches TDLib's forum-topic history handling; it does not treat General
+as an ordinary reply thread to message `1`. For pins, use `messages.SearchRequest` with
+`top_msg_id` and `InputMessagesFilterPinned`. Do not combine Telethon's `reply_to` iterator
+with the pin filter, which it ignores. No dependency update is required.
+
+The backend reads at most one native message page per fetch. Preserve existing
+per-call RPC/time limits, text budgets, half-open date intervals, and both history
+orders. Maintain a fixed upper date throughout traversal. A short native page alone
+does not prove exhaustion; advance on trustworthy native message IDs, including
+unavailable-message placeholders, and continue until an empty page or the date boundary.
+Filtered empty pages may retain a cursor. Unsafe or unrelated returned data is omitted
+with an incomplete-result issue instead of expanding the requested scope.
+
+Derive topic membership from the forum flag, creation action, and reply header.
+`reply_to_top_id` identifies an ordinary topic only when the header's `forum_topic`
+flag says so; a General reply may have a normal thread root of its own. Preserve
+the local topic ID when a message replies across chats, and retain the separate
+cross-chat parent reference. Malformed topic headers remain unknown. No parent-message
+lookups are needed to classify a reply, including when its parent is unavailable.
+
+Cursors bind the original selector, canonical chat ID, topic, date interval, and
+order. Page size may change. Page-fetch FloodWait, network, and server failures retain
+the position and continuation; no failed stream is retried in the same call or before
+its wait expires. Clear resolved temporary issues and preserve permanent ones.
+Telegram topic metadata, message membership, and pins can change during traversal;
+this is not a transactional snapshot.
+
+Acceptance checks:
+
+1. Existing chat-wide history, pins, and thread tools remain compatible; both MCP modes
+   expose optional bounded integer topic IDs and reject invalid values before backend calls.
+2. General and ordinary topics return only their own messages/pins. Raw fixtures cover
+   creation events, nested General replies, cross-chat replies, unavailable parents,
+   foreign peers, unknown membership, and original author/text/entity/media data.
+3. Raw request shapes and multi-page traversal cover both history orders, short pages,
+   empty/placeholder pages, date boundaries, fixed upper dates, and non-advancing results.
+4. Access revocation, forum conversion, topic disappearance, and source/topic changes
+   cannot release saved data or redirect a cursor. A failed metadata check leaves the
+   original checkpoint usable; closed/hidden metadata does not disable permitted reads.
+5. Temporary page-fetch failures preserve continuation and ordering without premature
+   FloodWait retries. Text budgets and Unicode continuation remain unchanged.
+6. README and roadmap are updated; `make check` and GitHub `checks` pass offline.
+
+Primary references: [forum semantics](https://core.telegram.org/api/forum),
+[topic lookup](https://core.telegram.org/method/messages.getForumTopicsByID),
+[thread history](https://core.telegram.org/method/messages.getReplies),
+[scoped message search](https://core.telegram.org/method/messages.search),
+[reply headers](https://core.telegram.org/constructor/messageReplyHeader), and
+[TDLib forum history](https://github.com/tdlib/td/blob/master/td/telegram/MessagesManager.cpp).
+
+### M2.3–M2.4 acceptance boundaries
 
 Before each remaining PR, finalize its exact model and tool schemas in this document.
 
-- **Topic history and pins:** accept an explicit chat and positive topic ID; enforce
-  the chat's read policy and topic isolation. Handle General deliberately rather than
-  treating ID 1 as a thread-root message. Keep period boundaries, text budgets, cursor
-  recovery, and source references. Test replies to deleted parents and topic changes.
 - **Rich metadata:** read counters, reaction summaries, and poll questions/options/results
   from already returned Telegram objects. Unknown values remain `null`; zero is a known
   value. Preserve formatted question/answer text and stable option identifiers. Do not

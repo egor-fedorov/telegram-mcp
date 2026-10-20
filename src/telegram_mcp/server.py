@@ -27,6 +27,7 @@ from telegram_mcp.service import Service
 
 Limit = Annotated[int, Field(ge=1, le=100)]
 ChatID = Annotated[str, Field(pattern=r"^-?[1-9]\d*$")]
+TopicID = Annotated[int, Field(gt=0, le=2147483647, strict=True)]
 FolderIDs = Annotated[list[int], Field(min_length=1, max_length=100)]
 ChatIDs = Annotated[list[ChatID], Field(min_length=1, max_length=1000)]
 
@@ -175,6 +176,7 @@ def create_server(service: Service) -> MCPServer[None]:
         a short or empty page can still have a cursor. Results preserve Telegram order
         and report incomplete metadata in issues. Temporary failures retain a cursor;
         respect retry_after_seconds. Topic order and titles may change during traversal.
+        Pass a topic ID to get_history or get_pinned_messages to read that topic.
         Read top_message_ref with get_messages, or ordinary root_message_ref with
         get_thread. General (ID 1) has no root_message_ref. Bot forums and monoforums
         are unsupported. Listing topics does not mark them read or modify them.
@@ -187,16 +189,19 @@ def create_server(service: Service) -> MCPServer[None]:
         chat_ref: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)],
         limit: Limit = 30,
         cursor: str | None = None,
+        topic_id: TopicID | None = None,
     ) -> Page:
         """Read a chat's pinned messages, newest first, by ID, @username or t.me[/s] link.
 
-        Pins are chat-wide; this tool has no topic selector. Existing read permissions,
-        explicit public broadcast-channel access, text budgets, and cursor recovery apply.
-        Follow next_cursor with the same chat_ref; respect retry_after_seconds on temporary
-        failures. Pin membership can change during traversal. No messages are pinned,
-        unpinned, or marked read by this tool.
+        Omit topic_id for chat-wide pins, or supply a positive forum topic ID (General is 1).
+        Topics require ordinary access to a supported forum supergroup; public-channel
+        permission does not authorize forum groups. Chat-wide pins retain the existing
+        public-channel access policy. Text budgets and cursor recovery apply.
+        Follow next_cursor with the same chat_ref and topic_id; respect retry_after_seconds
+        on temporary failures. Pin membership can change during traversal. No messages are
+        pinned, unpinned, or marked read by this tool.
         """
-        return await service.get_pinned_messages(chat_ref, limit, cursor)
+        return await service.get_pinned_messages(chat_ref, limit, cursor, topic_id)
 
     @server.tool(annotations=readonly)
     @expose_tool_errors
@@ -242,12 +247,17 @@ def create_server(service: Service) -> MCPServer[None]:
         limit: Limit = 30,
         cursor: str | None = None,
         chat_ref: str | None = None,
+        topic_id: TopicID | None = None,
     ) -> Page:
         """Read a chat's history over [date_from, date_to), or recent messages if dates are omitted.
 
         Supply exactly one of chat_id or chat_ref (numeric ID, @username, or t.me[/s]/username).
+        Omit topic_id for chat-wide history, or supply a positive forum topic ID (General is 1).
+        Topics require ordinary access to a supported forum supergroup; public-channel
+        permission does not authorize forum groups. General does not require a message root.
         Use oldest_first for chronological reading. Follow next_cursor for a complete period,
-        repeating the original selector; the cursor remains bound to the resolved chat ID.
+        repeating the original source, topic, dates and order; the cursor remains bound to
+        the resolved chat ID.
         Public channels outside the allowlist require allow_public_channel_reads.
         Temporary failures retain next_cursor; respect retry_after_seconds before continuing.
         """
@@ -259,6 +269,7 @@ def create_server(service: Service) -> MCPServer[None]:
             limit=limit,
             cursor=cursor,
             chat_ref=chat_ref,
+            topic_id=topic_id,
         )
 
     @server.tool(annotations=readonly)

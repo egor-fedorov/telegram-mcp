@@ -21,6 +21,7 @@ class Batch:
     messages: list[Message]
     next_offset: int
     exhausted: bool
+    issues: list[Issue] = field(default_factory=list)
 
 
 @dataclass
@@ -62,6 +63,7 @@ class Backend(Protocol):
         limit: int = 30,
         query: str | None = None,
     ) -> TopicBatch: ...
+    async def get_topic(self, chat_id: str, topic_id: int) -> ForumTopic: ...
     async def chat_details(self, chat: Chat) -> dict[str, object]: ...
     async def resolve_message(self, ref: str | MessageRef) -> MessageRef: ...
     async def message(self, ref: MessageRef) -> Message | None: ...
@@ -82,4 +84,5 @@ class Backend(Protocol):
         oldest_first: bool = False,
         thread_id: int | None = None,
         pinned_only: bool = False,
+        topic_id: int | None = None,
     ) -> Batch: ...

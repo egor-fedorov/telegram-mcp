@@ -93,6 +93,11 @@ def check_limit(limit: int) -> None:
         raise ToolError("INVALID_ARGUMENT", "limit must be between 1 and 100.")
 
 
+def check_topic_id(topic_id: int | None) -> None:
+    if topic_id is not None and (type(topic_id) is not int or not 1 <= topic_id <= 2147483647):
+        raise ToolError("INVALID_ARGUMENT", "topic_id must be an integer from 1 to 2147483647.")
+
+
 def discovery_result(batch: DiscoveryBatch, limit: int) -> DiscoveryResult:
     # Keep the first occurrence so native result order and metadata remain stable.
     unique = {}
@@ -333,13 +338,22 @@ class Service:
         )
 
     async def get_pinned_messages(
-        self, chat_ref: str, limit: int = 30, cursor: str | None = None
+        self,
+        chat_ref: str,
+        limit: int = 30,
+        cursor: str | None = None,
+        topic_id: int | None = None,
     ) -> Page:
         chat_ref = chat_ref.strip()
         if not chat_ref:
             raise ToolError("INVALID_ARGUMENT", "chat_ref must not be empty.")
         return await self.query(
-            source_ref=chat_ref, limit=limit, cursor=cursor, kind="pinned", pinned_only=True
+            source_ref=chat_ref,
+            limit=limit,
+            cursor=cursor,
+            kind="pinned",
+            pinned_only=True,
+            topic_id=topic_id,
         )
 
     async def resolve(self, ref: str | MessageRef, allowed: set[str]) -> MessageRef:
@@ -356,6 +370,7 @@ class Service:
         limit: int = 30,
         cursor: str | None = None,
         chat_ref: str | None = None,
+        topic_id: int | None = None,
     ) -> Page:
         if (chat_id is None) == (chat_ref is None):
             raise ToolError("INVALID_ARGUMENT", "Provide exactly one of chat_id or chat_ref.")
@@ -368,6 +383,7 @@ class Service:
             cursor=cursor,
             kind="history",
             source_ref=chat_ref,
+            topic_id=topic_id,
         )
 
     async def get_messages(
@@ -495,8 +511,22 @@ class Service:
         source_ref: str | None = None,
         allow_public: bool = True,
         pinned_only: bool = False,
+        topic_id: int | None = None,
     ) -> Page:
         check_limit(limit)
+        check_topic_id(topic_id)
+        if topic_id is not None:
+            if (
+                thread_id is not None
+                or folder_ids is not None
+                or query is not None
+                or sender_id is not None
+                or (source_ref is None and len(chat_ids or []) != 1)
+            ):
+                raise ToolError(
+                    "INVALID_ARGUMENT", "Select one chat for topic history or topic pins."
+                )
+            allow_public = False
         if kind == "search" and (query is None or not query.strip()):
             raise ToolError(
                 "INVALID_ARGUMENT", "Search requires non-empty query; use get_history otherwise."
@@ -507,9 +537,14 @@ class Service:
         if date_from and date_to and date_from >= date_to:
             raise ToolError("INVALID_ARGUMENT", "date_from must be earlier than date_to.")
         chats, folders, allowed = await self.catalog()
+        source_chat = None
         if source_ref is not None:
             # Loading dialogs first primes Telethon's entity/access-hash cache for IDs.
-            chat_ids = [(await self.backend.resolve_chat(source_ref, refresh=True)).id]
+            source_chat = await self.backend.resolve_chat(source_ref, refresh=True)
+            chat_ids = [source_chat.id]
+        elif topic_id is not None and chat_ids:
+            source_chat = await self.backend.resolve_chat(chat_ids[0], refresh=True)
+            chat_ids = [source_chat.id]
         fp = fingerprint(
             [
                 query,
@@ -524,6 +559,7 @@ class Service:
                 source_ref,
                 allow_public,
                 pinned_only,
+                topic_id,
             ]
         )
         if cursor:
@@ -537,6 +573,21 @@ class Service:
         for cid in explicit_ids:
             await self.allow_explicit(cid, allowed, public)
         effective_allowed = allowed | public.keys()
+        if topic_id is not None and source_chat is not None:
+            self.require_access(source_chat.id, allowed)
+            if (
+                source_chat.type != "group"
+                or not source_chat.is_supergroup
+                or not source_chat.is_forum
+            ):
+                raise ToolError(
+                    "FORUM_UNAVAILABLE", "This chat is not a supported forum supergroup."
+                )
+            # Topic existence can change independently of group access. Check it before
+            # emitting saved messages; a failed check leaves the original cursor reusable.
+            topic = await self.backend.get_topic(source_chat.id, topic_id)
+            if topic.id != topic_id or topic.chat_id != source_chat.id or topic.is_deleted:
+                raise ToolError("TOPIC_UNAVAILABLE", "The requested forum topic is unavailable.")
         if not cursor:
             known = {c.id for c in chats}
             for cid in chat_ids or []:
@@ -591,12 +642,14 @@ class Service:
                             oldest_first=oldest,
                             thread_id=thread_id,
                             pinned_only=pinned_only,
+                            topic_id=topic_id,
                         )
                         if not batch.exhausted and batch.next_offset == stream.offset:
                             raise ToolError(
                                 "PAGINATION_STALLED", "Telegram returned a non-advancing page."
                             )
                         stream.offset = batch.next_offset
+                        state.issues.extend(batch.issues)
                         stream.buffer = batch.messages
                         stream.exhausted = batch.exhausted
                         stream.transient_issue = None
@@ -640,4 +693,11 @@ class Service:
         scope = state.scope.model_copy(
             update={"pending_chat_ids": pending, "complete": not pending and not issues}
         )
-        return Page(messages=output, next_cursor=token, scope=scope, issues=issues, order=order)
+        return Page(
+            messages=output,
+            next_cursor=token,
+            scope=scope,
+            issues=issues,
+            order=order,
+            topic_id=topic_id,
+        )

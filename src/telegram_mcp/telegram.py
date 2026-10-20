@@ -8,7 +8,7 @@ import sqlite3
 from collections.abc import Awaitable
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
-from typing import Any, TypeVar
+from typing import Any, TypeGuard, TypeVar
 from urllib.parse import parse_qs, urlparse
 
 from telethon import TelegramClient, errors, functions, types, utils
@@ -32,6 +32,7 @@ from telegram_mcp.models import (
 )
 
 T = TypeVar("T")
+MAX_TOPIC_ID = 2**31 - 1
 
 
 def utc(value: datetime) -> datetime:
@@ -79,6 +80,29 @@ def is_supported_forum(entity: Any) -> bool:
         and not entity.monoforum
         and not (entity.banned_rights and entity.banned_rights.view_messages)
     )
+
+
+def valid_topic_id(value: Any) -> TypeGuard[int]:
+    return type(value) is int and 0 < value <= MAX_TOPIC_ID
+
+
+def message_topic_id(raw: Any, chat: Chat) -> int | None:
+    if not chat.is_forum:
+        return None
+    if isinstance(getattr(raw, "action", None), types.MessageActionTopicCreate):
+        return raw.id if valid_topic_id(raw.id) else None
+    reply = getattr(raw, "reply_to", None)
+    if not getattr(reply, "forum_topic", False):
+        # General can contain ordinary message threads with their own top IDs.
+        return 1
+    top_id = getattr(reply, "reply_to_top_id", None)
+    if top_id is not None:
+        return top_id if valid_topic_id(top_id) else None
+    reply_peer = getattr(reply, "reply_to_peer_id", None)
+    if reply_peer is not None and peer_id(reply_peer) != chat.id:
+        return None
+    reply_id = getattr(reply, "reply_to_msg_id", None)
+    return reply_id if valid_topic_id(reply_id) else None
 
 
 def chat_from_entity(entity: Any, dialog: Any = None, default_muted: bool = False) -> Chat:
@@ -210,6 +234,10 @@ def normalize_message(raw: Any, chat: Chat) -> Message:
     reply_chat = peer_id(reply_peer) if reply_peer else chat.id
     reply_mid = getattr(reply, "reply_to_msg_id", None)
     top_mid = getattr(reply, "reply_to_top_id", None)
+    topic_id = message_topic_id(raw, chat)
+    thread_chat = chat.id if chat.is_forum and getattr(reply, "forum_topic", False) else reply_chat
+    if chat.is_forum and getattr(reply, "forum_topic", False) and top_mid == 1:
+        top_mid = None
     fwd = getattr(raw, "fwd_from", None)
     origin: ForwardOrigin | None = None
     if fwd:
@@ -256,7 +284,8 @@ def normalize_message(raw: Any, chat: Chat) -> Message:
             for e in getattr(raw, "entities", None) or []
         ],
         reply_to=MessageRef(chat_id=reply_chat, message_id=reply_mid) if reply_mid else None,
-        thread_ref=MessageRef(chat_id=reply_chat, message_id=top_mid) if top_mid else None,
+        thread_ref=MessageRef(chat_id=thread_chat, message_id=top_mid) if top_mid else None,
+        topic_id=topic_id,
         forward_origin=origin,
         attachments=attachments,
         album_id=str(raw.grouped_id) if getattr(raw, "grouped_id", None) else None,
@@ -291,7 +320,19 @@ class TelegramBackend:
             raise ToolError(
                 "INVALID_ARGUMENT", "Telegram rejected an empty or too-short search query."
             ) from None
+        except errors.TopicDeletedError:
+            raise ToolError(
+                "TOPIC_UNAVAILABLE", "The requested forum topic is unavailable."
+            ) from None
+        except errors.ChannelForumMissingError:
+            raise ToolError(
+                "FORUM_UNAVAILABLE", "This chat is not a supported supergroup forum."
+            ) from None
         except errors.RPCError as exc:
+            if exc.message == "TOPIC_ID_INVALID":
+                raise ToolError(
+                    "TOPIC_UNAVAILABLE", "The requested forum topic is unavailable."
+                ) from None
             raise ToolError("TELEGRAM_ERROR", type(exc).__name__) from None
         except (TimeoutError, ConnectionError, OSError):
             raise ToolError(
@@ -595,6 +636,33 @@ class TelegramBackend:
         next_offset = TopicOffset(utc(date), max(0, tail.top_message), tail.id)
         return TopicBatch(topics, next_offset, False, order_by_create_date, response.count, issues)
 
+    async def get_topic(self, chat_id: str, topic_id: int) -> ForumTopic:
+        if not valid_topic_id(topic_id):
+            raise ToolError("INVALID_ARGUMENT", "topic_id must be a positive 32-bit integer.")
+        chat = await self.resolve_chat(chat_id)
+        if not chat.is_forum:
+            raise ToolError("FORUM_UNAVAILABLE", "This chat is not a supported supergroup forum.")
+        client = await self.ensure()
+        entity = await self.call(client.get_input_entity(int(chat_id)))
+        try:
+            response = await self.call(
+                client(functions.messages.GetForumTopicsByIDRequest(peer=entity, topics=[topic_id]))
+            )
+        except ToolError as exc:
+            if exc.code == "TELEGRAM_ERROR" and exc.detail == "MsgIdInvalidError":
+                raise ToolError(
+                    "TOPIC_UNAVAILABLE", "The requested forum topic is unavailable."
+                ) from None
+            raise
+        matches = [
+            raw for raw in getattr(response, "topics", []) if getattr(raw, "id", None) == topic_id
+        ]
+        if len(matches) == 1:
+            raw = matches[0]
+            if isinstance(raw, types.ForumTopic) and (raw.short or peer_id(raw.peer) == chat_id):
+                return forum_topic_from_tl(raw, chat)
+        raise ToolError("TOPIC_UNAVAILABLE", "The requested forum topic is unavailable.")
+
     async def chat_details(self, chat: Chat) -> dict[str, object]:
         client = await self.ensure()
         entity = await self.call(client.get_input_entity(int(chat.id)))
@@ -715,7 +783,27 @@ class TelegramBackend:
         oldest_first: bool = False,
         thread_id: int | None = None,
         pinned_only: bool = False,
+        topic_id: int | None = None,
     ) -> Batch:
+        if topic_id is not None:
+            if not valid_topic_id(topic_id):
+                raise ToolError("INVALID_ARGUMENT", "topic_id must be a positive 32-bit integer.")
+            if thread_id is not None or query is not None or sender_id is not None:
+                raise ToolError(
+                    "INVALID_ARGUMENT",
+                    "Topic history cannot be combined with thread, search, or sender selectors.",
+                )
+            return await self.fetch_topic_messages(
+                chat_id,
+                topic_id,
+                offset=offset,
+                limit=limit,
+                date_from=date_from,
+                date_to=date_to,
+                content_type=content_type,
+                oldest_first=oldest_first,
+                pinned_only=pinned_only,
+            )
         if pinned_only and thread_id is not None:
             raise ToolError("INVALID_ARGUMENT", "Pinned-message retrieval is chat-wide.")
         client = await self.ensure()
@@ -755,3 +843,130 @@ class TelegramBackend:
             if content_type is None or message.content_type == content_type:
                 output.append(message)
         return Batch(output, next_offset, exhausted)
+
+    async def fetch_topic_messages(
+        self,
+        chat_id: str,
+        topic_id: int,
+        *,
+        offset: int,
+        limit: int,
+        date_from: datetime | None,
+        date_to: datetime | None,
+        content_type: ContentType | None,
+        oldest_first: bool,
+        pinned_only: bool,
+    ) -> Batch:
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise ToolError("INVALID_ARGUMENT", "limit must be between 1 and 100.")
+        if type(offset) is not int or not 0 <= offset <= MAX_TOPIC_ID:
+            raise ToolError("INVALID_ARGUMENT", "Invalid message offset.")
+        chat = await self.resolve_chat(chat_id)
+        if not chat.is_forum:
+            raise ToolError("FORUM_UNAVAILABLE", "This chat is not a supported supergroup forum.")
+        client = await self.ensure()
+        entity = await self.call(client.get_input_entity(int(chat_id)))
+        offset_date = None
+        offset_id = offset
+        if oldest_first:
+            if offset == MAX_TOPIC_ID:
+                return Batch([], offset, True)
+            offset_id = offset + 1
+            if not offset and date_from is not None:
+                offset_id = 0
+                offset_date = date_from - timedelta(seconds=1)
+        elif not offset and date_to is not None:
+            offset_date = date_to + timedelta(seconds=1)
+        if pinned_only:
+            request = functions.messages.SearchRequest(
+                peer=entity,
+                q="",
+                top_msg_id=topic_id,
+                filter=types.InputMessagesFilterPinned(),
+                min_date=None,
+                max_date=date_to + timedelta(seconds=1) if date_to is not None else None,
+                offset_id=offset + 1 if oldest_first else offset,
+                add_offset=-limit if oldest_first else 0,
+                limit=limit,
+                max_id=0,
+                min_id=0,
+                hash=0,
+            )
+        else:
+            request = functions.messages.GetRepliesRequest(
+                peer=entity,
+                msg_id=topic_id,
+                offset_id=offset_id,
+                offset_date=offset_date,
+                add_offset=-limit if oldest_first else 0,
+                limit=limit,
+                max_id=0,
+                min_id=0,
+                hash=0,
+            )
+        response = await self.call(client(request))
+        issues: list[Issue] = []
+
+        def incomplete(message: str) -> None:
+            issue = ToolError("PAGINATION_INCOMPLETE", message).issue(chat_id)
+            if issue not in issues:
+                issues.append(issue)
+
+        if not isinstance(
+            response,
+            (types.messages.Messages, types.messages.MessagesSlice, types.messages.ChannelMessages),
+        ):
+            incomplete("Telegram returned no usable message page.")
+            return Batch([], offset, True, issues)
+        raw_messages = response.messages
+        if not raw_messages:
+            return Batch([], offset, True)
+        entities = {utils.get_peer_id(value): value for value in [*response.users, *response.chats]}
+        positioned: dict[int, Any] = {}
+        for raw in raw_messages:
+            mid = getattr(raw, "id", None)
+            if not valid_topic_id(mid):
+                incomplete("Telegram returned a message without a usable position.")
+                continue
+            raw_peer = getattr(raw, "peer_id", None)
+            if raw_peer is not None and peer_id(raw_peer) != chat_id:
+                incomplete("Telegram returned a message outside the requested chat.")
+                continue
+            if raw_peer is None and not isinstance(raw, types.MessageEmpty):
+                incomplete("Telegram returned a message without a usable chat.")
+                continue
+            if offset and (mid <= offset if oldest_first else mid >= offset):
+                continue
+            positioned.setdefault(mid, raw)
+        if not positioned:
+            incomplete("Telegram returned a message page without an advancing position.")
+            return Batch([], offset, True, issues)
+        ordered = [positioned[mid] for mid in sorted(positioned, reverse=not oldest_first)]
+        next_offset = ordered[-1].id
+        exhausted = False
+        output: list[Message] = []
+        for raw in ordered:
+            if isinstance(raw, types.MessageEmpty):
+                continue
+            if not isinstance(raw, (types.Message, types.MessageService)) or not isinstance(
+                getattr(raw, "date", None), datetime
+            ):
+                incomplete("Telegram returned incomplete message metadata.")
+                continue
+            if message_topic_id(raw, chat) != topic_id:
+                incomplete("Telegram returned a message outside the requested topic.")
+                continue
+            sent_at = utc(raw.date)
+            if date_from is not None and sent_at < date_from:
+                if not oldest_first:
+                    exhausted = True
+                continue
+            if date_to is not None and sent_at >= date_to:
+                if oldest_first:
+                    exhausted = True
+                continue
+            raw._finish_init(client, entities, entity)
+            message = normalize_message(raw, chat)
+            if content_type is None or message.content_type == content_type:
+                output.append(message)
+        return Batch(output, next_offset, exhausted, issues)
