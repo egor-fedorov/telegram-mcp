@@ -36,8 +36,10 @@ def build_service(
 
 
 def main() -> None:
+    from telegram_mcp.adapters.bridge import connect
     from telegram_mcp.adapters.cli import CliDependencies
     from telegram_mcp.adapters.cli import main as cli_main
     from telegram_mcp.adapters.telegram.auth import authenticate
+    from telegram_mcp.adapters.transport import run_http
 
-    cli_main(CliDependencies(TelegramBackend, build_service, authenticate))
+    cli_main(CliDependencies(TelegramBackend, build_service, authenticate, run_http, connect))

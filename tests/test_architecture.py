@@ -48,7 +48,7 @@ def permitted(source: str, target: str) -> bool:
     if layer == "adapters":
         if dependency not in {"domain", "application", "adapters"}:
             return False
-        ingress = {f"{PACKAGE}.adapters.cli", f"{PACKAGE}.adapters.mcp"}
+        ingress = {f"{PACKAGE}.adapters.{name}" for name in ("cli", "mcp", "transport", "bridge")}
         if source not in ingress and any(
             target == name or target.startswith(name + ".") for name in ingress
         ):

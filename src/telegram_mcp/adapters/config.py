@@ -2,12 +2,14 @@
 
 import json
 import os
+import re
 import tempfile
 import tomllib
+from contextlib import suppress
 from pathlib import Path
 
 from platformdirs import user_config_path, user_data_path
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, ValidationError
 
 from telegram_mcp.domain.models import Model, ToolError
 from telegram_mcp.domain.policy import ReadPolicy
@@ -15,7 +17,7 @@ from telegram_mcp.domain.policy import ReadPolicy
 
 class Settings(Model):
     api_id: int | None = Field(default=None, gt=0)
-    api_hash: SecretStr | None = None
+    api_hash: SecretStr | None = Field(default=None, min_length=1)
     session_path: Path = Field(
         default_factory=lambda: user_data_path("telegram-mcp") / "account.session"
     )
@@ -29,6 +31,10 @@ class Settings(Model):
     rpc_pages_per_call: int = Field(default=12, ge=1, le=100)
     cursor_ttl_seconds: int = Field(default=900, ge=1)
     max_cursors: int = Field(default=128, ge=1)
+    http_port: int = Field(default=8765, ge=1, le=65535, strict=True)
+    http_token_path: Path = Field(
+        default_factory=lambda: user_data_path("telegram-mcp") / "mcp.token"
+    )
 
     def credentials(self) -> tuple[int, str]:
         if self.api_id is None or self.api_hash is None:
@@ -42,24 +48,90 @@ def config_path() -> Path:
     ).expanduser()
 
 
+def validation_error(
+    error: ValidationError, source: str, overrides: dict[str, str] | None = None
+) -> ToolError:
+    """Describe fields and expectations without including submitted values."""
+    details = []
+    for item in error.errors(include_input=False, include_context=False, include_url=False):
+        location = ".".join(str(part) for part in item["loc"]) or "configuration"
+        origin = (overrides or {}).get(str(item["loc"][0]), source) if item["loc"] else source
+        details.append(f"{origin}: {location}: {item['msg']}")
+    return ToolError("INVALID_CONFIGURATION", "; ".join(details))
+
+
+def validate_settings(settings: Settings, source: str) -> Settings:
+    try:
+        return Settings.model_validate(settings.model_dump())
+    except ValidationError as exc:
+        raise validation_error(exc, source) from None
+
+
+def local_io_error(action: str, path: Path, error: OSError) -> ToolError:
+    if isinstance(error, PermissionError):
+        reason = "permission denied; check file and directory permissions"
+    elif isinstance(error, FileNotFoundError):
+        reason = "file or parent directory does not exist"
+    elif isinstance(error, IsADirectoryError):
+        reason = "expected a file, found a directory"
+    elif isinstance(error, NotADirectoryError):
+        reason = "a parent path is not a directory"
+    else:
+        reason = "local filesystem operation failed; check the path and available disk space"
+    return ToolError("LOCAL_IO_ERROR", f"Cannot {action} {path}: {reason}.")
+
+
 def load_settings(path: Path | None = None) -> Settings:
     path = path or config_path()
-    data = tomllib.loads(path.read_text()) if path.exists() else {}
-    if value := os.environ.get("TELEGRAM_API_ID"):
-        data["api_id"] = int(value)
-    if value := os.environ.get("TELEGRAM_API_HASH"):
-        data["api_hash"] = value
-    if value := os.environ.get("TELEGRAM_SESSION_PATH"):
-        data["session_path"] = value
-    settings = Settings.model_validate(data)
-    settings.session_path = settings.session_path.expanduser().absolute()
+    try:
+        content = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        content = ""
+    except UnicodeError:
+        raise ToolError("INVALID_CONFIGURATION", f"{path}: configuration must use UTF-8.") from None
+    except OSError as exc:
+        raise local_io_error("read configuration", path, exc) from None
+    try:
+        data = tomllib.loads(content)
+    except tomllib.TOMLDecodeError as exc:
+        # TOML diagnostics identify syntax/position; never print the input line.
+        line = getattr(exc, "lineno", None)
+        column = getattr(exc, "colno", None)
+        if line is None:
+            match = re.search(r"\(at line (\d+), column (\d+)\)$", str(exc))
+            if match:
+                line, column = match.groups()
+        position = f" at line {line}, column {column}" if line is not None else ""
+        raise ToolError(
+            "INVALID_CONFIGURATION", f"{path}: invalid TOML syntax{position}."
+        ) from None
+    overrides = {}
+    for key, environment in (
+        ("api_id", "TELEGRAM_API_ID"),
+        ("api_hash", "TELEGRAM_API_HASH"),
+        ("session_path", "TELEGRAM_SESSION_PATH"),
+    ):
+        if value := os.environ.get(environment):
+            data[key] = value
+            overrides[key] = environment
+    try:
+        settings = Settings.model_validate(data)
+    except ValidationError as exc:
+        raise validation_error(exc, str(path), overrides) from None
+    for key in ("session_path", "http_token_path"):
+        try:
+            setattr(settings, key, getattr(settings, key).expanduser().absolute())
+        except (OSError, RuntimeError, ValueError):
+            raise ToolError(
+                "INVALID_CONFIGURATION", f"{overrides.get(key, str(path))}: {key}: invalid path."
+            ) from None
     if not str(settings.session_path).endswith(".session"):
         settings.session_path = Path(str(settings.session_path) + ".session")
     return settings
 
 
 def save_settings(settings: Settings, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    settings = validate_settings(settings, str(path))
     data = settings.model_dump(mode="json", exclude_none=True)
     if settings.api_hash:
         data["api_hash"] = settings.api_hash.get_secret_value()
@@ -67,14 +139,18 @@ def save_settings(settings: Settings, path: Path) -> None:
         "\n".join(f"{key} = {json.dumps(value, ensure_ascii=False)}" for key, value in data.items())
         + "\n"
     )
-    fd, temporary = tempfile.mkstemp(prefix=".config-", dir=path.parent)
     try:
-        with os.fdopen(fd, "w") as stream:
-            stream.write(text)
-        os.replace(temporary, path)
-    finally:
-        if os.path.exists(temporary):
-            os.unlink(temporary)
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        fd, temporary = tempfile.mkstemp(prefix=".config-", dir=path.parent)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as stream:
+                stream.write(text)
+            os.replace(temporary, path)
+        finally:
+            with suppress(FileNotFoundError):
+                os.unlink(temporary)
+    except OSError as exc:
+        raise local_io_error("write configuration", path, exc) from None
 
 
 class ConfiguredPolicyProvider:

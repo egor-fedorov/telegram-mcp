@@ -1,6 +1,4 @@
 import asyncio
-import fcntl
-import os
 import sqlite3
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock
@@ -10,6 +8,7 @@ from pydantic import SecretStr
 from telethon import errors, functions
 
 from telegram_mcp.adapters.config import Settings
+from telegram_mcp.adapters.session import SessionLease
 from telegram_mcp.adapters.telegram.runtime import TelegramRuntime
 from telegram_mcp.domain.models import ToolError
 
@@ -21,11 +20,9 @@ def settings_for_session(tmp_path: Path) -> Settings:
 
 
 def assert_session_released(settings: Settings) -> None:
-    fd = os.open(str(settings.session_path) + ".lock", os.O_RDWR)
-    try:
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    finally:
-        os.close(fd)
+    lease = SessionLease(settings.session_path)
+    lease.acquire()
+    lease.close()
 
 
 async def test_missing_session_does_not_create_one_or_attempt_login(tmp_path: Path) -> None:
@@ -41,14 +38,14 @@ async def test_missing_session_does_not_create_one_or_attempt_login(tmp_path: Pa
 
 async def test_active_session_lock_prevents_second_client(tmp_path: Path) -> None:
     settings = settings_for_session(tmp_path)
-    fd = os.open(str(settings.session_path) + ".lock", os.O_CREAT | os.O_RDWR, 0o600)
-    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    lease = SessionLease(settings.session_path)
+    lease.acquire()
     runtime = TelegramRuntime(settings)
     try:
         with pytest.raises(ToolError, match="SESSION_IN_USE"):
             await runtime.ensure()
     finally:
-        os.close(fd)
+        lease.close()
 
 
 async def test_connection_error_message_does_not_echo_credentials() -> None:

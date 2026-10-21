@@ -8,6 +8,7 @@ from telethon import TelegramClient
 
 from telegram_mcp.adapters.config import Settings
 from telegram_mcp.adapters.session import SessionLease
+from telegram_mcp.adapters.version import get_version
 from telegram_mcp.domain.models import ToolError
 
 
@@ -32,7 +33,7 @@ async def authenticate(
                 api_id,
                 api_hash,
                 device_model="Telegram Context MCP",
-                app_version="0.1.0",
+                app_version=get_version(),
             )
             try:
                 await client.start(phone=phone, code_callback=code, password=password)

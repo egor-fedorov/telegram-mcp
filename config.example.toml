@@ -19,3 +19,10 @@ max_dialogs = 10000
 rpc_pages_per_call = 12
 cursor_ttl_seconds = 900
 max_cursors = 128
+
+# Shared local server: telegram-mcp serve --transport http
+# Connect MCP applications using telegram-mcp connect. HTTP binds only to 127.0.0.1.
+http_port = 8765
+# Default: platformdirs user data directory for telegram-mcp, file mcp.token.
+# The server creates a private bearer-token file; clients read it locally.
+# http_token_path = "/absolute/private/path/mcp.token"

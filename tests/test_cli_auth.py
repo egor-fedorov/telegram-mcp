@@ -56,7 +56,8 @@ async def test_authentication_releases_session_and_restores_umask(
     )
     if failure is None:
         await operation
-        assert stat.S_IMODE(session.stat().st_mode) == 0o600
+        if os.name != "nt":
+            assert stat.S_IMODE(session.stat().st_mode) == 0o600
     else:
         expected = {
             "start": ConnectionError,

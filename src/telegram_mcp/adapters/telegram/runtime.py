@@ -10,6 +10,7 @@ from telethon import TelegramClient, errors, functions
 
 from telegram_mcp.adapters.config import Settings
 from telegram_mcp.adapters.session import SessionLease
+from telegram_mcp.adapters.version import get_version
 from telegram_mcp.domain.models import ToolError
 
 T = TypeVar("T")
@@ -95,7 +96,7 @@ class TelegramRuntime:
                         retry_delay=1,
                         raise_last_call_error=True,
                         device_model="Telegram Context MCP",
-                        app_version="0.1.0",
+                        app_version=get_version(),
                     )
                 except (sqlite3.Error, OSError):
                     raise ToolError(

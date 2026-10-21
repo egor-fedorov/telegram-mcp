@@ -1,3 +1,4 @@
+import os
 import stat
 from pathlib import Path
 
@@ -31,7 +32,8 @@ def test_configuration_roundtrip_and_file_permissions(
     assert loaded.allowed_folder_ids == [1]
     assert loaded.allow_public_channel_reads is True
     assert loaded.allow_public_channel_discovery is True
-    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    if os.name != "nt":
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
     assert "example-not-a-real-key" not in repr(loaded)
 
 
@@ -84,7 +86,7 @@ async def test_configure_public_channel_opt_in(
     monkeypatch.setattr("telegram_mcp.adapters.cli.sys.stdin.isatty", lambda: True)
     reading = setting == "allow_public_channel_reads"
     prompt_answers = [*answers, ""] if reading else ["", *answers]
-    replies = iter(["", "", *prompt_answers])
+    replies = iter(["", "", *prompt_answers, ""])
     monkeypatch.setattr("builtins.input", lambda _: next(replies))
     settings = Settings(
         allowed_chat_ids=["1"],

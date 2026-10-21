@@ -10,6 +10,8 @@ from mcp.server.mcpserver.exceptions import ToolError as MCPToolError
 from mcp_types import ToolAnnotations
 from pydantic import AwareDatetime, Field, StringConstraints
 
+from telegram_mcp.adapters.tool_gate import ToolCallGate
+from telegram_mcp.adapters.version import get_version
 from telegram_mcp.application.service import Service
 from telegram_mcp.domain.models import (
     AlbumResult,
@@ -33,12 +35,16 @@ FolderIDs = Annotated[list[int], Field(min_length=1, max_length=100)]
 ChatIDs = Annotated[list[ChatID], Field(min_length=1, max_length=1000)]
 
 
-def expose_tool_errors[**P, R](fn: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
+def expose_tool_errors[**P, R](
+    fn: Callable[P, Awaitable[R]], *, gate: ToolCallGate | None = None
+) -> Callable[P, Awaitable[R]]:
     """Expose deliberate domain failures while leaving unexpected errors to SDK redaction."""
 
     @wraps(fn)
     async def wrapped(*args: P.args, **kwargs: P.kwargs) -> R:
         try:
+            if gate is not None:
+                return await gate.run(lambda: fn(*args, **kwargs))
             return await fn(*args, **kwargs)
         except ToolError as exc:
             raise MCPToolError(exc.issue().model_dump_json(exclude_none=True)) from None
@@ -46,17 +52,23 @@ def expose_tool_errors[**P, R](fn: Callable[P, Awaitable[R]]) -> Callable[P, Awa
     return wrapped
 
 
-def create_server(service: Service) -> MCPServer[None]:
+def create_server(
+    service: Service, *, gate: ToolCallGate | None = None, owns_service: bool = True
+) -> MCPServer[None]:
+    def expose[**P, R](fn: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
+        return expose_tool_errors(fn, gate=gate)
+
     @asynccontextmanager
     async def lifespan(_: MCPServer[None]) -> AsyncIterator[None]:
         try:
             yield None
         finally:
-            await service.close()
+            if owns_service:
+                await service.close()
 
     server: MCPServer[None] = MCPServer(
         "Telegram Context",
-        version="0.1.0",
+        version=get_version(),
         lifespan=lifespan,
         log_level="WARNING",
         instructions=(
@@ -88,7 +100,7 @@ def create_server(service: Service) -> MCPServer[None]:
     readonly = ToolAnnotations(read_only_hint=True, open_world_hint=True)
 
     @server.tool(annotations=readonly)
-    @expose_tool_errors
+    @expose
     async def get_status() -> dict[str, object]:
         """Check fresh Telegram authorization, connection, discovery policy and read scope.
 
@@ -98,7 +110,7 @@ def create_server(service: Service) -> MCPServer[None]:
         return await service.get_status()
 
     @server.tool(annotations=readonly)
-    @expose_tool_errors
+    @expose
     async def search_public_channels(
         query: Annotated[
             str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1000)
@@ -116,7 +128,7 @@ def create_server(service: Service) -> MCPServer[None]:
         return await service.search_public_channels(query, limit)
 
     @server.tool(annotations=readonly)
-    @expose_tool_errors
+    @expose
     async def get_similar_channels(
         chat_ref: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)],
         limit: Limit = 20,
@@ -134,13 +146,13 @@ def create_server(service: Service) -> MCPServer[None]:
         return await service.get_similar_channels(chat_ref, limit)
 
     @server.tool(annotations=readonly)
-    @expose_tool_errors
+    @expose
     async def list_folders(query: str | None = None) -> list[Folder]:
         """Discover folder IDs, names, order and rules. Optional case-insensitive name substring."""
         return await service.list_folders(query)
 
     @server.tool(annotations=readonly)
-    @expose_tool_errors
+    @expose
     async def list_chats(
         query: str | None = None,
         chat_type: ChatType | None = None,
@@ -157,7 +169,7 @@ def create_server(service: Service) -> MCPServer[None]:
         return await service.list_chats(query, chat_type, folder_ids, limit, cursor)
 
     @server.tool(annotations=readonly)
-    @expose_tool_errors
+    @expose
     async def get_chat(chat_ref: str) -> dict[str, object]:
         """Read permitted chat metadata by numeric ID, exact @username or t.me[/s]/username URL.
 
@@ -167,7 +179,7 @@ def create_server(service: Service) -> MCPServer[None]:
         return await service.get_chat(chat_ref)
 
     @server.tool(annotations=readonly)
-    @expose_tool_errors
+    @expose
     async def list_topics(
         chat_ref: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)],
         query: Annotated[
@@ -192,7 +204,7 @@ def create_server(service: Service) -> MCPServer[None]:
         return await service.list_topics(chat_ref, query, limit, cursor)
 
     @server.tool(annotations=readonly)
-    @expose_tool_errors
+    @expose
     async def get_pinned_messages(
         chat_ref: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)],
         limit: Limit = 30,
@@ -212,7 +224,7 @@ def create_server(service: Service) -> MCPServer[None]:
         return await service.get_pinned_messages(chat_ref, limit, cursor, topic_id)
 
     @server.tool(annotations=readonly)
-    @expose_tool_errors
+    @expose
     async def search_messages(
         query: Annotated[str, Field(min_length=1, max_length=1000)],
         chat_ids: ChatIDs | None = None,
@@ -246,7 +258,7 @@ def create_server(service: Service) -> MCPServer[None]:
         )
 
     @server.tool(annotations=readonly)
-    @expose_tool_errors
+    @expose
     async def get_history(
         chat_id: ChatID | None = None,
         date_from: AwareDatetime | None = None,
@@ -281,7 +293,7 @@ def create_server(service: Service) -> MCPServer[None]:
         )
 
     @server.tool(annotations=readonly)
-    @expose_tool_errors
+    @expose
     async def get_messages(
         refs: Annotated[list[str | MessageRef], Field(min_length=1, max_length=100)],
         text_offset: Annotated[int, Field(ge=0)] = 0,
@@ -300,7 +312,7 @@ def create_server(service: Service) -> MCPServer[None]:
         return await service.get_messages(refs, text_offset, text_limit)
 
     @server.tool(annotations=readonly)
-    @expose_tool_errors
+    @expose
     async def get_album(
         ref: str | MessageRef,
         scan_limit: Annotated[int, Field(ge=1, le=100, strict=True)] = 30,
@@ -322,7 +334,7 @@ def create_server(service: Service) -> MCPServer[None]:
         return await service.get_album(ref, scan_limit)
 
     @server.tool(annotations=readonly)
-    @expose_tool_errors
+    @expose
     async def get_context(
         ref: str | MessageRef,
         before: Annotated[int, Field(ge=0, le=30)] = 10,
@@ -337,7 +349,7 @@ def create_server(service: Service) -> MCPServer[None]:
         return await service.get_context(ref, before, after, reply_depth)
 
     @server.tool(annotations=readonly)
-    @expose_tool_errors
+    @expose
     async def get_thread(
         ref: str | MessageRef, limit: Limit = 30, cursor: str | None = None
     ) -> Page:

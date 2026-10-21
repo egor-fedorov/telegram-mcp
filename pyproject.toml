@@ -4,26 +4,46 @@ build-backend = "hatchling.build"
 
 [project]
 name = "telegram-context-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "Local, read-only Telegram MCP server with folder-aware retrieval"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
+  "anyio>=4.15.1,<5",
+  "httpx2>=2.5,<3",
   "mcp>=2.2,<3",
-  "pydantic>=2.10,<3",
-  "telethon>=1.42,<2",
+  "pydantic>=2.14.1,<3",
+  "telethon>=1.45,<2",
   "platformdirs>=4,<5",
+  "portalocker>=4.4.1,<5",
+  "pywin32>=311; sys_platform == 'win32'",
+  "starlette>=1.6,<2",
+  "uvicorn>=0.52.4,<1",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: 3.15",
 ]
 
 [project.scripts]
 telegram-mcp = "telegram_mcp.cli:main"
 
 [project.urls]
+Documentation = "https://github.com/egor-fedorov/telegram-mcp/blob/main/README.md"
 Repository = "https://github.com/egor-fedorov/telegram-mcp"
 Issues = "https://github.com/egor-fedorov/telegram-mcp/issues"
 Roadmap = "https://github.com/egor-fedorov/telegram-mcp/blob/main/ROADMAP.md"
+Changelog = "https://github.com/egor-fedorov/telegram-mcp/blob/main/CHANGELOG.md"
 
 [dependency-groups]
 dev = ["pytest>=8", "pytest-asyncio>=0.25", "ruff", "ty"]
