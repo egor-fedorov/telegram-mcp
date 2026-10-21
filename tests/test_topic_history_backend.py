@@ -6,9 +6,11 @@ from unittest.mock import AsyncMock
 import pytest
 from telethon import errors, functions, types
 
-from telegram_mcp.config import Settings
-from telegram_mcp.models import MessageRef, ToolError
-from telegram_mcp.telegram import TelegramBackend, chat_from_entity, normalize_message
+from telegram_mcp.adapters.config import Settings
+from telegram_mcp.adapters.telegram import TelegramBackend, TelegramRuntime
+from telegram_mcp.adapters.telegram.mapping import chat_from_entity, normalize_message
+from telegram_mcp.application.requests import ReadFilters, TopicRead
+from telegram_mcp.domain.models import MessageRef, ToolError
 from tests.fakes import BASE
 from tests.test_navigation_backend import CHAT_ID, forum, response, topic
 
@@ -46,9 +48,12 @@ def adapter(result: Any) -> tuple[TelegramBackend, AsyncMock]:
     client.get_input_entity = AsyncMock(return_value=types.InputPeerChannel(123, 456))
     client._self_id = 999
     client._mb_entity_cache = SimpleNamespace(get=lambda _: None)
-    backend = TelegramBackend(Settings())
-    backend.chats[CHAT_ID] = chat_from_entity(forum())
-    backend.client = client
+    settings = Settings()
+    chat_cache = {}
+    chat_cache[CHAT_ID] = chat_from_entity(forum(), now=BASE + timedelta(days=1))
+    backend = TelegramBackend(
+        settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
+    )
     return backend, client
 
 
@@ -119,19 +124,25 @@ async def test_get_topic_keeps_temporary_errors_distinct(failure: Exception, cod
 @pytest.mark.parametrize("topic_id", [0, -1, 2**31, True, "10", 10.5])
 async def test_adapter_rejects_invalid_topic_id_before_requests(topic_id: Any) -> None:
     backend, client = adapter(None)
-    for operation in (backend.get_topic, backend.fetch):
-        with pytest.raises(ToolError, match="INVALID_ARGUMENT"):
-            await operation(CHAT_ID, topic_id=topic_id)
+    with pytest.raises(ToolError, match="INVALID_ARGUMENT"):
+        await backend.get_topic(CHAT_ID, topic_id=topic_id)
+    with pytest.raises(ToolError, match="INVALID_ARGUMENT"):
+        await backend.read(CHAT_ID, TopicRead(topic_id))
     client.assert_not_called()
     client.get_input_entity.assert_not_called()
 
 
-@pytest.mark.parametrize("method", ["get_topic", "fetch"])
+@pytest.mark.parametrize("method", ["get_topic", "read"])
 async def test_selected_topic_requires_a_supported_forum_before_rpc(method: str) -> None:
     backend, client = adapter(None)
-    backend.chats[CHAT_ID] = chat_from_entity(forum(enabled=False))
+    backend.chat_gateway.cache[CHAT_ID] = chat_from_entity(
+        forum(enabled=False), now=BASE + timedelta(days=1)
+    )
     with pytest.raises(ToolError, match="FORUM_UNAVAILABLE"):
-        await getattr(backend, method)(CHAT_ID, topic_id=10)
+        if method == "get_topic":
+            await backend.get_topic(CHAT_ID, topic_id=10)
+        else:
+            await backend.read(CHAT_ID, TopicRead(10))
     client.assert_not_called()
 
 
@@ -141,14 +152,16 @@ async def test_history_uses_topic_replies_in_both_orders_and_continues_by_id(
     topic_id: int, oldest_first: bool
 ) -> None:
     backend, client = adapter(message_page([raw_message(mid, topic_id) for mid in [30, 20]]))
-    batch = await backend.fetch(
+    batch = await backend.read(
         CHAT_ID,
-        topic_id=topic_id,
+        TopicRead(
+            topic_id,
+            filters=ReadFilters(
+                oldest_first=oldest_first, date_from=BASE, date_to=BASE + timedelta(days=1)
+            ),
+        ),
         limit=7,
         offset=15 if oldest_first else 40,
-        oldest_first=oldest_first,
-        date_from=BASE,
-        date_to=BASE + timedelta(days=1),
     )
     assert client.await_args is not None
     request = client.await_args.args[0]
@@ -173,13 +186,10 @@ async def test_topic_history_first_page_broadens_date_offset_then_filters_half_o
 ) -> None:
     start, end = BASE + timedelta(seconds=20), BASE + timedelta(seconds=40)
     backend, client = adapter(message_page([raw_message(mid) for mid in [40, 30, 20, 19]]))
-    batch = await backend.fetch(
+    batch = await backend.read(
         CHAT_ID,
-        topic_id=10,
+        TopicRead(10, filters=ReadFilters(oldest_first=oldest_first, date_from=start, date_to=end)),
         limit=9,
-        oldest_first=oldest_first,
-        date_from=start,
-        date_to=end,
     )
     assert client.await_args is not None
     request = client.await_args.args[0]
@@ -195,7 +205,7 @@ async def test_topic_history_first_page_broadens_date_offset_then_filters_half_o
 
 async def test_oldest_topic_history_without_lower_date_starts_at_first_message_id() -> None:
     backend, client = adapter(message_page([]))
-    await backend.fetch(CHAT_ID, topic_id=1, oldest_first=True, limit=4)
+    await backend.read(CHAT_ID, TopicRead(1, filters=ReadFilters(oldest_first=True)), limit=4)
     assert client.await_args is not None
     request = client.await_args.args[0]
     assert request.offset_id == 1 and request.offset_date is None
@@ -206,8 +216,11 @@ async def test_oldest_topic_history_without_lower_date_starts_at_first_message_i
 async def test_scoped_pins_use_search_top_id_without_unfiltered_replies(topic_id: int) -> None:
     backend, client = adapter(message_page([raw_message(20, topic_id)]))
     end = BASE + timedelta(seconds=30)
-    batch = await backend.fetch(
-        CHAT_ID, topic_id=topic_id, pinned_only=True, offset=25, limit=6, date_to=end
+    batch = await backend.read(
+        CHAT_ID,
+        TopicRead(topic_id, filters=ReadFilters(date_to=end), pinned_only=True),
+        offset=25,
+        limit=6,
     )
     assert client.await_args is not None
     request = client.await_args.args[0]
@@ -227,8 +240,8 @@ async def test_selected_topic_does_not_silently_ignore_other_selectors(
     selectors: dict[str, Any],
 ) -> None:
     backend, client = adapter(None)
-    with pytest.raises(ToolError, match="INVALID_ARGUMENT"):
-        await backend.fetch(CHAT_ID, topic_id=10, **selectors)
+    with pytest.raises(TypeError, match="unexpected keyword argument"):
+        await backend.read(CHAT_ID, TopicRead(10, **selectors))
     client.assert_not_called()
 
 
@@ -262,7 +275,7 @@ async def test_selected_page_normalizes_authors_media_unicode_entities_and_real_
     backend, client = adapter(
         message_page([raw, root], users=[types.User(id=7, first_name="Alice", access_hash=8)])
     )
-    batch = await backend.fetch(CHAT_ID, topic_id=10)
+    batch = await backend.read(CHAT_ID, TopicRead(10, filters=ReadFilters()))
     entry, creation = batch.messages
     assert entry.sender.id == "7" and entry.sender.name == "Alice"
     assert entry.sender.type == "user"
@@ -333,7 +346,7 @@ def test_topic_metadata_distinguishes_general_threads_and_foreign_reply_targets(
 ) -> None:
     raw = raw_message(100)
     raw.reply_to = reply
-    mapped = normalize_message(raw, chat_from_entity(forum()))
+    mapped = normalize_message(raw, chat_from_entity(forum(), now=BASE + timedelta(days=1)))
     assert mapped.topic_id == expected_topic
     expected_ref = (
         MessageRef(chat_id=expected_thread_chat, message_id=expected_thread_id)
@@ -343,14 +356,19 @@ def test_topic_metadata_distinguishes_general_threads_and_foreign_reply_targets(
     assert mapped.thread_ref == expected_ref
     if reply and reply.reply_to_peer_id:
         assert mapped.reply_to is not None and mapped.reply_to.chat_id == "-1000000000456"
-    assert normalize_message(raw, chat_from_entity(forum(enabled=False))).topic_id is None
+    assert (
+        normalize_message(
+            raw, chat_from_entity(forum(enabled=False), now=BASE + timedelta(days=1))
+        ).topic_id
+        is None
+    )
 
 
 async def test_general_history_preserves_only_actual_general_messages_without_fake_root() -> None:
     direct_reply = raw_message(50, 1)
     direct_reply.reply_to = types.MessageReplyHeader(reply_to_msg_id=40, reply_to_top_id=30)
     backend, client = adapter(message_page([raw_message(60, 10), direct_reply, raw_message(20, 1)]))
-    batch = await backend.fetch(CHAT_ID, topic_id=1)
+    batch = await backend.read(CHAT_ID, TopicRead(1, filters=ReadFilters()))
     assert [entry.message_ref.message_id for entry in batch.messages] == [50, 20]
     assert all(entry.topic_id == 1 for entry in batch.messages)
     assert batch.messages[0].thread_ref == MessageRef(chat_id=CHAT_ID, message_id=30)
@@ -365,7 +383,7 @@ async def test_topic_isolation_skips_foreign_and_ambiguous_rows_without_leaking_
     foreign = raw_message(99, peer_channel_id=456)
     foreign.message = "SECRET"
     backend, _ = adapter(message_page([foreign, unknown, raw_message(50, 11), raw_message(30)]))
-    batch = await backend.fetch(CHAT_ID, topic_id=10)
+    batch = await backend.read(CHAT_ID, TopicRead(10, filters=ReadFilters()))
     assert [entry.message_ref.message_id for entry in batch.messages] == [30]
     assert batch.next_offset == 30 and not batch.exhausted
     assert len(batch.issues) == 2
@@ -379,8 +397,10 @@ async def test_native_page_sorts_deduplicates_and_discards_previous_positions(
 ) -> None:
     rows = [raw_message(mid) for mid in [20, 40, 30, 20, 60]]
     backend, _ = adapter(message_page(rows))
-    batch = await backend.fetch(
-        CHAT_ID, topic_id=10, offset=25 if oldest_first else 50, oldest_first=oldest_first
+    batch = await backend.read(
+        CHAT_ID,
+        TopicRead(10, filters=ReadFilters(oldest_first=oldest_first)),
+        offset=25 if oldest_first else 50,
     )
     assert [entry.message_ref.message_id for entry in batch.messages] == (
         [30, 40, 60] if oldest_first else [40, 30, 20]
@@ -391,17 +411,19 @@ async def test_native_page_sorts_deduplicates_and_discards_previous_positions(
 
 async def test_short_empty_placeholder_and_filtered_pages_preserve_positions() -> None:
     backend, client = adapter(message_page([raw_message(30)], count=1))
-    first = await backend.fetch(CHAT_ID, topic_id=10, limit=30)
+    first = await backend.read(CHAT_ID, TopicRead(10, filters=ReadFilters()), limit=30)
     assert first.next_offset == 30 and not first.exhausted
     client.return_value = message_page([types.MessageEmpty(id=20, peer_id=None)])
-    second = await backend.fetch(CHAT_ID, topic_id=10, offset=30)
+    second = await backend.read(CHAT_ID, TopicRead(10, filters=ReadFilters()), offset=30)
     assert not second.messages and second.next_offset == 20 and not second.exhausted
     assert not second.issues
     client.return_value = message_page([raw_message(15)])
-    third = await backend.fetch(CHAT_ID, topic_id=10, offset=20, content_type="photo")
+    third = await backend.read(
+        CHAT_ID, TopicRead(10, filters=ReadFilters(content_type="photo")), offset=20
+    )
     assert not third.messages and third.next_offset == 15 and not third.exhausted
     client.return_value = message_page([], count=100)
-    final = await backend.fetch(CHAT_ID, topic_id=10, offset=15)
+    final = await backend.read(CHAT_ID, TopicRead(10, filters=ReadFilters()), offset=15)
     assert final.exhausted and not final.messages and not final.issues
     assert final.next_offset == 15
 
@@ -419,14 +441,14 @@ async def test_nonadvancing_pages_stop_with_incomplete_issue_instead_of_looping(
     rows: list[Any],
 ) -> None:
     backend, _ = adapter(message_page(rows))
-    batch = await backend.fetch(CHAT_ID, topic_id=10, offset=30)
+    batch = await backend.read(CHAT_ID, TopicRead(10, filters=ReadFilters()), offset=30)
     assert batch.exhausted and batch.next_offset == 30 and not batch.messages
     assert batch.issues and all(issue.code == "PAGINATION_INCOMPLETE" for issue in batch.issues)
 
 
 async def test_unusable_response_does_not_falsely_report_complete_history() -> None:
     backend, _ = adapter(types.messages.MessagesNotModified(count=5))
-    batch = await backend.fetch(CHAT_ID, topic_id=10)
+    batch = await backend.read(CHAT_ID, TopicRead(10, filters=ReadFilters()))
     assert batch.exhausted and not batch.messages
     assert [issue.code for issue in batch.issues] == ["PAGINATION_INCOMPLETE"]
 
@@ -444,7 +466,7 @@ async def test_topic_deleted_or_forum_changed_after_preflight_is_not_empty_succe
     backend, client = adapter(None)
     client.side_effect = failure
     with pytest.raises(ToolError) as caught:
-        await backend.fetch(CHAT_ID, topic_id=10)
+        await backend.read(CHAT_ID, TopicRead(10, filters=ReadFilters()))
     assert caught.value.code == code and not caught.value.retryable
     client.assert_awaited_once()
 
@@ -463,6 +485,6 @@ async def test_topic_history_preserves_retryable_errors_without_internal_retries
     backend, client = adapter(None)
     client.side_effect = failure
     with pytest.raises(ToolError) as caught:
-        await backend.fetch(CHAT_ID, topic_id=10)
+        await backend.read(CHAT_ID, TopicRead(10, filters=ReadFilters()))
     assert caught.value.code == code and caught.value.retryable
     client.assert_awaited_once()

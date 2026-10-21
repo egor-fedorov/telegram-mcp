@@ -1,7 +1,7 @@
 """Evaluate Telegram dialog filters, then apply the server's access policy."""
 
-from telegram_mcp.config import Settings
-from telegram_mcp.models import Chat, Folder, ToolError
+from telegram_mcp.domain.models import Chat, Folder, ToolError
+from telegram_mcp.domain.policy import ReadPolicy
 
 
 def contains(folder: Folder, chat: Chat) -> bool:
@@ -32,7 +32,7 @@ def contains(folder: Folder, chat: Chat) -> bool:
     return folder.include_contacts if chat.is_contact else folder.include_non_contacts
 
 
-def allowed_ids(settings: Settings, chats: list[Chat], folders: list[Folder]) -> set[str]:
+def allowed_ids(settings: ReadPolicy, chats: list[Chat], folders: list[Folder]) -> set[str]:
     if settings.allow_all_chats:
         return {c.id for c in chats}
     chosen = [f for f in folders if f.id in settings.allowed_folder_ids]

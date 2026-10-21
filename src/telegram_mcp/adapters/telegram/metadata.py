@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 from telethon import types
 
-from telegram_mcp.models import (
+from telegram_mcp.domain.models import (
     Entity,
     FormattedText,
     PollAnswerResult,

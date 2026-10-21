@@ -2,9 +2,11 @@ from typing import Any
 
 import pytest
 
-from telegram_mcp.backend import HistoryWindow
-from telegram_mcp.config import Settings
-from telegram_mcp.models import (
+from telegram_mcp.adapters.config import Settings
+from telegram_mcp.application.ports import HistoryWindow
+from telegram_mcp.application.service import Service
+from telegram_mcp.bootstrap import build_service
+from telegram_mcp.domain.models import (
     Attachment,
     Chat,
     Entity,
@@ -19,7 +21,6 @@ from telegram_mcp.models import (
     ReactionSummary,
     ToolError,
 )
-from telegram_mcp.service import Service
 from tests.fakes import BASE, FakeBackend, msg
 
 CHAT_ID = "-1001"
@@ -54,7 +55,7 @@ class AlbumBackend(FakeBackend):
 
 
 def album_service(backend: AlbumBackend, **settings: Any) -> Service:
-    return Service(backend, Settings(**(settings or {"allow_all_chats": True})))
+    return build_service(backend, Settings(**(settings or {"allow_all_chats": True})))
 
 
 @pytest.mark.parametrize("scan_limit", [0, -1, 101, True, False, 1.0, "30", None])
@@ -116,7 +117,8 @@ async def test_explicit_public_album_grant_is_rechecked_and_does_not_follow_link
     anchor.thread_ref = other_ref
     anchor.forward_origin = ForwardOrigin(message_ref=other_ref, saved_from_ref=other_ref)
     backend = AlbumBackend([anchor, member(21)], chats=[], external_chats=[chat])
-    service = album_service(backend, allow_public_channel_reads=True)
+    settings = Settings(allow_public_channel_reads=True)
+    service = build_service(backend, settings)
     result = await service.get_album("https://t.me/source/20")
     assert len(result.messages) == 2
     assert backend.public_checks == [CHAT_ID]
@@ -129,7 +131,7 @@ async def test_explicit_public_album_grant_is_rechecked_and_does_not_follow_link
     assert backend.public_checks == [CHAT_ID, CHAT_ID]
     assert backend.reads == [f"{CHAT_ID}:20"]
     assert len(backend.window_calls) == 2
-    assert service.settings.allowed_chat_ids == [] and backend.chats == []
+    assert settings.allowed_chat_ids == [] and backend.chats == []
 
 
 async def test_public_album_is_denied_when_public_mode_is_disabled() -> None:

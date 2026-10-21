@@ -1,0 +1,12 @@
+"""A credential-free snapshot of the current retrieval policy."""
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class ReadPolicy:
+    allowed_chat_ids: tuple[str, ...] = ()
+    allowed_folder_ids: tuple[int, ...] = ()
+    allow_all_chats: bool = False
+    allow_public_channel_reads: bool = False
+    allow_public_channel_discovery: bool = False

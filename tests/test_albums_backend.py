@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock
 import pytest
 from telethon import errors, functions, types
 
-from telegram_mcp.config import Settings
-from telegram_mcp.models import Chat, MessageRef, ToolError
-from telegram_mcp.telegram import TelegramBackend
+from telegram_mcp.adapters.config import Settings
+from telegram_mcp.adapters.telegram import TelegramBackend, TelegramRuntime
+from telegram_mcp.domain.models import Chat, MessageRef, ToolError
 from tests.fakes import BASE
 
 CHAT = Chat(id="-1000000000123", title="News", type="channel", username="example")
@@ -40,9 +40,12 @@ def adapter(response: Any) -> tuple[TelegramBackend, AsyncMock]:
     client.get_input_entity.return_value = types.InputPeerChannel(123, 456)
     client._self_id = 999
     client._mb_entity_cache = SimpleNamespace(get=lambda _: None)
-    backend = TelegramBackend(Settings())
-    backend.chats[CHAT.id] = CHAT
-    backend.client = client
+    settings = Settings()
+    chat_cache = {}
+    chat_cache[CHAT.id] = CHAT
+    backend = TelegramBackend(
+        settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
+    )
     return backend, client
 
 

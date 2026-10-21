@@ -1,13 +1,16 @@
 from datetime import datetime, timedelta
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
 from telethon import functions, types
 
-from telegram_mcp.backend import TopicOffset
-from telegram_mcp.config import Settings
-from telegram_mcp.models import ToolError
-from telegram_mcp.telegram import TelegramBackend, chat_from_entity
+from telegram_mcp.adapters.config import Settings
+from telegram_mcp.adapters.telegram import TelegramBackend, TelegramRuntime
+from telegram_mcp.adapters.telegram.mapping import chat_from_entity
+from telegram_mcp.application.ports import TopicOffset
+from telegram_mcp.application.requests import PinnedRead, ReadFilters
+from telegram_mcp.domain.models import ToolError
 from tests.fakes import BASE
 
 CHAT_ID = "-1000000000123"
@@ -97,9 +100,12 @@ def response(
 def adapter(result: types.messages.ForumTopics) -> tuple[TelegramBackend, AsyncMock]:
     client = AsyncMock(return_value=result)
     client.get_input_entity = AsyncMock(return_value=types.InputPeerChannel(123, 456))
-    backend = TelegramBackend(Settings())
-    backend.chats[CHAT_ID] = chat_from_entity(forum())
-    backend.client = client
+    settings = Settings()
+    chat_cache = {}
+    chat_cache[CHAT_ID] = chat_from_entity(forum(), now=BASE + timedelta(days=1))
+    backend = TelegramBackend(
+        settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
+    )
     return backend, client
 
 
@@ -118,7 +124,7 @@ def adapter(result: types.messages.ForumTopics) -> tuple[TelegramBackend, AsyncM
     ],
 )
 def test_forum_flag_requires_supported_raw_supergroup(entity: object, expected: bool) -> None:
-    assert chat_from_entity(entity).is_forum is expected
+    assert chat_from_entity(entity, now=BASE + timedelta(days=1)).is_forum is expected
 
 
 async def test_topics_use_messages_namespace_and_exact_offsets_without_detail_reads() -> None:
@@ -172,7 +178,9 @@ async def test_topic_models_preserve_general_deleted_and_short_metadata(
             [topic(1), types.ForumTopicDeleted(8), topic(9, short=True), topic(10)], [message()]
         )
     )
-    backend.chats[CHAT_ID] = chat_from_entity(forum(username=username))
+    backend.chat_gateway.cache[CHAT_ID] = chat_from_entity(
+        forum(username=username), now=BASE + timedelta(days=1)
+    )
     batch = await backend.fetch_topics(CHAT_ID, offset=TopicOffset())
     general, deleted, short, full = batch.topics
     assert general.is_general and general.root_message_ref is None
@@ -269,8 +277,11 @@ async def test_foreign_topic_is_not_exposed_but_safe_tail_can_continue() -> None
 async def test_unsupported_forums_fail_before_topic_rpc(entity: types.Channel) -> None:
     client = AsyncMock()
     client.get_entity = AsyncMock(return_value=entity)
-    backend = TelegramBackend(Settings())
-    backend.client = client
+    settings = Settings()
+    chat_cache = {}
+    backend = TelegramBackend(
+        settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
+    )
     with pytest.raises(ToolError, match="FORUM_UNAVAILABLE"):
         await backend.fetch_topics(CHAT_ID, offset=TopicOffset())
     client.assert_not_called()
@@ -280,7 +291,7 @@ async def test_unsupported_forums_fail_before_topic_rpc(entity: types.Channel) -
 async def test_chat_wide_pins_use_filter_with_existing_message_normalization() -> None:
     backend, client = adapter(response([], []))
     client.get_messages = AsyncMock(return_value=[message(20)])
-    batch = await backend.fetch(CHAT_ID, offset=30, limit=5, pinned_only=True)
+    batch = await backend.read(CHAT_ID, PinnedRead(filters=ReadFilters()), offset=30, limit=5)
     client.get_messages.assert_awaited_once()
     assert client.get_messages.await_args is not None
     args = client.get_messages.await_args
@@ -294,8 +305,8 @@ async def test_chat_wide_pins_use_filter_with_existing_message_normalization() -
 
 
 async def test_pins_cannot_accidentally_use_unfiltered_thread_replies() -> None:
-    backend = TelegramBackend(Settings())
-    backend.client = AsyncMock()
-    with pytest.raises(ToolError, match="INVALID_ARGUMENT.*chat-wide"):
-        await backend.fetch(CHAT_ID, pinned_only=True, thread_id=7)
-    backend.client.get_messages.assert_not_called()
+    backend, client = adapter(response([], []))
+    unsupported: dict[str, Any] = {"thread_id": 7}
+    with pytest.raises(TypeError, match="unexpected keyword argument"):
+        await backend.read(CHAT_ID, PinnedRead(**unsupported))
+    client.get_messages.assert_not_called()

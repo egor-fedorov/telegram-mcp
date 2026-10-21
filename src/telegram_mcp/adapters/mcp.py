@@ -10,7 +10,8 @@ from mcp.server.mcpserver.exceptions import ToolError as MCPToolError
 from mcp_types import ToolAnnotations
 from pydantic import AwareDatetime, Field, StringConstraints
 
-from telegram_mcp.models import (
+from telegram_mcp.application.service import Service
+from telegram_mcp.domain.models import (
     AlbumResult,
     ChatPage,
     ChatType,
@@ -24,7 +25,6 @@ from telegram_mcp.models import (
     ToolError,
     TopicPage,
 )
-from telegram_mcp.service import Service
 
 Limit = Annotated[int, Field(ge=1, le=100)]
 ChatID = Annotated[str, Field(pattern=r"^-?[1-9]\d*$")]
@@ -52,7 +52,7 @@ def create_server(service: Service) -> MCPServer[None]:
         try:
             yield None
         finally:
-            await service.backend.close()
+            await service.close()
 
     server: MCPServer[None] = MCPServer(
         "Telegram Context",
@@ -233,7 +233,7 @@ def create_server(service: Service) -> MCPServer[None]:
         Configured public-channel access applies only to explicit chat_ids, never implicit scope.
         Temporary failures retain next_cursor; respect retry_after_seconds before continuing.
         """
-        return await service.query(
+        return await service.search_messages(
             query=query,
             chat_ids=chat_ids,
             folder_ids=folder_ids,

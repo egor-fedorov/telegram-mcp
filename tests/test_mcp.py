@@ -6,11 +6,11 @@ import pytest
 from mcp.client import Client
 from mcp.client.stdio import StdioServerParameters
 
-from telegram_mcp.backend import DiscoveryBatch
-from telegram_mcp.config import Settings
-from telegram_mcp.models import Folder, PublicChannel, ToolError
-from telegram_mcp.server import create_server
-from telegram_mcp.service import Service
+from telegram_mcp.adapters.config import Settings
+from telegram_mcp.adapters.mcp import create_server
+from telegram_mcp.application.ports import DiscoveryBatch
+from telegram_mcp.bootstrap import build_service as Service
+from telegram_mcp.domain.models import Folder, PublicChannel, ToolError
 from tests.fakes import FakeBackend, msg
 
 EXPECTED_TOOLS = {

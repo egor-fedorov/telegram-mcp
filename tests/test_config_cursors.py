@@ -4,11 +4,11 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr
 
-from telegram_mcp.cli import configure, save_settings
-from telegram_mcp.config import Settings, load_settings
-from telegram_mcp.cursors import CursorStore
-from telegram_mcp.models import ToolError
-from tests.fakes import FakeBackend
+from telegram_mcp.adapters.cli import configure
+from telegram_mcp.adapters.config import Settings, load_settings, save_settings
+from telegram_mcp.adapters.cursors import CursorStore
+from telegram_mcp.domain.models import ToolError
+from tests.fakes import FakeBackend, FakeClock
 
 
 def test_configuration_roundtrip_and_file_permissions(
@@ -81,8 +81,7 @@ async def test_configure_public_channel_opt_in(
     expected: bool,
 ) -> None:
     backend = FakeBackend()
-    monkeypatch.setattr("telegram_mcp.cli.TelegramBackend", lambda _: backend)
-    monkeypatch.setattr("telegram_mcp.cli.sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("telegram_mcp.adapters.cli.sys.stdin.isatty", lambda: True)
     reading = setting == "allow_public_channel_reads"
     prompt_answers = [*answers, ""] if reading else ["", *answers]
     replies = iter(["", "", *prompt_answers])
@@ -94,7 +93,7 @@ async def test_configure_public_channel_opt_in(
     )
     path = tmp_path / "config.toml"
 
-    await configure(settings, path)
+    await configure(settings, path, lambda _: backend)
 
     loaded = load_settings(path)
     assert loaded.allow_public_channel_reads is (expected if reading else not initial)
@@ -103,8 +102,9 @@ async def test_configure_public_channel_opt_in(
     assert backend.closed
 
 
-def test_cursor_snapshot_expiry_and_memory_limit(monkeypatch: pytest.MonkeyPatch) -> None:
-    store = CursorStore(ttl=10, maximum=1, max_bytes=1000)
+def test_cursor_snapshot_expiry_and_memory_limit() -> None:
+    clock = FakeClock()
+    store = CursorStore(clock, ttl=10, maximum=1, max_bytes=1000)
     value = ["initial"]
     token = store.put("test", "fp", value)
     value.append("changed")
@@ -115,6 +115,6 @@ def test_cursor_snapshot_expiry_and_memory_limit(monkeypatch: pytest.MonkeyPatch
     with pytest.raises(ToolError, match="QUERY_TOO_LARGE"):
         store.put("test", "fp", "x" * 2000)
     token = store.put("test", "fp", [])
-    monkeypatch.setattr("telegram_mcp.cursors.time.monotonic", lambda: float("inf"))
+    clock.time = float("inf")
     with pytest.raises(ToolError, match="CURSOR_EXPIRED"):
         store.get(token, "test", "fp")

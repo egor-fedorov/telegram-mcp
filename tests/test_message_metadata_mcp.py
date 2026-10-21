@@ -3,8 +3,10 @@ import json
 import pytest
 from mcp.client import Client
 
-from telegram_mcp.config import Settings
-from telegram_mcp.models import (
+from telegram_mcp.adapters.config import Settings
+from telegram_mcp.adapters.mcp import create_server
+from telegram_mcp.bootstrap import build_service as Service
+from telegram_mcp.domain.models import (
     Chat,
     Entity,
     FormattedText,
@@ -17,8 +19,6 @@ from telegram_mcp.models import (
     ReactionCount,
     ReactionSummary,
 )
-from telegram_mcp.server import create_server
-from telegram_mcp.service import Service
 from tests.fakes import BASE, FakeBackend, msg
 
 METADATA_FIELDS = ("view_count", "forward_count", "reply_count", "reactions", "poll", "entities")

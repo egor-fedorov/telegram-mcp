@@ -1,0 +1,154 @@
+"""Validate selectors and recheck access before any saved message buffer is read."""
+
+from dataclasses import dataclass, field
+
+from telegram_mcp.application.access import AccessFactory
+from telegram_mcp.application.common import fingerprint
+from telegram_mcp.application.message_pager import QueryState, Stream
+from telegram_mcp.application.ports import ChatPort, Clock, CursorPort, ForumPort
+from telegram_mcp.application.requests import (
+    MessageRead,
+    PinnedRead,
+    SearchRead,
+    ThreadRead,
+    TopicRead,
+)
+from telegram_mcp.domain.folders import select_chats
+from telegram_mcp.domain.models import Scope, ToolError
+
+
+@dataclass(frozen=True)
+class SourceSelection:
+    chat_ids: list[str] | None = None
+    folder_ids: list[int] | None = None
+    source_ref: str | None = None
+
+
+@dataclass(frozen=True)
+class QuerySpec:
+    read: MessageRead
+    selection: SourceSelection = field(default_factory=SourceSelection)
+
+    @property
+    def kind(self) -> str:
+        match self.read:
+            case SearchRead():
+                return "search"
+            case ThreadRead():
+                return "thread"
+            case PinnedRead() | TopicRead(pinned_only=True):
+                return "pinned"
+            case _:
+                return "history"
+
+    @property
+    def allow_public(self) -> bool:
+        return not isinstance(self.read, (ThreadRead, TopicRead))
+
+    def fingerprint(self, chat_ids: list[str] | None) -> str:
+        read = self.read
+        return fingerprint(
+            [
+                read.query if isinstance(read, SearchRead) else None,
+                chat_ids,
+                self.selection.folder_ids,
+                read.filters.date_from,
+                read.filters.date_to,
+                read.sender_id if isinstance(read, SearchRead) else None,
+                read.filters.content_type,
+                "oldest_first" if read.filters.oldest_first else "newest_first",
+                read.thread_id if isinstance(read, ThreadRead) else None,
+                self.selection.source_ref,
+                self.allow_public,
+                isinstance(read, PinnedRead) or isinstance(read, TopicRead) and read.pinned_only,
+                read.topic_id if isinstance(read, TopicRead) else None,
+            ]
+        )
+
+
+class QueryPreparation:
+    def __init__(
+        self,
+        chats: ChatPort,
+        forums: ForumPort,
+        access: AccessFactory,
+        cursors: CursorPort,
+        clock: Clock,
+    ):
+        self.chats = chats
+        self.forums = forums
+        self.access = access
+        self.cursors = cursors
+        self.clock = clock
+
+    async def prepare(self, spec: QuerySpec, cursor: str | None) -> tuple[QueryState, str]:
+        filters = spec.read.filters
+        for date in (filters.date_from, filters.date_to):
+            if date is not None and date.utcoffset() is None:
+                raise ToolError("INVALID_ARGUMENT", "Dates must include a timezone.")
+        if filters.date_from and filters.date_to and filters.date_from >= filters.date_to:
+            raise ToolError("INVALID_ARGUMENT", "date_from must be earlier than date_to.")
+        access = await self.access.load()
+        chats, folders, allowed = access.chats, access.folders, access.allowed
+        selection = spec.selection
+        chat_ids = selection.chat_ids
+        source_chat = None
+        if selection.source_ref is not None:
+            # Loading dialogs first primes the adapter's entity/access-hash cache for IDs.
+            source_chat = await self.chats.resolve_chat(selection.source_ref, refresh=True)
+            chat_ids = [source_chat.id]
+        elif isinstance(spec.read, TopicRead) and chat_ids:
+            source_chat = await self.chats.resolve_chat(chat_ids[0], refresh=True)
+            chat_ids = [source_chat.id]
+        fp = spec.fingerprint(chat_ids)
+        if cursor:
+            state = self.cursors.get(cursor, spec.kind, fp)
+            if not isinstance(state, QueryState):
+                raise ToolError("INVALID_CURSOR", "Wrong cursor type.")
+            explicit_ids = state.explicit_chat_ids
+        else:
+            explicit_ids = list(dict.fromkeys(chat_ids or [])) if spec.allow_public else []
+        for chat_id in explicit_ids:
+            await access.allow_explicit(chat_id)
+        effective_allowed = allowed | access.public.keys()
+        if isinstance(spec.read, TopicRead) and source_chat is not None:
+            access.require_forum(source_chat)
+            # A failed fresh topic check must not consume the original cursor.
+            topic = await self.forums.get_topic(source_chat.id, spec.read.topic_id)
+            if (
+                topic.id != spec.read.topic_id
+                or topic.chat_id != source_chat.id
+                or topic.is_deleted
+            ):
+                raise ToolError("TOPIC_UNAVAILABLE", "The requested forum topic is unavailable.")
+        if not cursor:
+            known = {chat.id for chat in chats}
+            for chat_id in chat_ids or []:
+                access.require_selected(chat_id)
+                if chat_id not in known:
+                    chats.append(
+                        access.public[chat_id]
+                        if chat_id in access.public
+                        else await self.chats.resolve_chat(chat_id)
+                    )
+                    known.add(chat_id)
+            if access.policy.allow_all_chats:
+                effective_allowed = {chat.id for chat in chats}
+            selected = select_chats(
+                chats, folders, effective_allowed, selection.folder_ids, chat_ids
+            )
+            now = self.clock.utc_now()
+            scope = Scope(
+                folder_ids=selection.folder_ids or [],
+                chat_ids=[chat.id for chat in selected],
+                resolved_at=now,
+            )
+            state = QueryState(
+                [Stream(chat.id) for chat in selected],
+                scope,
+                min(filters.date_to, now) if filters.date_to else now,
+                explicit_chat_ids=explicit_ids,
+            )
+        for stream in state.streams:
+            access.require_selected(stream.chat_id)
+        return state, fp

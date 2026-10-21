@@ -2,10 +2,11 @@ from typing import Literal
 
 import pytest
 
-from telegram_mcp.backend import DiscoveryBatch
-from telegram_mcp.config import Settings
-from telegram_mcp.models import Chat, DiscoveryResult, Folder, PublicChannel, ToolError
-from telegram_mcp.service import Service
+from telegram_mcp.adapters.config import Settings
+from telegram_mcp.application.ports import DiscoveryBatch
+from telegram_mcp.application.service import Service
+from telegram_mcp.bootstrap import build_service
+from telegram_mcp.domain.models import Chat, DiscoveryResult, Folder, PublicChannel, ToolError
 from tests.fakes import FakeBackend, msg
 
 DiscoveryTool = Literal["search", "similar"]
@@ -40,8 +41,9 @@ async def test_discovery_is_disabled_by_default_without_any_backend_access(
     tool: DiscoveryTool,
 ) -> None:
     backend = discovery_backend()
-    service = Service(backend, Settings())
-    assert service.settings.allow_public_channel_discovery is False
+    settings = Settings()
+    service = build_service(backend, settings)
+    assert settings.allow_public_channel_discovery is False
     with pytest.raises(ToolError, match="FEATURE_DISABLED"):
         await discover(service, tool)
     assert backend.backend_calls == []
@@ -54,7 +56,7 @@ async def test_disabled_discovery_cannot_be_enabled_by_read_permissions(
     tool: DiscoveryTool, allow_reads: bool, allow_all: bool
 ) -> None:
     backend = discovery_backend()
-    service = Service(
+    service = build_service(
         backend,
         Settings(
             allow_public_channel_discovery=False,
@@ -76,16 +78,17 @@ async def test_metadata_discovery_does_not_access_read_or_account_endpoints(
 ) -> None:
     candidate = channel(1)
     backend = discovery_backend(DiscoveryBatch([candidate]))
-    service = Service(backend, Settings(allow_public_channel_discovery=True))
+    settings = Settings(allow_public_channel_discovery=True)
+    service = build_service(backend, settings)
     result = await discover(service, tool)
     assert result.channels == [candidate]
     assert backend.backend_calls == [
         "search_public_channels" if tool == "search" else "get_similar_channels"
     ]
-    assert service.settings.allowed_chat_ids == []
-    assert service.settings.allowed_folder_ids == []
-    assert service.settings.allow_public_channel_reads is False
-    assert service.settings.allow_all_chats is False
+    assert settings.allowed_chat_ids == []
+    assert settings.allowed_folder_ids == []
+    assert settings.allow_public_channel_reads is False
+    assert settings.allow_all_chats is False
 
 
 @pytest.mark.parametrize("tool", ["search", "similar"])
@@ -108,7 +111,8 @@ async def test_discovered_channel_requires_separate_read_permission(
     )
     backend.discovery_search_batch = DiscoveryBatch([candidate])
     backend.discovery_similar_batch = DiscoveryBatch([candidate])
-    service = Service(backend, Settings(allow_public_channel_discovery=True))
+    settings = Settings(allow_public_channel_discovery=True)
+    service = build_service(backend, settings)
     result = await discover(service, tool)
     discovered = result.channels[0]
     with pytest.raises(ToolError, match="ACCESS_DENIED"):
@@ -120,12 +124,12 @@ async def test_discovered_channel_requires_separate_read_permission(
     assert backend.batch_reads == []
 
     if permission == "public_reads":
-        service.settings.allow_public_channel_reads = True
+        settings.allow_public_channel_reads = True
     elif permission == "allowlist":
-        service.settings.allowed_chat_ids = [candidate.id]
+        settings.allowed_chat_ids = [candidate.id]
     else:
-        service.settings.allow_all_chats = True
-    service.settings.allow_public_channel_discovery = False
+        settings.allow_all_chats = True
+    settings.allow_public_channel_discovery = False
     history = await service.get_history(chat_ref=discovered.url)
     assert [message.message_ref.key for message in history.messages] == [f"{candidate.id}:1"]
     with pytest.raises(ToolError, match="FEATURE_DISABLED"):
@@ -147,19 +151,20 @@ async def test_discovery_does_not_expand_catalog_implicit_search_or_folder_scope
     )
     backend.discovery_search_batch = DiscoveryBatch([candidate])
     backend.discovery_similar_batch = DiscoveryBatch([candidate])
-    service = Service(
+    settings = Settings(
+        allow_public_channel_discovery=True,
+        allow_public_channel_reads=True,
+        allowed_chat_ids=[local.id],
+    )
+    service = build_service(
         backend,
-        Settings(
-            allow_public_channel_discovery=True,
-            allow_public_channel_reads=True,
-            allowed_chat_ids=[local.id],
-        ),
+        settings,
     )
     await service.search_public_channels("topic")
     await service.get_similar_channels(candidate.url)
     listed = await service.list_chats()
-    implicit = await service.query(query="budget")
-    from_folder = await service.query(query="budget", folder_ids=[folder.id])
+    implicit = await service.search_messages(query="budget")
+    from_folder = await service.search_messages(query="budget", folder_ids=[folder.id])
     assert [chat.id for chat in listed.chats] == [local.id]
     assert implicit.scope.chat_ids == [local.id]
     assert [message.message_ref.key for message in implicit.messages] == ["1:1"]
@@ -168,13 +173,13 @@ async def test_discovery_does_not_expand_catalog_implicit_search_or_folder_scope
     assert candidate.id not in backend.fetches
     assert backend.chats == [local]
     assert folder.included_chat_ids == []
-    assert service.settings.allowed_chat_ids == [local.id]
+    assert settings.allowed_chat_ids == [local.id]
 
 
 @pytest.mark.parametrize("query", ["", " \n\t ", "x" * 1001])
 async def test_invalid_search_query_fails_before_backend_access(query: str) -> None:
     backend = discovery_backend()
-    service = Service(backend, Settings(allow_public_channel_discovery=True))
+    service = build_service(backend, Settings(allow_public_channel_discovery=True))
     with pytest.raises(ToolError, match="INVALID_ARGUMENT"):
         await service.search_public_channels(query)
     assert backend.backend_calls == []
@@ -183,7 +188,7 @@ async def test_invalid_search_query_fails_before_backend_access(query: str) -> N
 @pytest.mark.parametrize("query", ["x", "x" * 1000, "каналы 🌐"])
 async def test_search_trims_query_and_accepts_character_length_boundaries(query: str) -> None:
     backend = discovery_backend()
-    service = Service(backend, Settings(allow_public_channel_discovery=True))
+    service = build_service(backend, Settings(allow_public_channel_discovery=True))
     result = await service.search_public_channels(f" \n\t{query}\t ")
     assert result.channels == []
     assert backend.discovery_search_calls == [(query, 20)]
@@ -194,7 +199,7 @@ async def test_similar_channels_requires_nonblank_seed_before_backend_access(
     reference: str,
 ) -> None:
     backend = discovery_backend()
-    service = Service(backend, Settings(allow_public_channel_discovery=True))
+    service = build_service(backend, Settings(allow_public_channel_discovery=True))
     with pytest.raises(ToolError, match="INVALID_ARGUMENT"):
         await service.get_similar_channels(reference)
     assert backend.backend_calls == []
@@ -206,7 +211,7 @@ async def test_invalid_discovery_limit_fails_before_backend_access(
     tool: DiscoveryTool, limit: int
 ) -> None:
     backend = discovery_backend()
-    service = Service(backend, Settings(allow_public_channel_discovery=True))
+    service = build_service(backend, Settings(allow_public_channel_discovery=True))
     with pytest.raises(ToolError, match="INVALID_ARGUMENT"):
         await discover(service, tool, limit)
     assert backend.backend_calls == []
@@ -218,7 +223,7 @@ async def test_discovery_limit_boundaries_preserve_backend_contracts(
     tool: DiscoveryTool, limit: int
 ) -> None:
     backend = discovery_backend(DiscoveryBatch([channel(1)]))
-    service = Service(backend, Settings(allow_public_channel_discovery=True))
+    service = build_service(backend, Settings(allow_public_channel_discovery=True))
     result = await discover(service, tool, limit)
     assert result.returned_count == 1
     if tool == "search":
@@ -240,7 +245,7 @@ async def test_discovery_preserves_first_occurrence_and_order_before_limiting(
     original = [first, duplicate, second, third]
     batch = DiscoveryBatch(list(original), telegram_total_count=50)
     backend = discovery_backend(batch)
-    service = Service(backend, Settings(allow_public_channel_discovery=True))
+    service = build_service(backend, Settings(allow_public_channel_discovery=True))
     result = await discover(service, tool, limit=2)
     assert result.channels == [first, second]
     assert result.returned_count == 2
@@ -272,7 +277,7 @@ async def test_discovery_distinguishes_unknown_counts_server_limits_and_local_tr
     expected_truncated: bool,
 ) -> None:
     backend = discovery_backend(DiscoveryBatch(channels, telegram_total_count=total_count))
-    service = Service(backend, Settings(allow_public_channel_discovery=True))
+    service = build_service(backend, Settings(allow_public_channel_discovery=True))
     result = await discover(service, tool, limit)
     assert result.telegram_total_count == total_count
     assert result.returned_count == len(result.channels)
@@ -310,7 +315,7 @@ async def test_discovery_errors_remain_explicit_without_hidden_retry_or_empty_su
     backend = discovery_backend()
     fault = ToolError(code, "The request could not complete.", retry_after)
     backend.discovery_faults[tool] = fault
-    service = Service(backend, Settings(allow_public_channel_discovery=True))
+    service = build_service(backend, Settings(allow_public_channel_discovery=True))
     with pytest.raises(ToolError) as caught:
         await discover(service, tool)
     assert caught.value.code == code

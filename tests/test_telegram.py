@@ -5,14 +5,15 @@ from unittest.mock import AsyncMock
 import pytest
 from telethon import errors, functions, types
 
-from telegram_mcp.config import Settings
-from telegram_mcp.models import Chat, MessageRef, ToolError
-from telegram_mcp.telegram import (
-    TelegramBackend,
+from telegram_mcp.adapters.config import Settings
+from telegram_mcp.adapters.telegram import TelegramBackend, TelegramRuntime
+from telegram_mcp.adapters.telegram.mapping import (
     chat_from_entity,
     folder_from_tl,
     normalize_message,
 )
+from telegram_mcp.application.requests import HistoryRead, ReadFilters, SearchRead
+from telegram_mcp.domain.models import Chat, MessageRef, ToolError
 from tests.fakes import BASE
 
 
@@ -70,15 +71,19 @@ def test_inherited_and_explicit_mute_settings() -> None:
         unread_mentions_count=1,
         dialog=SimpleNamespace(notify_settings=types.PeerNotifySettings(), unread_mark=True),
     )
-    assert chat_from_entity(entity, dialog, default_muted=True).is_muted
+    assert chat_from_entity(
+        entity, dialog, default_muted=True, now=BASE + timedelta(days=1)
+    ).is_muted
     dialog.dialog.notify_settings = types.PeerNotifySettings(mute_until=BASE)
-    mapped = chat_from_entity(entity, dialog, default_muted=True)
+    mapped = chat_from_entity(entity, dialog, default_muted=True, now=BASE + timedelta(days=1))
     assert not mapped.is_muted and mapped.unread_mentions_count == 1
 
 
 async def test_link_resolution_and_rejection_of_external_links() -> None:
     backend = TelegramBackend(Settings())
-    backend.chats["-1000000000123"] = Chat(id="-1000000000123", title="News", type="channel")
+    backend.chat_gateway.cache["-1000000000123"] = Chat(
+        id="-1000000000123", title="News", type="channel"
+    )
     assert await backend.resolve_message("https://t.me/c/123/44") == MessageRef(
         chat_id="-1000000000123", message_id=44
     )
@@ -93,8 +98,9 @@ async def test_link_resolution_and_rejection_of_external_links() -> None:
 
 
 async def test_real_adapter_filters_dates_without_losing_pagination_position() -> None:
-    backend = TelegramBackend(Settings())
-    backend.chats["1"] = Chat(id="1", title="Friend", type="private")
+    settings = Settings()
+    chat_cache = {}
+    chat_cache["1"] = Chat(id="1", title="Friend", type="private")
     raw = [
         types.Message(
             id=i, peer_id=types.PeerUser(1), date=BASE + timedelta(minutes=i), message="budget"
@@ -102,13 +108,18 @@ async def test_real_adapter_filters_dates_without_losing_pagination_position() -
         for i in (4, 3, 2, 1)
     ]
     client = SimpleNamespace(get_messages=AsyncMock(return_value=raw))
-    backend.client = client
-    result = await backend.fetch(
+    backend = TelegramBackend(
+        settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
+    )
+    result = await backend.read(
         "1",
+        SearchRead(
+            "budget",
+            filters=ReadFilters(
+                date_from=BASE + timedelta(minutes=2), date_to=BASE + timedelta(minutes=4)
+            ),
+        ),
         limit=4,
-        query="budget",
-        date_from=BASE + timedelta(minutes=2),
-        date_to=BASE + timedelta(minutes=4),
     )
     assert [m.message_ref.message_id for m in result.messages] == [3, 2]
     assert result.next_offset == 1 and result.exhausted
@@ -124,26 +135,31 @@ async def test_flood_wait_is_structured_and_does_not_sleep() -> None:
         raise errors.FloodWaitError(request, capture=17)
 
     with pytest.raises(ToolError) as caught:
-        await backend.call(fail())
+        await backend.runtime.call(fail())
     assert caught.value.code == "RATE_LIMITED"
     assert caught.value.retry_after == 17
 
 
 async def test_comment_links_resolve_linked_group_before_fetching_a_message() -> None:
     backend = TelegramBackend(Settings())
-    backend.chats["-1000000000123"] = Chat(id="-1000000000123", title="News", type="channel")
-    backend.discussion_chat = AsyncMock(return_value="-1000000000456")
+    backend.chat_gateway.cache["-1000000000123"] = Chat(
+        id="-1000000000123", title="News", type="channel"
+    )
+    backend.chat_gateway.discussion_chat = AsyncMock(return_value="-1000000000456")
     ref = await backend.resolve_message("https://t.me/c/123/10?comment=27")
     assert ref == MessageRef(chat_id="-1000000000456", message_id=27)
 
 
 async def test_discussion_root_uses_actual_group_message_id() -> None:
-    backend = TelegramBackend(Settings())
+    settings = Settings()
+    chat_cache = {}
     group_root = types.Message(id=87, peer_id=types.PeerChannel(456), date=BASE, message="post")
     response = SimpleNamespace(messages=[group_root])
     client = AsyncMock(return_value=response)
     client.get_input_entity = AsyncMock(return_value=types.InputPeerChannel(123, 1))
-    backend.client = client
+    backend = TelegramBackend(
+        settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
+    )
     root = await backend.thread_root(
         MessageRef(chat_id="-1000000000123", message_id=10), "-1000000000456"
     )
@@ -151,10 +167,13 @@ async def test_discussion_root_uses_actual_group_message_id() -> None:
 
 
 async def test_catalog_is_not_silently_truncated() -> None:
-    backend = TelegramBackend(Settings(max_dialogs=1))
+    settings = Settings(max_dialogs=1)
+    chat_cache = {}
     client = AsyncMock(return_value=SimpleNamespace(filters=[]))
     client.get_dialogs = AsyncMock(return_value=[object(), object()])
-    backend.client = client
+    backend = TelegramBackend(
+        settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
+    )
     with pytest.raises(ToolError, match="CATALOG_LIMIT"):
         await backend.catalog()
 
@@ -167,11 +186,14 @@ async def test_saved_messages_peer_in_folder_uses_account_id() -> None:
         include_peers=[types.InputPeerSelf()],
         exclude_peers=[],
     )
-    backend = TelegramBackend(Settings())
+    settings = Settings()
+    chat_cache = {}
     client = AsyncMock(return_value=SimpleNamespace(filters=[raw]))
     client.get_dialogs = AsyncMock(return_value=[])
     client.get_me = AsyncMock(return_value=types.InputPeerUser(123, 456))
-    backend.client = client
+    backend = TelegramBackend(
+        settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
+    )
     _, folders = await backend.catalog()
     assert folders[0].included_chat_ids == ["123"]
     assert folders[0].pinned_chat_ids == ["123"]
@@ -207,11 +229,14 @@ def channel(
     ],
 )
 async def test_chat_references_resolve_to_canonical_id(reference: str) -> None:
-    backend = TelegramBackend(Settings())
+    settings = Settings()
+    chat_cache = {}
     client = SimpleNamespace(
         get_entity=AsyncMock(return_value=channel(broadcast=True, username="example"))
     )
-    backend.client = client
+    backend = TelegramBackend(
+        settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
+    )
     resolved = await backend.resolve_chat(reference)
     assert resolved.id == "-1000000000123" and resolved.username == "example"
     await backend.resolve_chat(resolved.id)
@@ -221,8 +246,15 @@ async def test_chat_references_resolve_to_canonical_id(reference: str) -> None:
 
 
 async def test_unknown_numeric_chat_suggests_username_without_leaking_error() -> None:
-    backend = TelegramBackend(Settings())
-    backend.client = SimpleNamespace(get_entity=AsyncMock(side_effect=ValueError("secret")))
+    settings = Settings()
+    chat_cache = {}
+    backend = TelegramBackend(
+        settings,
+        runtime=TelegramRuntime(
+            settings, client=SimpleNamespace(get_entity=AsyncMock(side_effect=ValueError("secret")))
+        ),
+        chat_cache=chat_cache,
+    )
     with pytest.raises(ToolError, match="username or t.me link") as caught:
         await backend.resolve_chat("-1000000000123")
     assert caught.value.code == "INVALID_REFERENCE"
@@ -239,10 +271,13 @@ async def test_unknown_numeric_chat_suggests_username_without_leaking_error() ->
 async def test_public_channel_checks_fresh_entity_and_active_usernames(
     entity: types.Channel,
 ) -> None:
-    backend = TelegramBackend(Settings())
-    backend.chats["-1000000000123"] = Chat(id="-1000000000123", title="Stale", type="group")
+    settings = Settings()
+    chat_cache = {}
+    chat_cache["-1000000000123"] = Chat(id="-1000000000123", title="Stale", type="group")
     client = SimpleNamespace(get_entity=AsyncMock(return_value=entity))
-    backend.client = client
+    backend = TelegramBackend(
+        settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
+    )
     resolved = await backend.public_channel("-1000000000123")
     assert resolved.type == "channel" and resolved.username == "example"
     assert resolved.title == "News"
@@ -265,15 +300,23 @@ async def test_public_channel_checks_fresh_entity_and_active_usernames(
     ],
 )
 async def test_public_exception_rejects_private_and_non_broadcast_entities(entity: object) -> None:
-    backend = TelegramBackend(Settings())
-    backend.client = SimpleNamespace(get_entity=AsyncMock(return_value=entity))
+    settings = Settings()
+    chat_cache = {}
+    backend = TelegramBackend(
+        settings,
+        runtime=TelegramRuntime(
+            settings, client=SimpleNamespace(get_entity=AsyncMock(return_value=entity))
+        ),
+        chat_cache=chat_cache,
+    )
     with pytest.raises(ToolError, match="ACCESS_DENIED"):
         await backend.public_channel("-1000000000123")
 
 
 async def test_batch_lookup_deduplicates_and_retains_missing_ids_and_metadata() -> None:
-    backend = TelegramBackend(Settings())
-    backend.chats["-1000000000123"] = Chat(
+    settings = Settings()
+    chat_cache = {}
+    chat_cache["-1000000000123"] = Chat(
         id="-1000000000123", title="News", type="channel", username="example"
     )
     message = types.Message(
@@ -289,7 +332,9 @@ async def test_batch_lookup_deduplicates_and_retains_missing_ids_and_metadata() 
             return_value=[None, message, types.MessageEmpty(id=12, peer_id=types.PeerChannel(123))]
         )
     )
-    backend.client = client
+    backend = TelegramBackend(
+        settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
+    )
     results = await backend.messages("-1000000000123", [11, 10, 10, 12])
     client.get_messages.assert_awaited_once_with(-1000000000123, ids=[11, 10, 12])
     assert results[11] is None and results[12] is None
@@ -339,8 +384,9 @@ def test_forward_sources_remain_separate_for_saved_and_hidden_senders() -> None:
 
 @pytest.mark.parametrize("oldest_first", [False, True])
 async def test_date_boundaries_and_offsets_across_adapter_pages(oldest_first: bool) -> None:
-    backend = TelegramBackend(Settings())
-    backend.chats["1"] = Chat(id="1", title="Friend", type="private")
+    settings = Settings()
+    chat_cache = {}
+    chat_cache["1"] = Chat(id="1", title="Friend", type="private")
     ids = [1, 2, 3, 4] if oldest_first else [4, 3, 2, 1]
     raw = [
         types.Message(
@@ -349,21 +395,31 @@ async def test_date_boundaries_and_offsets_across_adapter_pages(oldest_first: bo
         for i in ids
     ]
     client = SimpleNamespace(get_messages=AsyncMock(side_effect=[raw[:2], raw[2:]]))
-    backend.client = client
-    first = await backend.fetch(
-        "1",
-        limit=2,
-        date_from=BASE + timedelta(seconds=2),
-        date_to=BASE + timedelta(seconds=4),
-        oldest_first=oldest_first,
+    backend = TelegramBackend(
+        settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
     )
-    second = await backend.fetch(
+    first = await backend.read(
         "1",
+        HistoryRead(
+            filters=ReadFilters(
+                date_from=BASE + timedelta(seconds=2),
+                date_to=BASE + timedelta(seconds=4),
+                oldest_first=oldest_first,
+            )
+        ),
+        limit=2,
+    )
+    second = await backend.read(
+        "1",
+        HistoryRead(
+            filters=ReadFilters(
+                date_from=BASE + timedelta(seconds=2),
+                date_to=BASE + timedelta(seconds=4),
+                oldest_first=oldest_first,
+            )
+        ),
         offset=first.next_offset,
         limit=2,
-        date_from=BASE + timedelta(seconds=2),
-        date_to=BASE + timedelta(seconds=4),
-        oldest_first=oldest_first,
     )
     assert [m.message_ref.message_id for m in first.messages + second.messages] == (
         [2, 3] if oldest_first else [3, 2]
@@ -377,14 +433,24 @@ async def test_date_boundaries_and_offsets_across_adapter_pages(oldest_first: bo
 
 
 async def test_empty_telegram_messages_advance_pagination() -> None:
-    backend = TelegramBackend(Settings())
-    backend.chats["1"] = Chat(id="1", title="Friend", type="private")
-    backend.client = SimpleNamespace(
-        get_messages=AsyncMock(
-            return_value=[types.MessageEmpty(id=i, peer_id=types.PeerUser(1)) for i in (20, 19)]
-        )
+    settings = Settings()
+    chat_cache = {}
+    chat_cache["1"] = Chat(id="1", title="Friend", type="private")
+    backend = TelegramBackend(
+        settings,
+        runtime=TelegramRuntime(
+            settings,
+            client=SimpleNamespace(
+                get_messages=AsyncMock(
+                    return_value=[
+                        types.MessageEmpty(id=i, peer_id=types.PeerUser(1)) for i in (20, 19)
+                    ]
+                )
+            ),
+        ),
+        chat_cache=chat_cache,
     )
-    page = await backend.fetch("1", limit=2)
+    page = await backend.read("1", HistoryRead(filters=ReadFilters()), limit=2)
     assert page.messages == [] and page.next_offset == 19 and not page.exhausted
 
 
@@ -401,7 +467,7 @@ async def test_empty_telegram_messages_advance_pagination() -> None:
 async def test_error_retryability_is_explicit(error: Exception, code: str, retryable: bool) -> None:
     backend = TelegramBackend(Settings())
     with pytest.raises(ToolError) as caught:
-        await backend.call(AsyncMock(side_effect=error)())
+        await backend.runtime.call(AsyncMock(side_effect=error)())
     assert caught.value.code == code and caught.value.retryable is retryable
     issue = caught.value.issue(input_index=3)
     assert issue.input_index == 3 and issue.message_ref is None

@@ -3,11 +3,11 @@
 import copy
 import pickle
 import secrets
-import time
 from collections import OrderedDict
 from dataclasses import dataclass
 
-from telegram_mcp.models import ToolError
+from telegram_mcp.application.ports import Clock
+from telegram_mcp.domain.models import ToolError
 
 
 @dataclass
@@ -20,14 +20,17 @@ class Entry:
 
 
 class CursorStore:
-    def __init__(self, ttl: int = 900, maximum: int = 128, max_bytes: int = 64 * 1024 * 1024):
+    def __init__(
+        self, clock: Clock, ttl: int = 900, maximum: int = 128, max_bytes: int = 64 * 1024 * 1024
+    ):
+        self.clock = clock
         self.ttl = ttl
         self.maximum = maximum
         self.max_bytes = max_bytes
         self.entries: OrderedDict[str, Entry] = OrderedDict()
 
     def put(self, kind: str, fingerprint: str, value: object) -> str:
-        now = time.monotonic()
+        now = self.clock.monotonic()
         self.entries = OrderedDict((k, v) for k, v in self.entries.items() if v.expires > now)
         token = secrets.token_urlsafe(24)
         # Serialize only our own objects to estimate size; never unpickle user input.
@@ -44,7 +47,7 @@ class CursorStore:
 
     def get(self, token: str, kind: str, fingerprint: str) -> object:
         entry = self.entries.get(token)
-        if entry is None or entry.expires <= time.monotonic():
+        if entry is None or entry.expires <= self.clock.monotonic():
             raise ToolError(
                 "CURSOR_EXPIRED", "Restart the query; the cursor expired or server restarted."
             )

@@ -3,10 +3,17 @@ import json
 import pytest
 from mcp.client import Client
 
-from telegram_mcp.config import Settings
-from telegram_mcp.models import Attachment, Chat, ForwardOrigin, Message, MessageRef, ToolError
-from telegram_mcp.server import create_server
-from telegram_mcp.service import Service
+from telegram_mcp.adapters.config import Settings
+from telegram_mcp.adapters.mcp import create_server
+from telegram_mcp.bootstrap import build_service as Service
+from telegram_mcp.domain.models import (
+    Attachment,
+    Chat,
+    ForwardOrigin,
+    Message,
+    MessageRef,
+    ToolError,
+)
 from tests.fakes import BASE, FakeBackend, msg
 from tests.test_message_metadata_mcp import assert_metadata, rich_message
 

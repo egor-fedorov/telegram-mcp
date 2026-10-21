@@ -3,9 +3,11 @@ from typing import Literal, cast
 
 import pytest
 
-from telegram_mcp.backend import Batch
-from telegram_mcp.config import Settings
-from telegram_mcp.models import (
+from telegram_mcp.adapters.config import Settings
+from telegram_mcp.application.ports import Batch
+from telegram_mcp.application.requests import MessageRead, TopicRead
+from telegram_mcp.bootstrap import build_service
+from telegram_mcp.domain.models import (
     Chat,
     Entity,
     Folder,
@@ -16,8 +18,7 @@ from telegram_mcp.models import (
     Page,
     ToolError,
 )
-from telegram_mcp.service import Service
-from tests.fakes import BASE, FakeBackend, msg
+from tests.fakes import BASE, FakeBackend, FakeClock, msg
 
 Order = Literal["newest_first", "oldest_first"]
 
@@ -57,7 +58,7 @@ async def test_invalid_topic_selector_fails_before_backend_calls(
     topic_id: object, pinned: bool
 ) -> None:
     backend = forum_backend()
-    service = Service(backend, Settings(allow_all_chats=True))
+    service = build_service(backend, Settings(allow_all_chats=True))
     with pytest.raises(ToolError, match="INVALID_ARGUMENT"):
         if pinned:
             await service.get_pinned_messages("1", topic_id=cast(int, topic_id))
@@ -70,7 +71,7 @@ async def test_invalid_topic_selector_fails_before_backend_calls(
 async def test_topic_selector_accepts_telegram_id_bounds(topic_id: int) -> None:
     backend = forum_backend()
     backend.topics[("1", topic_id)] = ForumTopic(id=topic_id, chat_id="1", is_general=topic_id == 1)
-    page = await Service(backend, Settings(allowed_chat_ids=["1"])).get_history(
+    page = await build_service(backend, Settings(allowed_chat_ids=["1"])).get_history(
         chat_id="1", topic_id=topic_id
     )
     assert page.topic_id == topic_id
@@ -81,7 +82,7 @@ async def test_topic_selector_accepts_telegram_id_bounds(topic_id: int) -> None:
 @pytest.mark.parametrize("reference", ["legacy_id", "1", "@forum", "https://t.me/forum"])
 async def test_topic_history_resolves_every_source_fresh_before_lookup(reference: str) -> None:
     backend = forum_backend([msg("1", 21, topic_id=10), msg("1", 22, topic_id=20)])
-    service = Service(backend, Settings(allowed_chat_ids=["1"]))
+    service = build_service(backend, Settings(allowed_chat_ids=["1"]))
     if reference == "legacy_id":
         page = await service.get_history(chat_id="1", topic_id=10)
     else:
@@ -98,7 +99,7 @@ async def test_topic_history_resolves_every_source_fresh_before_lookup(reference
 async def test_omitted_topic_preserves_chat_wide_history_and_pins() -> None:
     backend = forum_backend([msg("1", 21, topic_id=1), msg("1", 22, topic_id=10), msg("1", 23)])
     backend.pinned_message_keys = {"1:21", "1:22"}
-    service = Service(backend, Settings(allowed_chat_ids=["1"]))
+    service = build_service(backend, Settings(allowed_chat_ids=["1"]))
     history = await service.get_history("1")
     pins = await service.get_pinned_messages("1")
     assert message_ids(history) == [23, 22, 21]
@@ -112,7 +113,7 @@ async def test_omitted_topic_preserves_chat_wide_history_and_pins() -> None:
 async def test_public_flags_do_not_grant_forum_topic_access(pinned: bool) -> None:
     backend = forum_backend([msg("1", 21, topic_id=10)])
     backend.pinned_message_keys = {"1:21"}
-    service = Service(
+    service = build_service(
         backend, Settings(allow_public_channel_reads=True, allow_public_channel_discovery=True)
     )
     with pytest.raises(ToolError, match="ACCESS_DENIED"):
@@ -139,7 +140,7 @@ async def test_public_flags_do_not_grant_forum_topic_access(pinned: bool) -> Non
 async def test_topic_selection_requires_a_supported_forum(chat: Chat, pinned: bool) -> None:
     backend = forum_backend()
     backend.chats = [chat]
-    service = Service(backend, Settings(allowed_chat_ids=["1"]))
+    service = build_service(backend, Settings(allowed_chat_ids=["1"]))
     with pytest.raises(ToolError, match="FORUM_UNAVAILABLE"):
         if pinned:
             await service.get_pinned_messages("1", topic_id=1)
@@ -160,7 +161,7 @@ async def test_topic_lookup_cannot_return_missing_or_mismatched_topic(invalid: s
     else:
         backend.topics[("1", 10)].id = 20
     with pytest.raises(ToolError, match="TOPIC_UNAVAILABLE"):
-        await Service(backend, Settings(allowed_chat_ids=["1"])).get_history(
+        await build_service(backend, Settings(allowed_chat_ids=["1"])).get_history(
             chat_id="1", topic_id=10
         )
     assert backend.fetches == []
@@ -180,7 +181,7 @@ async def test_hidden_closed_general_is_readable_without_a_fake_root_or_parent_f
     )
     backend.topics[("1", 1)].is_hidden = True
     backend.topics[("1", 1)].is_closed = True
-    page = await Service(backend, Settings(allowed_chat_ids=["1"])).get_history(
+    page = await build_service(backend, Settings(allowed_chat_ids=["1"])).get_history(
         chat_id="1", topic_id=1
     )
     assert message_ids(page) == [22, 21]
@@ -196,7 +197,7 @@ async def test_topic_reads_accept_folder_permissions_and_revalidate_them() -> No
     backend = forum_backend([msg("1", 21, topic_id=10), msg("1", 22, topic_id=10)])
     folder = Folder(id=7, title="Forums", position=0, included_chat_ids=["1"])
     backend.folders = [folder]
-    service = Service(backend, Settings(allowed_folder_ids=[7]))
+    service = build_service(backend, Settings(allowed_folder_ids=[7]))
     first = await service.get_history(chat_id="1", topic_id=10, limit=1)
     assert message_ids(first) == [22] and first.next_cursor
     folder.included_chat_ids = []
@@ -216,7 +217,7 @@ async def test_topic_date_window_paginates_both_orders_without_other_topics(
     backend = forum_backend(
         [msg("1", mid, topic_id=topic_id if mid % 2 == 0 else 20) for mid in range(1, 301)]
     )
-    service = Service(backend, Settings(allowed_chat_ids=["1"], rpc_pages_per_call=1))
+    service = build_service(backend, Settings(allowed_chat_ids=["1"], rpc_pages_per_call=1))
 
     async def history(cursor: str | None = None, limit: int = 7) -> Page:
         return await service.get_history(
@@ -254,7 +255,7 @@ async def test_topic_date_window_paginates_both_orders_without_other_topics(
 @pytest.mark.parametrize("explicit_future_end", [False, True])
 async def test_topic_history_freezes_upper_date_for_later_pages(explicit_future_end: bool) -> None:
     backend = forum_backend([msg("1", mid, topic_id=1) for mid in range(1, 40)])
-    service = Service(backend, Settings(allowed_chat_ids=["1"], rpc_pages_per_call=1))
+    service = build_service(backend, Settings(allowed_chat_ids=["1"], rpc_pages_per_call=1))
     end = datetime.now(UTC) + timedelta(days=1) if explicit_future_end else None
     first = await service.get_history(
         chat_id="1", topic_id=1, order="oldest_first", limit=30, date_to=end
@@ -282,7 +283,7 @@ async def test_topic_pins_keep_only_pinned_messages_in_selected_topic(topic_id: 
         [msg("1", mid, topic_id=topic_id if mid % 2 == 0 else 20) for mid in range(21, 151)]
     )
     backend.pinned_message_keys = {f"1:{mid}" for mid in range(21, 151) if mid % 3 == 0}
-    service = Service(backend, Settings(allowed_chat_ids=["1"]))
+    service = build_service(backend, Settings(allowed_chat_ids=["1"]))
     page = await service.get_pinned_messages("@forum", topic_id=topic_id, limit=5)
     found = message_ids(page)
     while page.next_cursor:
@@ -303,7 +304,7 @@ async def test_empty_topic_pins_do_not_return_pins_from_general_or_other_topics(
         [msg("1", 21, topic_id=1), msg("1", 22, topic_id=10), msg("1", 23, topic_id=20)]
     )
     backend.pinned_message_keys = {"1:21", "1:23"}
-    page = await Service(backend, Settings(allowed_chat_ids=["1"])).get_pinned_messages(
+    page = await build_service(backend, Settings(allowed_chat_ids=["1"])).get_pinned_messages(
         "1", topic_id=10
     )
     assert page.messages == [] and page.topic_id == 10
@@ -316,7 +317,7 @@ async def test_topic_text_budget_preserves_unicode_entities_and_retrievable_rema
     message.entities = [Entity(type="bold", offset=1100, length=25)]
     message.url = "https://t.me/forum/21"
     backend = forum_backend([message, msg("1", 22, text=original, topic_id=1)])
-    service = Service(backend, Settings(allowed_chat_ids=["1"]))
+    service = build_service(backend, Settings(allowed_chat_ids=["1"]))
     page = await service.get_history(chat_id="1", topic_id=1, limit=100)
     assert sum(len(item.text) for item in page.messages) <= 100000
     clipped = next(item for item in page.messages if item.message_ref.message_id == 21)
@@ -344,7 +345,7 @@ async def test_topic_text_budget_preserves_unicode_entities_and_retrievable_rema
 async def test_topic_history_cursor_binds_every_selector(change: str) -> None:
     backend = forum_backend([msg("1", mid, topic_id=10) for mid in range(21, 24)])
     backend.pinned_message_keys = {"1:21", "1:22", "1:23"}
-    service = Service(backend, Settings(allowed_chat_ids=["1"]))
+    service = build_service(backend, Settings(allowed_chat_ids=["1"]))
     first = await service.get_history(chat_ref="@forum", topic_id=10, limit=1)
     assert first.next_cursor
     with pytest.raises(ToolError, match="CURSOR_MISMATCH"):
@@ -371,7 +372,7 @@ async def test_topic_history_cursor_binds_every_selector(change: str) -> None:
 async def test_topic_pin_cursor_cannot_be_used_for_chat_wide_pins_or_another_topic() -> None:
     backend = forum_backend([msg("1", mid, topic_id=10) for mid in range(21, 24)])
     backend.pinned_message_keys = {"1:21", "1:22", "1:23"}
-    service = Service(backend, Settings(allowed_chat_ids=["1"]))
+    service = build_service(backend, Settings(allowed_chat_ids=["1"]))
     first = await service.get_pinned_messages("1", topic_id=10, limit=1)
     for topic_id in (None, 1, 20):
         with pytest.raises(ToolError, match="CURSOR_MISMATCH"):
@@ -381,7 +382,7 @@ async def test_topic_pin_cursor_cannot_be_used_for_chat_wide_pins_or_another_top
 
 async def test_reassigned_username_cannot_move_topic_cursor_to_another_forum() -> None:
     backend = forum_backend([msg("1", 21, topic_id=10), msg("1", 22, topic_id=10)])
-    service = Service(backend, Settings(allow_all_chats=True))
+    service = build_service(backend, Settings(allow_all_chats=True))
     first = await service.get_history(chat_ref="@forum", topic_id=10, limit=1)
     backend.chats[0].username = "renamed_forum"
     replacement = backend.chats[0].model_copy(update={"id": "2", "username": "forum"})
@@ -394,7 +395,7 @@ async def test_reassigned_username_cannot_move_topic_cursor_to_another_forum() -
 
 async def test_renamed_forum_and_topic_keep_numeric_cursor_identity() -> None:
     backend = forum_backend([msg("1", 21, topic_id=10), msg("1", 22, topic_id=10)])
-    service = Service(backend, Settings(allowed_chat_ids=["1"]))
+    service = build_service(backend, Settings(allowed_chat_ids=["1"]))
     first = await service.get_history(chat_id="1", topic_id=10, limit=1)
     backend.chats[0].username = "new_forum_name"
     backend.topics[("1", 10)].title = "New topic name"
@@ -422,7 +423,8 @@ async def test_topic_continuation_revalidates_before_buffer_and_original_cursor_
 ) -> None:
     backend = forum_backend([msg("1", 21, topic_id=10), msg("1", 22, topic_id=10)])
     backend.pinned_message_keys = {"1:21", "1:22"}
-    service = Service(backend, Settings(allowed_chat_ids=["1"]))
+    settings = Settings(allowed_chat_ids=["1"])
+    service = build_service(backend, settings)
 
     async def read(cursor: str | None = None) -> Page:
         if pinned:
@@ -433,7 +435,7 @@ async def test_topic_continuation_revalidates_before_buffer_and_original_cursor_
     assert message_ids(first) == [22] and first.next_cursor
     original_topic = backend.topics[("1", 10)].model_copy()
     if change == "access":
-        service.settings.allowed_chat_ids = []
+        settings.allowed_chat_ids = []
     elif change == "forum":
         backend.chats[0].is_forum = False
     elif change == "deleted":
@@ -449,7 +451,7 @@ async def test_topic_continuation_revalidates_before_buffer_and_original_cursor_
     with pytest.raises(ToolError, match=code):
         await read(first.next_cursor)
     assert backend.fetches == ["1"]
-    service.settings.allowed_chat_ids = ["1"]
+    settings.allowed_chat_ids = ["1"]
     backend.chats[0].is_forum = True
     backend.topics[("1", 10)] = original_topic
     backend.catalog_fault = None
@@ -465,7 +467,7 @@ async def test_numeric_topic_cursor_requires_fresh_resolution_even_with_stale_ca
     change: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     backend = forum_backend([msg("1", 21, topic_id=10), msg("1", 22, topic_id=10)])
-    service = Service(backend, Settings(allowed_chat_ids=["1"]))
+    service = build_service(backend, Settings(allowed_chat_ids=["1"]))
     first = await service.get_history(chat_id="1", topic_id=10, limit=1)
     original_resolve = backend.resolve_chat
 
@@ -502,13 +504,14 @@ async def test_topic_batch_issues_survive_buffer_and_later_successful_fetches(
     ]
     requests: list[dict[str, object]] = []
 
-    async def fetch(chat_id: str, **kwargs: object) -> Batch:
+    async def read(chat_id: str, request: MessageRead, **kwargs: object) -> Batch:
         assert chat_id == "1"
-        requests.append(kwargs)
+        assert isinstance(request, TopicRead)
+        requests.append({**kwargs, "topic_id": request.topic_id})
         return batches.pop(0)
 
-    monkeypatch.setattr(backend, "fetch", fetch)
-    service = Service(backend, Settings(allowed_chat_ids=["1"], rpc_pages_per_call=1))
+    monkeypatch.setattr(backend, "read", read)
+    service = build_service(backend, Settings(allowed_chat_ids=["1"], rpc_pages_per_call=1))
     first = await service.get_history(chat_id="1", topic_id=10, limit=1)
     assert message_ids(first) == [23] and first.next_cursor
     assert first.issues == [issue] and not first.scope.complete
@@ -529,12 +532,13 @@ async def test_topic_batch_issues_survive_buffer_and_later_successful_fetches(
 )
 @pytest.mark.parametrize("order", ["newest_first", "oldest_first"])
 async def test_topic_fetch_failure_resumes_same_offset_without_loss_or_reordering(
-    code: str, delay: int | None, order: Order, monkeypatch: pytest.MonkeyPatch
+    code: str, delay: int | None, order: Order
 ) -> None:
-    clock = [100.0]
-    monkeypatch.setattr("telegram_mcp.service.time.monotonic", lambda: clock[0])
+    clock = FakeClock()
     backend = forum_backend([msg("1", mid, topic_id=1) for mid in range(1, 71)])
-    service = Service(backend, Settings(allowed_chat_ids=["1"], rpc_pages_per_call=1))
+    service = build_service(
+        backend, Settings(allowed_chat_ids=["1"], rpc_pages_per_call=1), clock=clock
+    )
 
     async def read(cursor: str | None = None) -> Page:
         return await service.get_history(
@@ -551,12 +555,12 @@ async def test_topic_fetch_failure_resumes_same_offset_without_loss_or_reorderin
     assert len(backend.fetches) == 2
     backend.faults.clear()
     if delay:
-        clock[0] += 2
+        clock.time += 2
         pending = await read(failed.next_cursor)
         assert pending.messages == [] and pending.next_cursor
         assert pending.issues[0].retry_after_seconds == 10
         assert len(backend.fetches) == 2
-        clock[0] += 10
+        clock.time += 10
     page = await read(failed.next_cursor)
     assert backend.fetch_offsets[-1] == failed_offset
     assert page.issues == []
@@ -570,21 +574,20 @@ async def test_topic_fetch_failure_resumes_same_offset_without_loss_or_reorderin
     assert set(backend.fetch_topic_ids) == {1}
 
 
-async def test_topic_pins_keep_filter_after_floodwait(monkeypatch: pytest.MonkeyPatch) -> None:
-    clock = [100.0]
-    monkeypatch.setattr("telegram_mcp.service.time.monotonic", lambda: clock[0])
+async def test_topic_pins_keep_filter_after_floodwait() -> None:
+    clock = FakeClock()
     backend = forum_backend(
         [msg("1", 21, topic_id=1), msg("1", 22, topic_id=10), msg("1", 23, topic_id=1)]
     )
     backend.pinned_message_keys = {"1:21", "1:22"}
     backend.faults["1"] = ToolError("RATE_LIMITED", "Retry later.", retry_after=9)
-    service = Service(backend, Settings(allowed_chat_ids=["1"]))
+    service = build_service(backend, Settings(allowed_chat_ids=["1"]), clock=clock)
     failed = await service.get_pinned_messages("1", topic_id=1)
     assert failed.messages == [] and failed.next_cursor and failed.topic_id == 1
     backend.faults.clear()
     waiting = await service.get_pinned_messages("1", topic_id=1, cursor=failed.next_cursor)
     assert waiting.messages == [] and len(backend.fetches) == 1
-    clock[0] += 9
+    clock.time += 9
     recovered = await service.get_pinned_messages("1", topic_id=1, cursor=failed.next_cursor)
     assert message_ids(recovered) == [21]
     assert recovered.scope.complete and recovered.issues == []

@@ -6,9 +6,9 @@ from pathlib import Path
 import pytest
 from mcp.client import Client
 
-from telegram_mcp.config import Settings
-from telegram_mcp.server import create_server
-from telegram_mcp.service import Service
+from telegram_mcp.adapters.config import Settings
+from telegram_mcp.adapters.mcp import create_server
+from telegram_mcp.bootstrap import build_service as Service
 from tests.fakes import FakeBackend
 
 

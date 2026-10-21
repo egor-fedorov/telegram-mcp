@@ -4,9 +4,9 @@ import pytest
 from pydantic import ValidationError
 from telethon import errors, functions, types
 
-from telegram_mcp.config import Settings
-from telegram_mcp.models import Chat, DiscoveryResult, PublicChannel, ToolError
-from telegram_mcp.telegram import TelegramBackend
+from telegram_mcp.adapters.config import Settings
+from telegram_mcp.adapters.telegram import TelegramBackend, TelegramRuntime
+from telegram_mcp.domain.models import Chat, DiscoveryResult, PublicChannel, ToolError
 from tests.fakes import BASE
 
 
@@ -84,10 +84,13 @@ async def test_search_uses_peer_order_and_filters_raw_entities_without_detail_re
         users=[types.User(id=1, username="person"), types.User(id=40, bot=True, username="bot")],
     )
     client = AsyncMock(return_value=response)
-    backend = TelegramBackend(Settings())
-    backend.client = client
+    settings = Settings()
+    chat_cache = {}
+    backend = TelegramBackend(
+        settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
+    )
     existing = Chat(id="17", title="Known dialog", type="private")
-    backend.chats[existing.id] = existing
+    backend.chat_gateway.cache[existing.id] = existing
 
     result = await backend.search_public_channels("news", 20)
 
@@ -101,7 +104,7 @@ async def test_search_uses_peer_order_and_filters_raw_entities_without_detail_re
     assert result.channels[0].url == "https://t.me/secondary"
     assert [entry.participants_count for entry in result.channels] == [None, 0, 12, None]
     assert result.telegram_total_count is None
-    assert backend.chats == {existing.id: existing}
+    assert backend.chat_gateway.cache == {existing.id: existing}
     client.assert_awaited_once()
     assert client.await_args is not None
     request = client.await_args.args[0]
@@ -114,8 +117,15 @@ async def test_search_uses_peer_order_and_filters_raw_entities_without_detail_re
 
 
 async def test_empty_search_remains_unknown_coverage() -> None:
-    backend = TelegramBackend(Settings())
-    backend.client = AsyncMock(return_value=types.contacts.Found([], [], [], []))
+    settings = Settings()
+    chat_cache = {}
+    backend = TelegramBackend(
+        settings,
+        runtime=TelegramRuntime(
+            settings, client=AsyncMock(return_value=types.contacts.Found([], [], [], []))
+        ),
+        chat_cache=chat_cache,
+    )
     result = await backend.search_public_channels("unmatched", 1)
     assert result.channels == [] and result.telegram_total_count is None
 
@@ -136,8 +146,11 @@ async def test_candidates_exclude_view_bans_but_allow_unjoined_and_send_restrict
     )
     client = AsyncMock(return_value=response)
     client.get_entity = AsyncMock(return_value=channel(10))
-    backend = TelegramBackend(Settings())
-    backend.client = client
+    settings = Settings()
+    chat_cache = {}
+    backend = TelegramBackend(
+        settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
+    )
     result = (
         await backend.search_public_channels("news", 20)
         if method == "search"
@@ -157,8 +170,11 @@ async def test_candidates_exclude_view_bans_but_allow_unjoined_and_send_restrict
 async def test_similar_allows_unjoined_and_send_restricted_seed(seed: types.Channel) -> None:
     client = AsyncMock(return_value=types.messages.Chats([]))
     client.get_entity = AsyncMock(return_value=seed)
-    backend = TelegramBackend(Settings())
-    backend.client = client
+    settings = Settings()
+    chat_cache = {}
+    backend = TelegramBackend(
+        settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
+    )
     result = await backend.get_similar_channels("@public_news")
     assert result.channels == []
     client.assert_awaited_once()
@@ -172,8 +188,11 @@ async def test_similar_preserves_server_count_order_and_duplicates(with_count: b
     )
     client = AsyncMock(return_value=response)
     client.get_entity = AsyncMock(return_value=channel(10))
-    backend = TelegramBackend(Settings())
-    backend.client = client
+    settings = Settings()
+    chat_cache = {}
+    backend = TelegramBackend(
+        settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
+    )
 
     result = await backend.get_similar_channels("https://t.me/s/public_news")
 
@@ -193,7 +212,7 @@ async def test_similar_preserves_server_count_order_and_duplicates(with_count: b
     client.get_input_entity.assert_not_called()
     client.get_dialogs.assert_not_called()
     client.get_messages.assert_not_called()
-    assert backend.chats == {}
+    assert backend.chat_gateway.cache == {}
 
 
 @pytest.mark.parametrize("reference", ["-1000000000010", "@public_news", "t.me/public_news"])
@@ -206,8 +225,11 @@ async def test_similar_accepts_shared_references_and_alternate_public_username(
             10, username=None, usernames=[types.Username("alternate", active=True)]
         )
     )
-    backend = TelegramBackend(Settings())
-    backend.client = client
+    settings = Settings()
+    chat_cache = {}
+    backend = TelegramBackend(
+        settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
+    )
     result = await backend.get_similar_channels(reference)
     assert result.channels == [] and result.telegram_total_count is None
     client.get_entity.assert_awaited_once()
@@ -231,9 +253,12 @@ async def test_similar_accepts_shared_references_and_alternate_public_username(
 async def test_similar_requires_fresh_eligible_seed_before_recommendations(seed: object) -> None:
     client = AsyncMock()
     client.get_entity = AsyncMock(return_value=seed)
-    backend = TelegramBackend(Settings())
-    backend.client = client
-    backend.chats["-1000000000010"] = Chat(
+    settings = Settings()
+    chat_cache = {}
+    backend = TelegramBackend(
+        settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
+    )
+    backend.chat_gateway.cache["-1000000000010"] = Chat(
         id="-1000000000010", title="Stale public metadata", type="channel", username="public_news"
     )
     with pytest.raises(ToolError, match="ACCESS_DENIED"):
@@ -246,8 +271,11 @@ async def test_similar_requires_fresh_eligible_seed_before_recommendations(seed:
 async def test_similar_rejects_unavailable_input_entity(seed: types.Channel) -> None:
     client = AsyncMock()
     client.get_entity = AsyncMock(return_value=seed)
-    backend = TelegramBackend(Settings())
-    backend.client = client
+    settings = Settings()
+    chat_cache = {}
+    backend = TelegramBackend(
+        settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
+    )
     with pytest.raises(ToolError, match="INVALID_REFERENCE.*unavailable"):
         await backend.get_similar_channels("@public_news")
     client.assert_not_called()
@@ -255,8 +283,11 @@ async def test_similar_rejects_unavailable_input_entity(seed: types.Channel) -> 
 
 async def test_similar_invalid_reference_does_not_request_personalized_recommendations() -> None:
     client = AsyncMock()
-    backend = TelegramBackend(Settings())
-    backend.client = client
+    settings = Settings()
+    chat_cache = {}
+    backend = TelegramBackend(
+        settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
+    )
     with pytest.raises(ToolError, match="INVALID_REFERENCE"):
         await backend.get_similar_channels("")
     client.assert_not_called()
@@ -270,8 +301,13 @@ async def test_similar_invalid_reference_does_not_request_personalized_recommend
 
 @pytest.mark.parametrize("error_type", [errors.QueryTooShortError, errors.SearchQueryEmptyError])
 async def test_telegram_rejected_query_is_an_argument_error(error_type: type[Exception]) -> None:
-    backend = TelegramBackend(Settings())
-    backend.client = AsyncMock(side_effect=error_type(None))
+    settings = Settings()
+    chat_cache = {}
+    backend = TelegramBackend(
+        settings,
+        runtime=TelegramRuntime(settings, client=AsyncMock(side_effect=error_type(None))),
+        chat_cache=chat_cache,
+    )
     with pytest.raises(ToolError, match="INVALID_ARGUMENT.*too-short"):
         await backend.search_public_channels("a", 20)
 
@@ -292,8 +328,11 @@ async def test_discovery_failures_are_not_disguised_as_empty_results(
 ) -> None:
     client = AsyncMock(side_effect=failure)
     client.get_entity = AsyncMock(return_value=channel(10))
-    backend = TelegramBackend(Settings())
-    backend.client = client
+    settings = Settings()
+    chat_cache = {}
+    backend = TelegramBackend(
+        settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
+    )
     with pytest.raises(ToolError) as caught:
         if method == "search":
             await backend.search_public_channels("news", 20)

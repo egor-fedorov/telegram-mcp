@@ -6,10 +6,16 @@ from unittest.mock import AsyncMock
 import pytest
 from telethon import types
 
-from telegram_mcp.config import Settings
-from telegram_mcp.message_metadata import normalize_entities, normalize_poll, normalize_reactions
-from telegram_mcp.models import Chat
-from telegram_mcp.telegram import TelegramBackend, normalize_message
+from telegram_mcp.adapters.config import Settings
+from telegram_mcp.adapters.telegram import TelegramBackend, TelegramRuntime
+from telegram_mcp.adapters.telegram.mapping import normalize_message
+from telegram_mcp.adapters.telegram.metadata import (
+    normalize_entities,
+    normalize_poll,
+    normalize_reactions,
+)
+from telegram_mcp.application.requests import HistoryRead, PinnedRead, SearchRead, ThreadRead
+from telegram_mcp.domain.models import Chat
 from tests.fakes import BASE
 
 CHAT = Chat(id="-1000000000123", title="News", type="channel", username="example")
@@ -317,8 +323,9 @@ def test_entity_mapping_preserves_constructor_specific_fields_and_native_offsets
 
 @pytest.mark.parametrize("method", ["messages", "history", "search", "pinned", "thread"])
 async def test_existing_backend_paths_preserve_metadata_without_extra_rpc(method: str) -> None:
-    backend = TelegramBackend(Settings())
-    backend.chats[CHAT.id] = CHAT
+    settings = Settings()
+    chat_cache = {}
+    chat_cache[CHAT.id] = CHAT
     source = raw_message(
         views=10,
         forwards=0,
@@ -330,18 +337,19 @@ async def test_existing_backend_paths_preserve_metadata_without_extra_rpc(method
     )
     client = AsyncMock()
     client.get_messages.return_value = [source]
-    backend.client = client
+    backend = TelegramBackend(
+        settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
+    )
     if method == "messages":
         message = (await backend.messages(CHAT.id, [10]))[10]
     else:
-        kwargs: dict[str, Any] = {}
-        if method == "search":
-            kwargs["query"] = "caption"
-        elif method == "pinned":
-            kwargs["pinned_only"] = True
-        elif method == "thread":
-            kwargs["thread_id"] = 8
-        message = (await backend.fetch(CHAT.id, **kwargs)).messages[0]
+        requests = {
+            "history": HistoryRead(),
+            "search": SearchRead("caption"),
+            "pinned": PinnedRead(),
+            "thread": ThreadRead(8),
+        }
+        message = (await backend.read(CHAT.id, requests[method])).messages[0]
     assert message is not None and message.view_count == 10 and message.forward_count == 0
     assert message.reactions is not None and message.reactions.results[0].count == 2
     assert message.poll is not None and message.poll.results is not None

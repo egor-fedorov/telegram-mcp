@@ -1,13 +1,16 @@
 """Configuration is read locally; no credential is exposed as an MCP argument."""
 
+import json
 import os
+import tempfile
 import tomllib
 from pathlib import Path
 
 from platformdirs import user_config_path, user_data_path
 from pydantic import Field, SecretStr
 
-from telegram_mcp.models import Model, ToolError
+from telegram_mcp.domain.models import Model, ToolError
+from telegram_mcp.domain.policy import ReadPolicy
 
 
 class Settings(Model):
@@ -53,3 +56,38 @@ def load_settings(path: Path | None = None) -> Settings:
     if not str(settings.session_path).endswith(".session"):
         settings.session_path = Path(str(settings.session_path) + ".session")
     return settings
+
+
+def save_settings(settings: Settings, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    data = settings.model_dump(mode="json", exclude_none=True)
+    if settings.api_hash:
+        data["api_hash"] = settings.api_hash.get_secret_value()
+    text = (
+        "\n".join(f"{key} = {json.dumps(value, ensure_ascii=False)}" for key, value in data.items())
+        + "\n"
+    )
+    fd, temporary = tempfile.mkstemp(prefix=".config-", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w") as stream:
+            stream.write(text)
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+class ConfiguredPolicyProvider:
+    """Snapshot current in-memory settings on each call, without reading credentials."""
+
+    def __init__(self, settings: Settings):
+        self.settings = settings
+
+    def current(self) -> ReadPolicy:
+        return ReadPolicy(
+            allowed_chat_ids=tuple(self.settings.allowed_chat_ids),
+            allowed_folder_ids=tuple(self.settings.allowed_folder_ids),
+            allow_all_chats=self.settings.allow_all_chats,
+            allow_public_channel_reads=self.settings.allow_public_channel_reads,
+            allow_public_channel_discovery=self.settings.allow_public_channel_discovery,
+        )

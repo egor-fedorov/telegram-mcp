@@ -288,6 +288,10 @@ class ContextResult(Model):
     issues: list[Issue] = Field(default_factory=list)
 
 
+def is_retryable(code: str) -> bool:
+    return code in {"RATE_LIMITED", "CONNECTION_ERROR", "TELEGRAM_UNAVAILABLE"}
+
+
 class ToolError(Exception):
     def __init__(self, code: str, message: str, retry_after: int | None = None):
         super().__init__(f"{code}: {message}")
@@ -297,7 +301,7 @@ class ToolError(Exception):
 
     @property
     def retryable(self) -> bool:
-        return self.code in {"RATE_LIMITED", "CONNECTION_ERROR", "TELEGRAM_UNAVAILABLE"}
+        return is_retryable(self.code)
 
     def issue(
         self,

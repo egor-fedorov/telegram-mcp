@@ -3,8 +3,21 @@ from urllib.parse import urlparse
 
 from pydantic import ValidationError
 
-from telegram_mcp.backend import Batch, DiscoveryBatch, HistoryWindow, TopicBatch, TopicOffset
-from telegram_mcp.models import (
+from telegram_mcp.application.ports import (
+    Batch,
+    DiscoveryBatch,
+    HistoryWindow,
+    TopicBatch,
+    TopicOffset,
+)
+from telegram_mcp.application.requests import (
+    MessageRead,
+    PinnedRead,
+    SearchRead,
+    ThreadRead,
+    TopicRead,
+)
+from telegram_mcp.domain.models import (
     Chat,
     ContentType,
     Folder,
@@ -235,22 +248,26 @@ class FakeBackend:
             raise ToolError("TOPIC_UNAVAILABLE", "Topic was not found or is unavailable.")
         return self.topics[key]
 
-    async def fetch(
+    async def read(
         self,
         chat_id: str,
+        request: MessageRead,
         *,
         offset: int = 0,
         limit: int = 30,
-        query: str | None = None,
-        date_from: datetime | None = None,
-        date_to: datetime | None = None,
-        sender_id: str | None = None,
-        content_type: ContentType | None = None,
-        oldest_first: bool = False,
-        thread_id: int | None = None,
-        pinned_only: bool = False,
-        topic_id: int | None = None,
     ) -> Batch:
+        filters = request.filters
+        date_from, date_to = filters.date_from, filters.date_to
+        content_type, oldest_first = filters.content_type, filters.oldest_first
+        query = request.query if isinstance(request, SearchRead) else None
+        sender_id = request.sender_id if isinstance(request, SearchRead) else None
+        thread_id = request.thread_id if isinstance(request, ThreadRead) else None
+        pinned_only = (
+            isinstance(request, PinnedRead)
+            or isinstance(request, TopicRead)
+            and request.pinned_only
+        )
+        topic_id = request.topic_id if isinstance(request, TopicRead) else None
         self.backend_calls.append("fetch")
         self.fetches.append(chat_id)
         self.fetch_offsets.append((chat_id, offset))
@@ -292,3 +309,17 @@ class FakeBackend:
         return Batch(
             filtered, raw[-1].message_ref.message_id if raw else offset, len(candidates) <= limit
         )
+
+
+class FakeClock:
+    """One injected clock controls deadlines, cooldowns and cursor expiry."""
+
+    def __init__(self, time: float = 100.0, now: datetime | None = None):
+        self.time = time
+        self.now = now if now is not None else datetime.now(UTC)
+
+    def monotonic(self) -> float:
+        return self.time
+
+    def utc_now(self) -> datetime:
+        return self.now

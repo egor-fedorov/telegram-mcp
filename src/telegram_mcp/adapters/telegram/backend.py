@@ -1,0 +1,101 @@
+"""Compose Telegram gateways over one owned runtime and entity catalog."""
+
+from telegram_mcp.adapters.clock import SystemClock
+from telegram_mcp.adapters.config import Settings
+from telegram_mcp.adapters.telegram.chats import ChatGateway
+from telegram_mcp.adapters.telegram.discovery import DiscoveryGateway
+from telegram_mcp.adapters.telegram.forums import ForumGateway
+from telegram_mcp.adapters.telegram.messages import MessageGateway
+from telegram_mcp.adapters.telegram.runtime import TelegramRuntime
+from telegram_mcp.application.ports import (
+    Batch,
+    Clock,
+    DiscoveryBatch,
+    HistoryWindow,
+    TopicBatch,
+    TopicOffset,
+)
+from telegram_mcp.application.requests import MessageRead
+from telegram_mcp.domain.models import Chat, Folder, ForumTopic, Message, MessageRef
+
+
+class TelegramBackend:
+    def __init__(
+        self,
+        settings: Settings,
+        *,
+        runtime: TelegramRuntime | None = None,
+        chat_cache: dict[str, Chat] | None = None,
+        clock: Clock | None = None,
+    ):
+        self.runtime = runtime if runtime is not None else TelegramRuntime(settings)
+        self.chat_gateway = ChatGateway(
+            self.runtime,
+            clock=clock if clock is not None else SystemClock(),
+            max_dialogs=settings.max_dialogs,
+            cache=chat_cache,
+        )
+        self.discovery_gateway = DiscoveryGateway(self.runtime, self.chat_gateway)
+        self.message_gateway = MessageGateway(self.runtime, self.chat_gateway)
+        self.forum_gateway = ForumGateway(self.runtime, self.chat_gateway)
+
+    async def status(self) -> dict[str, object]:
+        return await self.runtime.status()
+
+    async def close(self) -> None:
+        await self.runtime.close()
+
+    async def catalog(self) -> tuple[list[Chat], list[Folder]]:
+        return await self.chat_gateway.catalog()
+
+    async def resolve_chat(self, ref: str, *, refresh: bool = False) -> Chat:
+        return await self.chat_gateway.resolve_chat(ref, refresh=refresh)
+
+    async def public_channel(self, chat_id: str) -> Chat:
+        return await self.chat_gateway.public_channel(chat_id)
+
+    async def chat_details(self, chat: Chat) -> dict[str, object]:
+        return await self.chat_gateway.chat_details(chat)
+
+    async def search_public_channels(self, query: str, limit: int) -> DiscoveryBatch:
+        return await self.discovery_gateway.search_public_channels(query, limit)
+
+    async def get_similar_channels(self, chat_ref: str) -> DiscoveryBatch:
+        return await self.discovery_gateway.get_similar_channels(chat_ref)
+
+    async def fetch_topics(
+        self, chat_id: str, *, offset: TopicOffset, limit: int = 30, query: str | None = None
+    ) -> TopicBatch:
+        return await self.forum_gateway.fetch_topics(
+            chat_id, offset=offset, limit=limit, query=query
+        )
+
+    async def get_topic(self, chat_id: str, topic_id: int) -> ForumTopic:
+        return await self.forum_gateway.get_topic(chat_id, topic_id)
+
+    async def resolve_message(self, ref: str | MessageRef) -> MessageRef:
+        return await self.message_gateway.resolve_message(ref)
+
+    async def message(self, ref: MessageRef) -> Message | None:
+        return await self.message_gateway.message(ref)
+
+    async def messages(self, chat_id: str, message_ids: list[int]) -> dict[int, Message | None]:
+        return await self.message_gateway.messages(chat_id, message_ids)
+
+    async def history_window(
+        self, chat_id: str, *, anchor_id: int, limit: int, newer: bool
+    ) -> HistoryWindow:
+        return await self.message_gateway.history_window(
+            chat_id, anchor_id=anchor_id, limit=limit, newer=newer
+        )
+
+    async def discussion_chat(self, chat: Chat) -> str:
+        return await self.chat_gateway.discussion_chat(chat)
+
+    async def thread_root(self, ref: MessageRef, discussion_chat_id: str) -> MessageRef:
+        return await self.message_gateway.thread_root(ref, discussion_chat_id)
+
+    async def read(
+        self, chat_id: str, request: MessageRead, *, offset: int = 0, limit: int = 30
+    ) -> Batch:
+        return await self.message_gateway.read(chat_id, request, offset=offset, limit=limit)

@@ -1,8 +1,8 @@
 import pytest
 
-from telegram_mcp.config import Settings
-from telegram_mcp.folders import allowed_ids, contains, select_chats
-from telegram_mcp.models import Chat, Folder, ToolError
+from telegram_mcp.domain.folders import allowed_ids, contains, select_chats
+from telegram_mcp.domain.models import Chat, Folder, ToolError
+from telegram_mcp.domain.policy import ReadPolicy
 
 
 @pytest.mark.parametrize(
@@ -71,13 +71,13 @@ def test_union_intersection_policy_and_duplicates() -> None:
         Folder(id=1, title="Same", position=0, included_chat_ids=["1", "2"]),
         Folder(id=2, title="Same", position=1, included_chat_ids=["2", "3"]),
     ]
-    settings = Settings(allowed_folder_ids=[1])
+    settings = ReadPolicy(allowed_folder_ids=(1,))
     allowed = allowed_ids(settings, chats, folders)
     result = select_chats(chats + chats, folders, allowed, folder_ids=[1, 2])
     assert [c.id for c in result] == ["1", "2"]
     assert result[1].matched_folder_ids == [1, 2]
     assert [c.id for c in select_chats(chats, folders, allowed, [1, 2], ["2"])] == ["2"]
-    assert allowed_ids(Settings(), chats, folders) == set()
+    assert allowed_ids(ReadPolicy(), chats, folders) == set()
     with pytest.raises(ToolError, match="ACCESS_DENIED"):
         select_chats(chats, folders, allowed, chat_ids=["3"])
     with pytest.raises(ToolError, match="FOLDER_NOT_FOUND"):
