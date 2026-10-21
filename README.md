@@ -6,7 +6,8 @@
 A local MCP server for reading Telegram through your user account.
 Python 3.12, Telethon, the official MCP Python SDK 2, Pydantic, uv.
 
-See [ROADMAP.md](ROADMAP.md) for the development plan and the next stage.
+See [ROADMAP.md](ROADMAP.md) for the development plan and the next stage, and
+[Architecture](docs/architecture.md) for layer boundaries and implementation guidance.
 
 ## Tools
 
@@ -466,6 +467,8 @@ requests to Telegram. They cover public-channel discovery, topic navigation, sel
 history (including General), chat-wide and topic-specific pins, counters, reactions,
 polls, bounded album retrieval, folders, pagination, dates, context, access, Telethon structures,
 configuration, and the actual MCP protocol, including a separate STDIO process.
+They also enforce layer boundaries and compare both MCP modes against the recorded
+tool-schema baseline.
 Both modern MCP mode and compatibility with the initialize handshake are tested.
 
 GitHub Actions runs the same checks on pull requests and pushes to `main`, using

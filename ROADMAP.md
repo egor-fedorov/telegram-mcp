@@ -17,6 +17,7 @@ and setup instructions.
 | M0 | Done | Reliable retrieval: channel references, explicit public-channel access, batched messages, recovery from temporary failures, and fresh authorization status | Base MCP server |
 | M1 | Done | Public-channel discovery and similar sources, followed by existing retrieval tools | M0 |
 | M2 | Done | Forum topic and pinned-message navigation; richer message data, including albums, reactions, polls, and available counters | M0 |
+| R1 | Done | Layered architecture, explicit dependencies and preserved MCP/CLI contracts | M2; before M3 |
 | M3 | Planned | Downloading selected attachments with size limits and file delivery to the calling client | M0; use album structure from M2 |
 | M4 | Planned | New messages and available changes, persistent checkpoints, and export with source references | M0; M2–M3 for their respective content types |
 
@@ -43,9 +44,14 @@ tests, including native Telegram payloads and both MCP modes.
 
 M2.4 adds bounded retrieval of selected album members, preserving original messages
 and explicitly reporting uncertain completeness. `make check` passed with 665 offline
-tests. M2 is complete. The next milestone is M3, selected attachment downloads with
-size limits and client delivery; its detailed contract will be finalized before work
-starts. Live Telegram validation remains separate.
+tests. M2 is complete. R1 prepares the architecture before M3, selected attachment
+downloads with size limits and client delivery. The detailed M3 contract will be
+finalized before work starts. Live Telegram validation remains separate.
+
+R1 separates domain contracts, application use cases and ports, concrete adapters, and
+bootstrap wiring. `make check` passed with 684 offline tests, including the unchanged
+schemas of all 14 MCP tools in both modes, layer boundaries, and lifecycle cleanup.
+M3 is next; its detailed attachment-delivery contract remains to be agreed.
 
 The row order expresses priority, not a restriction on independent work. “Planned”
 means an agreed direction, not a complete technical specification.
@@ -508,6 +514,26 @@ Primary references: [message grouping](https://core.telegram.org/constructor/mes
 [albums and captions](https://core.telegram.org/api/files#albums-grouped-media),
 [history offsets](https://core.telegram.org/api/offsets), and
 [Telethon's warning about interleaved album messages](https://docs.telethon.dev/en/v2/developing/migration-guide.html).
+
+## R1: Layered architecture before attachment downloads
+
+Deliver one focused PR, preserving all 14 MCP tools, their schemas and error behavior,
+CLI commands, local configuration, STDIO and locked dependencies. Internal Python
+imports may change. See [Architecture](docs/architecture.md) for the accepted decision.
+
+- Preserve the pre-refactor MCP schema baseline and the existing behavioral tests.
+- Separate shared contracts/pure rules, application use cases/ports, adapters, and the
+  composition root. Keep Pydantic contracts without a duplicate DTO hierarchy.
+- Split source/access preparation from message pagination; retain distinct topic and
+  album algorithms. Replace universal query flags with typed read requests.
+- Share request-local access policy, injected clocks, retry state and text budgets.
+  Read current policy before each call without exposing credentials to application code.
+- Compose Telegram gateways around one runtime/client and shared entity cache. Preserve
+  connection/authentication, session locking, cleanup and existing RPC behavior.
+- Move local persistence and authentication resource operations out of CLI orchestration.
+  Route MCP shutdown through the application facade.
+- Remove transitional modules, enforce import directions/cycles in CI, and pass full
+  `make check` before the single squash merge. No new Telegram capability is part of R1.
 
 ## Later: ideas requiring a separate decision
 
