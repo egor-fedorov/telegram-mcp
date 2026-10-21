@@ -25,6 +25,7 @@ EXPECTED_TOOLS = {
     "list_topics",
     "get_pinned_messages",
     "get_messages",
+    "get_album",
     "get_context",
     "get_thread",
 }

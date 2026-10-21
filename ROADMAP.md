@@ -16,7 +16,7 @@ and setup instructions.
 | --- | --- | --- | --- |
 | M0 | Done | Reliable retrieval: channel references, explicit public-channel access, batched messages, recovery from temporary failures, and fresh authorization status | Base MCP server |
 | M1 | Done | Public-channel discovery and similar sources, followed by existing retrieval tools | M0 |
-| M2 | In progress | Forum topic and pinned-message navigation; richer message data, including albums, reactions, polls, and available counters | M0 |
+| M2 | Done | Forum topic and pinned-message navigation; richer message data, including albums, reactions, polls, and available counters | M0 |
 | M3 | Planned | Downloading selected attachments with size limits and file delivery to the calling client | M0; use album structure from M2 |
 | M4 | Planned | New messages and available changes, persistent checkpoints, and export with source references | M0; M2–M3 for their respective content types |
 
@@ -39,8 +39,13 @@ passed with 490 offline tests. Live Telegram validation remains separate.
 
 M2.3 preserves available message counters, aggregate reactions, and formatted poll
 definitions/results without additional requests. `make check` passed with 546 offline
-tests, including native Telegram payloads and both MCP modes. M2 remains in progress;
-the next PR is M2.4, retrieval of the messages in a selected album.
+tests, including native Telegram payloads and both MCP modes.
+
+M2.4 adds bounded retrieval of selected album members, preserving original messages
+and explicitly reporting uncertain completeness. `make check` passed with 665 offline
+tests. M2 is complete. The next milestone is M3, selected attachment downloads with
+size limits and client delivery; its detailed contract will be finalized before work
+starts. Live Telegram validation remains separate.
 
 The row order expresses priority, not a restriction on independent work. “Planned”
 means an agreed direction, not a complete technical specification.
@@ -183,7 +188,7 @@ four work items meet their acceptance criteria.
 - [x] M2.1 — List forum topics and retrieve chat-wide pinned messages.
 - [x] M2.2 — Read a selected topic's history, including General, and filter pins by topic.
 - [x] M2.3 — Preserve available message counters, reaction summaries, and poll data.
-- [ ] M2.4 — Retrieve the messages of a selected album using its original grouping.
+- [x] M2.4 — Retrieve the messages of a selected album using its original grouping.
 
 Keep STDIO, the MCP → Service → Backend boundary, and the locked dependencies.
 No topic creation, pinning/unpinning, voting, reactions, membership changes,
@@ -431,14 +436,78 @@ Primary references: [message fields](https://core.telegram.org/constructor/messa
 [poll results](https://core.telegram.org/constructor/pollResults), and
 [answer results](https://core.telegram.org/constructor/pollAnswerVoters).
 
-### M2.4 acceptance boundaries
+### M2.4: Selected-album retrieval
 
-Before each remaining PR, finalize its exact model and tool schemas in this document.
+Add `get_album(ref: str | MessageRef, scan_limit: int = 30) -> AlbumResult`.
+The required reference selects an existing album member using the same Telegram links,
+`chat_id:message_id` strings, or structured references as `get_messages`. `scan_limit`
+is a strict integer from 1 to 100 and bounds each direction independently.
 
-- **Albums:** use `album_id` with the chat ID, never globally. Return original messages
-  in message order, preserving each caption, attachment, and source link. Bound scans
-  and response size; explicitly report unavailable items or uncertain completeness.
-  Do not fabricate a combined message or download attachment bytes.
+Resolve the canonical chat and check the current retrieval policy before reading the
+anchor. Explicit public-channel access applies only to that chat and request. Do not
+follow linked discussions, replies, forwards, or identically numbered albums in other
+chats. An unavailable anchor yields `MESSAGE_UNAVAILABLE`; an available message without
+an album ID yields `NOT_AN_ALBUM`. Neither case starts a neighborhood scan.
+
+Fetch at most one raw history window before and one after the anchor, each containing
+at most `scan_limit` Telegram rows. Use a dedicated backend operation so Telethon's
+history iterator cannot silently refill the window or discard unavailable placeholders.
+Each attempted direction performs one history RPC, apart from the existing bounded
+transport retries. Do not add content-type or topic filters. The service inspects the
+whole window, retaining only the anchor's canonical chat and album ID; unrelated
+messages can occur between album members. Numeric ID gaps and Telegram's send-time
+album size limit do not establish retrieval completeness.
+
+The result contains:
+
+| Field | Contract |
+| --- | --- |
+| `anchor_ref`, `album_id` | Canonical selected message and its chat-scoped grouping ID |
+| `messages` | Unique original messages, including the anchor, ordered by increasing message ID |
+| `order` | Always `oldest_first`, referring to message order rather than edited timestamps |
+| `completeness` | Always `unknown`; Telegram provides no manifest of the original album |
+| `scan_limit` | Requested maximum raw rows in each direction |
+| `scanned_before`, `scanned_after` | Raw rows examined, including nonmembers and unavailable placeholders |
+| `before_exhausted`, `after_exhausted` | `true` for an observed history end, `false` when the end is not established, `null` for an unfinished/unattempted direction |
+| `issues` | Actual retrieval failures and unavailable-row diagnostics |
+
+Short channel or sliced history responses do not prove exhaustion. Even observed
+ends in both directions cannot establish the original album's size or recover missing
+members. An actual unavailable row may be reported with `MESSAGE_UNAVAILABLE`, but its
+album membership is unknown. Do not invent unavailable members from gaps or assert
+that they were deleted.
+
+Bound the response to at most `1 + 2 * scan_limit` messages (at most 201), 100,000
+message-text characters in total, and 12,000 per message. Preserve each caption,
+attachment, entity, source link, date, and metadata separately; use existing
+`next_text_offset` and `get_messages` for longer text. Do not combine captions into a
+fabricated message or download attachment bytes.
+
+After a scan failure, return the available members with an issue and leave the failed
+direction's exhaustion unknown. A retryable failure also stops subsequent scans in
+that call. There is no album cursor or persistent retry state: repeat the original
+call after any `retry_after_seconds`, rechecking access and rereading the anchor.
+Initial catalog, resolution, access, and anchor failures remain tool errors.
+
+Acceptance checks:
+
+1. Cover anchors at the beginning, middle, and end; sparse and interleaved IDs;
+   duplicate or unordered responses; and identical album IDs in different chats.
+2. Test strict scan bounds, one history RPC per direction, directional offsets,
+   short/empty responses, unavailable rows, unexpected peers, and message-ID boundaries.
+3. Preserve independent captions and all message metadata, including Unicode text
+   continuation and the aggregate text budget, without mutating source messages.
+4. Verify current allowlist/public-channel access, revocation, and no implicit reads
+   of linked sources. Cover unavailable and non-album anchors before scanning.
+5. Preserve partial results and retry delays after FloodWait, network, and server
+   failures without waiting, same-call retries, or false completeness claims.
+6. Add the fourteenth read-only MCP tool, validate both protocol modes, update README
+   and roadmap, and pass `make check` and GitHub `checks` without a Telegram account.
+
+Primary references: [message grouping](https://core.telegram.org/constructor/message),
+[albums and captions](https://core.telegram.org/api/files#albums-grouped-media),
+[history offsets](https://core.telegram.org/api/offsets), and
+[Telethon's warning about interleaved album messages](https://docs.telethon.dev/en/v2/developing/migration-guide.html).
 
 ## Later: ideas requiring a separate decision
 

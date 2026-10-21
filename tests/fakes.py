@@ -3,7 +3,7 @@ from urllib.parse import urlparse
 
 from pydantic import ValidationError
 
-from telegram_mcp.backend import Batch, DiscoveryBatch, TopicBatch, TopicOffset
+from telegram_mcp.backend import Batch, DiscoveryBatch, HistoryWindow, TopicBatch, TopicOffset
 from telegram_mcp.models import (
     Chat,
     ContentType,
@@ -81,6 +81,9 @@ class FakeBackend:
         self.pinned_message_keys: set[str] = set()
         self.fetch_pinned_flags: list[bool] = []
         self.fetch_topic_ids: list[int | None] = []
+        self.history_windows: list[tuple[str, int, int, bool]] = []
+        self.history_window_faults: dict[tuple[str, bool], ToolError] = {}
+        self.history_window_batches: dict[tuple[str, bool], HistoryWindow] = {}
 
     async def status(self) -> dict[str, object]:
         self.backend_calls.append("status")
@@ -161,6 +164,34 @@ class FakeBackend:
             raise self.message_faults[chat_id]
         found = {m.message_ref.message_id: m for m in self.stored_messages if m.chat.id == chat_id}
         return {mid: found.get(mid) for mid in message_ids}
+
+    async def history_window(
+        self, chat_id: str, *, anchor_id: int, limit: int, newer: bool
+    ) -> HistoryWindow:
+        self.backend_calls.append("history_window")
+        self.history_windows.append((chat_id, anchor_id, limit, newer))
+        fault = self.history_window_faults.get((chat_id, newer), self.faults.get(chat_id))
+        if fault is not None:
+            raise fault
+        supplied = self.history_window_batches.get((chat_id, newer))
+        if supplied is not None:
+            return supplied
+        candidates = [
+            message
+            for message in self.stored_messages
+            if message.chat.id == chat_id
+            and (
+                message.message_ref.message_id > anchor_id
+                if newer
+                else message.message_ref.message_id < anchor_id
+            )
+        ]
+        candidates.sort(key=lambda message: message.message_ref.message_id, reverse=not newer)
+        return HistoryWindow(
+            messages=candidates[:limit],
+            scanned_count=min(len(candidates), limit),
+            exhausted=len(candidates) < limit,
+        )
 
     async def discussion_chat(self, chat: Chat) -> str:
         self.backend_calls.append("discussion_chat")

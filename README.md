@@ -23,6 +23,7 @@ See [ROADMAP.md](ROADMAP.md) for the development plan and the next stage.
 | `list_topics` | Forum topics with navigation references, optional title query, and pagination |
 | `get_pinned_messages` | Chat-wide or forum-topic pinned messages, newest first |
 | `get_messages` | Messages by links/IDs with authors, dates, attachments, counters, reactions, and polls |
+| `get_album` | Members of a selected album within a bounded neighborhood of one message |
 | `get_context` | Messages before/after an anchor and a chain of parent replies |
 | `get_thread` | Comments on a channel post or replies in a group thread |
 
@@ -104,7 +105,7 @@ startup_timeout_sec = 20
 tool_timeout_sec = 120
 enabled_tools = [
   "get_status", "list_folders", "list_chats", "get_chat", "search_messages",
-  "get_history", "get_messages", "get_context", "get_thread",
+  "get_history", "get_messages", "get_album", "get_context", "get_thread",
   "search_public_channels", "get_similar_channels", "list_topics", "get_pinned_messages"
 ]
 ```
@@ -214,7 +215,7 @@ When continuing, history remains bound to the original canonical ID. If the user
 been reassigned to another channel, continuation returns `CURSOR_MISMATCH` instead of
 switching to the new source.
 
-`get_messages`, `get_context`, and `get_thread` accept a Telegram link, a
+`get_messages`, `get_album`, `get_context`, and `get_thread` accept a Telegram link, a
 `chat_id:message_id` string, or an object such as `{"chat_id": "…", "message_id": 123}`.
 Public/private links, links to messages in topics, and `?comment=…` are supported.
 Numeric chat_id values use Telethon marked peer IDs; message_id is the Telegram
@@ -281,6 +282,63 @@ Formatted poll text retains original Telegram entities, including their UTF-16 o
 and available attributes such as URLs or custom emoji IDs. Message text continuation
 through `next_text_offset` changes only the returned message-text slice; counters,
 reactions, polls and original entities are preserved.
+
+### Read a selected album
+
+Pass a known album member to `get_album(ref, scan_limit=30)`. For example:
+
+```json
+{
+  "ref": "https://t.me/example_channel/123",
+  "scan_limit": 30
+}
+```
+
+The source must satisfy the same access policy as `get_messages`. Explicit public
+broadcast channels outside the allowlist require `allow_public_channel_reads`;
+discovery alone does not grant access. Each call rechecks access and reads only the
+resolved chat. Linked discussions and other chats are not followed.
+
+`scan_limit` must be an integer from 1 to 100. The server reads the anchor and up to
+that many neighboring messages on each side, then selects messages with the same
+`album_id` in the same chat. Nonmembers count toward the scan limit and do not stop
+the scan; unrelated messages can appear between album members. Duplicate references
+are removed, and the result is ordered oldest first. The default window can return
+at most 61 messages; the largest window can return at most 201.
+
+`AlbumResult` contains:
+
+| Field | Meaning |
+| --- | --- |
+| `anchor_ref`, `album_id` | Canonical source reference and the anchor's album identifier |
+| `messages`, `order` | Observed members, including the anchor, in `oldest_first` order |
+| `completeness` | Always `"unknown"`; Telegram does not provide an album manifest |
+| `scan_limit` | Maximum neighboring messages inspected on each side |
+| `scanned_before`, `scanned_after` | Telegram rows inspected, including nonmembers and unavailable records |
+| `before_exhausted`, `after_exhausted` | `true` if that history boundary was reached, `false` if not established, `null` if failed or not attempted |
+| `issues` | Failures encountered while reading neighboring messages |
+
+History exhaustion does not prove album completeness: inaccessible or removed members
+cannot be inferred, and a small window can miss distant members. The result has no
+cursor. Increase `scan_limit` and repeat the call to inspect a wider window, while still
+reporting completeness as unknown. Messages can change between calls.
+
+An unavailable anchor returns `MESSAGE_UNAVAILABLE` without asserting deletion;
+an anchor without an album returns `NOT_AN_ALBUM`. Initial reference, authorization,
+access, and anchor-fetch failures are MCP errors. A failed neighbor scan preserves the
+anchor and other already retrieved members in a partial result with `issues`.
+Unavailable records within a scan also produce issues; their album membership is unknown.
+Gaps between message IDs alone do not establish that messages are missing.
+For temporary `RATE_LIMITED`, `CONNECTION_ERROR`, or `TELEGRAM_UNAVAILABLE` issues,
+retry the whole call after any `retry_after_seconds`; the server does not wait or
+retry a failed scan within the call.
+
+Album members retain their captions, attachment metadata, dates, links, entities,
+forwarding sources, and available counters, reactions, and polls. Returned message
+text shares a 100,000-character budget, with at most 12,000 characters per message.
+Use `get_messages` with each member's `next_text_offset` to retrieve truncated text;
+text offsets count Unicode code points while original entities keep UTF-16 offsets.
+This tool does not download attachments, fetch comments, or modify Telegram state.
 
 ### Navigate forum topics and pinned messages
 
@@ -379,8 +437,8 @@ provide an immutable snapshot.
   `limit` may change.
 - With many chats, an empty page may include `next_cursor`: the server is loading
   initial source pages to preserve the global ordering of messages by time.
-- Individual chat failures appear in `issues`. Temporary errors `RATE_LIMITED`,
-  `CONNECTION_ERROR`, and `TELEGRAM_UNAVAILABLE` preserve the position and `next_cursor`,
+- For paginated retrieval, individual chat failures appear in `issues`. Temporary errors
+  `RATE_LIMITED`, `CONNECTION_ERROR`, and `TELEGRAM_UNAVAILABLE` preserve the position and `next_cursor`,
   while `scope.complete` remains `false`. Repeat the original arguments with this cursor;
   for FloodWait, first wait for `retry_after_seconds`. The server does not wait inside
   the call or retry the failed stream within the same response.
@@ -406,8 +464,8 @@ make check
 This runs Ruff format/check, `ty check`, and pytest. Tests use no account and make no
 requests to Telegram. They cover public-channel discovery, topic navigation, selected-topic
 history (including General), chat-wide and topic-specific pins, counters, reactions,
-polls, folders, pagination, dates, context, access, Telethon structures, configuration,
-and the actual MCP protocol, including a separate STDIO process.
+polls, bounded album retrieval, folders, pagination, dates, context, access, Telethon structures,
+configuration, and the actual MCP protocol, including a separate STDIO process.
 Both modern MCP mode and compatibility with the initialize handshake are tested.
 
 GitHub Actions runs the same checks on pull requests and pushes to `main`, using
@@ -430,7 +488,7 @@ rights to Telegram content retrieved through the server.
 
 Reading cloud chats, discovering public channels, forum topic navigation, selected-topic
 history, chat-wide or topic-specific pinned-message retrieval, and message counters,
-aggregate reactions and poll metadata are implemented.
+aggregate reactions, poll metadata, and bounded album retrieval are implemented.
 Automatic joining, paid requests, sending, attachment downloads, voice transcription,
 folder management, and a semantic index remain possible extensions.
 Attachments are represented by metadata.

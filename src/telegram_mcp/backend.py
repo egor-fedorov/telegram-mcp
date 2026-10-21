@@ -25,6 +25,14 @@ class Batch:
 
 
 @dataclass
+class HistoryWindow:
+    messages: list[Message]
+    scanned_count: int
+    exhausted: bool
+    issues: list[Issue] = field(default_factory=list)
+
+
+@dataclass
 class DiscoveryBatch:
     channels: list[PublicChannel]
     telegram_total_count: int | None = None
@@ -68,6 +76,9 @@ class Backend(Protocol):
     async def resolve_message(self, ref: str | MessageRef) -> MessageRef: ...
     async def message(self, ref: MessageRef) -> Message | None: ...
     async def messages(self, chat_id: str, message_ids: list[int]) -> dict[int, Message | None]: ...
+    async def history_window(
+        self, chat_id: str, *, anchor_id: int, limit: int, newer: bool
+    ) -> HistoryWindow: ...
     async def discussion_chat(self, chat: Chat) -> str: ...
     async def thread_root(self, ref: MessageRef, discussion_chat_id: str) -> MessageRef: ...
     async def fetch(

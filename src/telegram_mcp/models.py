@@ -266,6 +266,20 @@ class MessageResult(Model):
     issues: list[Issue] = Field(default_factory=list)
 
 
+class AlbumResult(Model):
+    anchor_ref: MessageRef
+    album_id: str
+    messages: list[Message] = Field(default_factory=list, max_length=201)
+    order: Literal["oldest_first"] = "oldest_first"
+    completeness: Literal["unknown"] = "unknown"
+    scan_limit: int = Field(ge=1, le=100)
+    scanned_before: int = Field(default=0, ge=0, le=100)
+    scanned_after: int = Field(default=0, ge=0, le=100)
+    before_exhausted: bool | None = None
+    after_exhausted: bool | None = None
+    issues: list[Issue] = Field(default_factory=list)
+
+
 class ContextResult(Model):
     anchor: Message | None = None
     before: list[Message] = Field(default_factory=list)

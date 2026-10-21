@@ -12,6 +12,7 @@ from telegram_mcp.config import Settings
 from telegram_mcp.cursors import CursorStore
 from telegram_mcp.folders import allowed_ids, select_chats
 from telegram_mcp.models import (
+    AlbumResult,
     Chat,
     ChatPage,
     ContentType,
@@ -427,6 +428,63 @@ class Service:
             messages=[messages[i] for i in sorted(messages)],
             issues=[issues[i] for i in sorted(issues)],
         )
+
+    async def get_album(self, ref: str | MessageRef, scan_limit: int = 30) -> AlbumResult:
+        if type(scan_limit) is not int or not 1 <= scan_limit <= 100:
+            raise ToolError("INVALID_ARGUMENT", "scan_limit must be an integer from 1 to 100.")
+        _, _, allowed = await self.catalog()
+        anchor_ref = await self.resolve(ref, allowed)
+        anchor = await self.backend.message(anchor_ref)
+        if (
+            anchor is None
+            or anchor.message_ref != anchor_ref
+            or anchor.chat.id != anchor_ref.chat_id
+        ):
+            raise ToolError("MESSAGE_UNAVAILABLE", "Anchor message is unavailable.")
+        if anchor.album_id is None:
+            raise ToolError("NOT_AN_ALBUM", "Anchor message does not belong to an album.")
+        result = AlbumResult(anchor_ref=anchor_ref, album_id=anchor.album_id, scan_limit=scan_limit)
+        members = {anchor_ref.message_id: anchor}
+        for direction in ("before", "after"):
+            try:
+                batch = await self.backend.history_window(
+                    anchor_ref.chat_id,
+                    anchor_id=anchor_ref.message_id,
+                    limit=scan_limit,
+                    newer=direction == "after",
+                )
+                inspected = batch.messages[:scan_limit]
+                setattr(
+                    result, f"scanned_{direction}", min(scan_limit, max(0, batch.scanned_count))
+                )
+                setattr(result, f"{direction}_exhausted", batch.exhausted)
+                result.issues.extend(batch.issues)
+                for message in inspected:
+                    message_ref = message.message_ref
+                    if (
+                        message_ref.chat_id != anchor_ref.chat_id
+                        or message.chat.id != anchor_ref.chat_id
+                        or message.album_id != anchor.album_id
+                        or (
+                            message_ref.message_id >= anchor_ref.message_id
+                            if direction == "before"
+                            else message_ref.message_id <= anchor_ref.message_id
+                        )
+                    ):
+                        continue
+                    members.setdefault(message_ref.message_id, message)
+                if any(
+                    issue.code in {"RATE_LIMITED", "CONNECTION_ERROR", "TELEGRAM_UNAVAILABLE"}
+                    for issue in batch.issues
+                ):
+                    break
+            except ToolError as exc:
+                result.issues.append(exc.issue(anchor_ref.chat_id, anchor_ref))
+                if exc.retryable:
+                    break
+        cap = min(12000, 100000 // len(members))
+        result.messages = [clip(members[mid], cap) for mid in sorted(members)]
+        return result
 
     async def get_context(
         self, ref: str | MessageRef, before: int = 10, after: int = 10, reply_depth: int = 3
