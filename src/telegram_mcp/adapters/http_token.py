@@ -21,6 +21,7 @@ def protect_token(path: Path) -> None:
 
 def _protect_windows_token(path: Path) -> None:
     if sys.platform == "win32":
+        import ntsecuritycon
         import win32api
         import win32con
         import win32security
@@ -33,7 +34,7 @@ def _protect_windows_token(path: Path) -> None:
         finally:
             process_token.Close()
         dacl = win32security.ACL()
-        dacl.AddAccessAllowedAce(win32security.ACL_REVISION, win32con.FILE_ALL_ACCESS, sid)
+        dacl.AddAccessAllowedAce(win32security.ACL_REVISION, ntsecuritycon.FILE_ALL_ACCESS, sid)
         win32security.SetNamedSecurityInfo(
             str(path),
             win32security.SE_FILE_OBJECT,

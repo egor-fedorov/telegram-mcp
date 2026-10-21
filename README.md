@@ -23,8 +23,8 @@ telegram-mcp configure
 telegram-mcp status
 ```
 
-These examples target release 0.2.0. Until that version is available on PyPI, use the
-[source setup](#run-from-source).
+These examples target release 0.2.0; check [PyPI](https://pypi.org/project/telegram-context-mcp/)
+for published versions. Use the [source setup](#run-from-source) for unreleased revisions.
 
 Obtain `api_id` and `api_hash` from [my.telegram.org](https://my.telegram.org), then
 enter them in the local login prompt with your phone number, login code, and any 2FA

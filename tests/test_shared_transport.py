@@ -67,19 +67,50 @@ def test_http_token_persists_and_has_private_permissions(tmp_path: Path) -> None
     assert len(first) == 43
     assert load_token(path, create=True) == load_token(path) == first
     if sys.platform == "win32":
-        import win32security
-
-        descriptor = win32security.GetFileSecurity(
-            str(path), win32security.DACL_SECURITY_INFORMATION
-        )
-        dacl = descriptor.GetSecurityDescriptorDacl()
-        assert dacl.GetAceCount() == 1
-        assert descriptor.GetSecurityDescriptorControl()[0] & win32security.SE_DACL_PROTECTED
+        assert_windows_token_acl(path)
     else:
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
         path.chmod(0o644)
         assert load_token(path, create=True) == first
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+def assert_windows_token_acl(path: Path) -> None:
+    if sys.platform == "win32":
+        import ntsecuritycon
+        import win32api
+        import win32security
+
+        process_token = win32security.OpenProcessToken(
+            win32api.GetCurrentProcess(), ntsecuritycon.TOKEN_QUERY
+        )
+        try:
+            expected_sid = win32security.GetTokenInformation(
+                process_token, win32security.TokenUser
+            )[0]
+        finally:
+            process_token.Close()
+        descriptor = win32security.GetFileSecurity(
+            str(path), win32security.DACL_SECURITY_INFORMATION
+        )
+        dacl = descriptor.GetSecurityDescriptorDacl()
+        assert dacl is not None and dacl.GetAceCount() == 1
+        ace = dacl.GetAce(0)
+        assert ace[0] == (win32security.ACCESS_ALLOWED_ACE_TYPE, 0)
+        assert ace[1] == ntsecuritycon.FILE_ALL_ACCESS
+        assert ace[2] == expected_sid
+        assert descriptor.GetSecurityDescriptorControl()[0] & win32security.SE_DACL_PROTECTED
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Requires native Windows security APIs")
+def test_windows_acl_can_be_applied_before_writing_the_token(tmp_path: Path) -> None:
+    path = tmp_path / "token"
+    with path.open("w", encoding="ascii") as stream:
+        # Exercise the raw API so a binding/API mismatch is visible in Windows CI.
+        http_token._protect_windows_token(path)
+        assert_windows_token_acl(path)
+        stream.write("a" * 43)
+    assert load_token(path) == "a" * 43
 
 
 @pytest.mark.parametrize("contents", [None, "", "synthetic-secret", "a" * 1025, "non-ascii: é"])

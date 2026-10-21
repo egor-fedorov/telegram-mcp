@@ -18,7 +18,7 @@ need a detailed contract before implementation; no delivery dates are assigned.
 | M1 | Done | Opt-in public-channel search and recommendations without granting post access |
 | M2 | Done | Forum topics, pins, counters, reactions, polls, and bounded selected-album retrieval |
 | R1 | Done | Domain/application/adapter layers and explicit dependencies, preserving all 14 tools |
-| R2 | Implemented; release pending | Installable 0.2.0 package, Windows support, shared local HTTP process, client guides, and release automation |
+| R2 | Implemented | Installable 0.2.0 package, Windows support, shared local HTTP process, client guides, and release automation |
 | M3 | Planned after R2 | Selected attachment downloads with size limits and delivery to the calling client |
 | M4 | Planned after M3 | New messages and available changes, persistent checkpoints, and source-linked export |
 
