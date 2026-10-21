@@ -15,11 +15,11 @@ from telethon import TelegramClient, errors, functions, types, utils
 
 from telegram_mcp.backend import Batch, DiscoveryBatch, TopicBatch, TopicOffset
 from telegram_mcp.config import Settings
+from telegram_mcp.message_metadata import normalize_entities, normalize_poll, normalize_reactions
 from telegram_mcp.models import (
     Attachment,
     Chat,
     ContentType,
-    Entity,
     Folder,
     ForumTopic,
     ForwardOrigin,
@@ -277,12 +277,7 @@ def normalize_message(raw: Any, chat: Chat) -> Message:
         text=text,
         text_total_length=len(text),
         content_type=content,
-        entities=[
-            Entity(
-                type=type(e).__name__, offset=e.offset, length=e.length, url=getattr(e, "url", None)
-            )
-            for e in getattr(raw, "entities", None) or []
-        ],
+        entities=normalize_entities(getattr(raw, "entities", None)),
         reply_to=MessageRef(chat_id=reply_chat, message_id=reply_mid) if reply_mid else None,
         thread_ref=MessageRef(chat_id=thread_chat, message_id=top_mid) if top_mid else None,
         topic_id=topic_id,
@@ -290,6 +285,11 @@ def normalize_message(raw: Any, chat: Chat) -> Message:
         attachments=attachments,
         album_id=str(raw.grouped_id) if getattr(raw, "grouped_id", None) else None,
         url=link,
+        view_count=getattr(raw, "views", None),
+        forward_count=getattr(raw, "forwards", None),
+        reply_count=getattr(getattr(raw, "replies", None), "replies", None),
+        reactions=normalize_reactions(getattr(raw, "reactions", None)),
+        poll=normalize_poll(getattr(raw, "media", None)),
     )
 
 

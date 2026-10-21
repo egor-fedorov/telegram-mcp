@@ -103,6 +103,74 @@ class Entity(Model):
     offset: int
     length: int
     url: str | None = None
+    language: str | None = None
+    user_id: str | None = None
+    document_id: str | None = None
+    collapsed: bool | None = None
+    date: AwareDatetime | None = None
+    relative: bool | None = None
+    short_time: bool | None = None
+    long_time: bool | None = None
+    short_date: bool | None = None
+    long_date: bool | None = None
+    day_of_week: bool | None = None
+    old_text: str | None = None
+
+
+class FormattedText(Model):
+    text: str
+    entities: list[Entity] = Field(default_factory=list)
+
+
+class ReactionCount(Model):
+    type: Literal["emoji", "custom_emoji", "paid", "empty", "unknown"]
+    emoji: str | None = None
+    document_id: str | None = None
+    count: int = Field(ge=0)
+    is_chosen: bool | None = None
+    chosen_order: int | None = Field(default=None, ge=0)
+
+
+class ReactionSummary(Model):
+    is_min: bool = False
+    reactions_as_tags: bool = False
+    results: list[ReactionCount] = Field(default_factory=list)
+
+
+class PollOption(Model):
+    option_id: str
+    text: FormattedText
+
+
+class PollAnswerResult(Model):
+    option_id: str
+    voter_count: int | None = Field(default=None, ge=0)
+    is_chosen: bool | None = None
+    is_correct: bool | None = None
+
+
+class PollResults(Model):
+    is_min: bool = False
+    total_voters: int | None = Field(default=None, ge=0)
+    answers: list[PollAnswerResult] | None = None
+    solution: FormattedText | None = None
+
+
+class PollData(Model):
+    id: str
+    question: FormattedText
+    answers: list[PollOption]
+    is_closed: bool = False
+    is_quiz: bool = False
+    public_voters: bool = False
+    multiple_choice: bool = False
+    allows_new_answers: bool = False
+    revoting_disabled: bool = False
+    shuffle_answers: bool = False
+    hide_results_until_close: bool = False
+    close_period_seconds: int | None = Field(default=None, ge=0)
+    closes_at: AwareDatetime | None = None
+    results: PollResults | None = None
 
 
 class Attachment(Model):
@@ -140,6 +208,11 @@ class Message(Model):
     forward_origin: ForwardOrigin | None = None
     attachments: list[Attachment] = Field(default_factory=list)
     album_id: str | None = None
+    view_count: int | None = Field(default=None, ge=0)
+    forward_count: int | None = Field(default=None, ge=0)
+    reply_count: int | None = Field(default=None, ge=0)
+    reactions: ReactionSummary | None = None
+    poll: PollData | None = None
     url: str | None = None
     text_offset: int = 0
     text_total_length: int = 0

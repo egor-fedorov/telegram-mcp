@@ -70,6 +70,10 @@ def create_server(service: Service) -> MCPServer[None]:
             "respect retry_after_seconds before retrying. "
             "Repeat original arguments when continuing a cursor. get_messages supports text_offset "
             "for retrieving truncated text. Entities retain UTF-16 offsets into the original text. "
+            "Messages include available counters, aggregate reactions and poll metadata from "
+            "the retrieved payload, without extra requests or voter/reactor identity lists. "
+            "Unknown counts and unrevealed quiz correctness remain null; counters and results may "
+            "change between calls. Paid reaction counts measure Stars, not people. "
             "Channel discovery returns bounded, nonexhaustive metadata with no cursor. "
             "Retry temporary discovery failures after any reported wait. "
             "Discovery permission does not grant permission to read candidate posts. "
@@ -281,10 +285,13 @@ def create_server(service: Service) -> MCPServer[None]:
     ) -> MessageResult:
         """Fetch posts by Telegram URL, 'chat_id:message_id', or {chat_id, message_id}.
 
-        Includes authors, reply references, attachments and original links. Missing messages
-        produce individual issues with zero-based input_index. Input order and duplicates are
-        preserved. For truncated text call again with next_text_offset. Public channels outside
-        the allowlist require allow_public_channel_reads; linked discussions need ordinary access.
+        Includes authors, reply references, attachments, original links, available counters,
+        aggregate reactions and polls. Unknown counts/results remain null; no extra requests
+        are made for metadata or voter/reactor identities. Polls retain content_type="other".
+        Missing messages produce individual issues with zero-based input_index. Input order and
+        duplicates are preserved. For truncated text call again with next_text_offset.
+        Public channels outside the allowlist require allow_public_channel_reads;
+        linked discussions need ordinary access.
         """
         return await service.get_messages(refs, text_offset, text_limit)
 

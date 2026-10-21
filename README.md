@@ -22,7 +22,7 @@ See [ROADMAP.md](ROADMAP.md) for the development plan and the next stage.
 | `get_history` | Chat or forum-topic history over a time range, in either order |
 | `list_topics` | Forum topics with navigation references, optional title query, and pagination |
 | `get_pinned_messages` | Chat-wide or forum-topic pinned messages, newest first |
-| `get_messages` | Messages by links/IDs with authors, dates, and attachment metadata |
+| `get_messages` | Messages by links/IDs with authors, dates, attachments, counters, reactions, and polls |
 | `get_context` | Messages before/after an anchor and a chain of parent replies |
 | `get_thread` | Comments on a channel post or replies in a group thread |
 
@@ -231,6 +231,57 @@ in `post_author`. Information about the source of a saved forward is stored sepa
 `saved_from_ref`, `saved_from_sender_id`, `saved_from_name`, and `saved_at`.
 Unknown fields are `null`; no additional requests are made to forwarding sources.
 
+### Read message counters, reactions, and polls
+
+All message-returning tools include available metadata from the same Telegram message
+payload. This also applies to context, replies, selected-topic history, and pins.
+No additional requests are made for counters, reactions, poll results, or participant
+identities. The tools do not vote, react, send Stars, or mark messages read.
+
+| Message field | Meaning |
+| --- | --- |
+| `view_count` | Telegram's message view count, or `null` when unavailable |
+| `forward_count` | Telegram's message forward count, or `null` when unavailable |
+| `reply_count` | Telegram's reply/comment count, or `null` when unavailable |
+| `reactions` | Aggregate reaction entries and their `is_min` flag, or `null` |
+| `poll` | Poll definition and available result metadata, or `null` |
+
+An explicit count of `0` is retained; missing counts are never inferred as zero.
+Counters, reactions and poll results can change between calls. Their presence does not
+grant access to linked comments or other messages.
+
+`reactions.results` contains each reaction's `type` and `count`. Standard emoji use
+`type="emoji"` and `emoji`; custom emoji use `type="custom_emoji"` and a string
+`document_id`. Paid reactions use `type="paid"`: their count measures **Stars, not
+people**. Unsupported and empty reaction types retain their counts without inventing
+an emoji. `is_chosen` and `chosen_order` describe the current account's selection only
+when Telegram supplies a full result for an ordinary or custom emoji. An `is_min=true`
+summary is partial: its personal selection fields remain `null`. Paid reactions also
+leave personal selection fields `null`. `reactions_as_tags=true` identifies reactions
+used as Saved Messages tags. Reactor lists are not returned.
+
+`poll` contains a string `id`, formatted `question`, ordered `answers`, state flags,
+and optional `close_period_seconds` and `closes_at`. Each answer has formatted `text`
+and an `option_id`: a lowercase hexadecimal encoding of Telegram's opaque option bytes.
+Use this ID to match results to options; titles and positions are not stable identifiers.
+Polls keep `content_type="other"` for compatibility with existing filters.
+
+`poll.results` is `null` when unavailable. When present, it contains `is_min`, optional
+`total_voters`, an optional `answers` result vector, and an optional formatted `solution`.
+The result vector is kept separate from the poll's option list: `null` means the vector
+was absent, while `[]` means Telegram supplied an empty vector. Each entry keeps its
+`option_id`, nullable `voter_count`, `is_chosen`, and `is_correct`; do not infer zero votes
+for options absent from the result. An `is_min=true` result leaves `is_chosen` unknown.
+Quiz correctness remains `null` until Telegram reveals a correct answer; ordinary polls
+have no quiz correctness. `public_voters` describes the poll's setting but does not expose
+voter identities. Recent voters, reactors, reply participants, and answer authors are
+not included in this metadata.
+
+Formatted poll text retains original Telegram entities, including their UTF-16 offsets
+and available attributes such as URLs or custom emoji IDs. Message text continuation
+through `next_text_offset` changes only the returned message-text slice; counters,
+reactions, polls and original entities are preserved.
+
 ### Navigate forum topics and pinned messages
 
 `list_topics(chat_ref, query=None, limit=30, cursor=None)` lists topics in a permitted
@@ -354,9 +405,9 @@ make check
 
 This runs Ruff format/check, `ty check`, and pytest. Tests use no account and make no
 requests to Telegram. They cover public-channel discovery, topic navigation, selected-topic
-history (including General), chat-wide and topic-specific pins, folders, pagination,
-dates, context, access, Telethon structures, configuration, and the actual MCP protocol,
-including a separate STDIO process.
+history (including General), chat-wide and topic-specific pins, counters, reactions,
+polls, folders, pagination, dates, context, access, Telethon structures, configuration,
+and the actual MCP protocol, including a separate STDIO process.
 Both modern MCP mode and compatibility with the initialize handshake are tested.
 
 GitHub Actions runs the same checks on pull requests and pushes to `main`, using
@@ -378,7 +429,8 @@ rights to Telegram content retrieved through the server.
 ## First-version boundaries
 
 Reading cloud chats, discovering public channels, forum topic navigation, selected-topic
-history, and chat-wide or topic-specific pinned-message retrieval are implemented.
+history, chat-wide or topic-specific pinned-message retrieval, and message counters,
+aggregate reactions and poll metadata are implemented.
 Automatic joining, paid requests, sending, attachment downloads, voice transcription,
 folder management, and a semantic index remain possible extensions.
 Attachments are represented by metadata.
@@ -394,5 +446,7 @@ also apply to data obtained through the API.
 - [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk)
 - [Codex MCP](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)
 - [Telegram folders](https://core.telegram.org/api/folders)
+- [Telegram message reactions](https://core.telegram.org/constructor/messageReactions)
+- [Telegram polls](https://core.telegram.org/api/poll)
 - [Telegram Desktop folder matching](https://github.com/telegramdesktop/tdesktop/blob/dev/Telegram/SourceFiles/data/data_chat_filters.cpp)
 - [ty](https://docs.astral.sh/ty/)

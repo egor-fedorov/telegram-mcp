@@ -35,8 +35,12 @@ access revocation, and temporary-failure recovery.
 
 M2.2 adds optional topic selection to history and pinned-message retrieval, including
 General, with fresh topic checks and preserved message membership. `make check`
-passed with 490 offline tests. Live Telegram validation remains separate. M2 remains
-in progress; the next PR is M2.3, available counters, reaction summaries, and poll data.
+passed with 490 offline tests. Live Telegram validation remains separate.
+
+M2.3 preserves available message counters, aggregate reactions, and formatted poll
+definitions/results without additional requests. `make check` passed with 546 offline
+tests, including native Telegram payloads and both MCP modes. M2 remains in progress;
+the next PR is M2.4, retrieval of the messages in a selected album.
 
 The row order expresses priority, not a restriction on independent work. “Planned”
 means an agreed direction, not a complete technical specification.
@@ -178,7 +182,7 @@ four work items meet their acceptance criteria.
 
 - [x] M2.1 — List forum topics and retrieve chat-wide pinned messages.
 - [x] M2.2 — Read a selected topic's history, including General, and filter pins by topic.
-- [ ] M2.3 — Preserve available message counters, reaction summaries, and poll data.
+- [x] M2.3 — Preserve available message counters, reaction summaries, and poll data.
 - [ ] M2.4 — Retrieve the messages of a selected album using its original grouping.
 
 Keep STDIO, the MCP → Service → Backend boundary, and the locked dependencies.
@@ -338,14 +342,99 @@ Primary references: [forum semantics](https://core.telegram.org/api/forum),
 [reply headers](https://core.telegram.org/constructor/messageReplyHeader), and
 [TDLib forum history](https://github.com/tdlib/td/blob/master/td/telegram/MessagesManager.cpp).
 
-### M2.3–M2.4 acceptance boundaries
+### M2.3: Counters, reaction summaries, and polls
+
+Extend the existing `Message` output; keep all 13 tools, their arguments, read
+permissions, and the existing content-type filters. Poll messages retain
+`content_type="other"` and gain a structured `poll` payload.
+
+| Field | Contract |
+| --- | --- |
+| `view_count` | Telegram's available view counter; `null` when absent |
+| `forward_count` | Telegram's available forward counter; `null` when absent |
+| `reply_count` | The supplied reply/comment total; `null` without reply metadata |
+| `reactions` | A nullable `ReactionSummary` with native-order counts and reduced-result status |
+| `poll` | Nullable poll definition, formatted options, and available results |
+
+Counters are nonnegative integers. Preserve known zero separately from unknown;
+never derive totals from recent-user lists, sum option votes to invent a voter total,
+or make additional requests to populate missing data. Reply metadata does not grant
+access to a linked discussion or trigger a read of that chat.
+
+`ReactionSummary` has `is_min`, `reactions_as_tags`, and `results`. The tags flag
+distinguishes Saved Messages labels from ordinary reactions. Each result carries a
+reaction `type`
+(`emoji`, `custom_emoji`, `paid`, `empty`, or `unknown`), optional `emoji` or string
+`document_id`, `count`, nullable `is_chosen`, and nullable `chosen_order`. An absent
+summary is `null`; a present empty result list remains `[]`. Reduced (`is_min=true`)
+data has unknown personal selection. Full emoji/custom-emoji rows preserve selection
+and its order, including order zero. Paid, empty, and unknown reaction types leave
+personal selection unknown. Paid reaction counts represent Stars rather than people;
+do not report a combined number of reacting users.
+
+`PollData` carries a string ID, `question: FormattedText`, native-order `answers`,
+closed/quiz/public-voter/multiple-choice flags, open-answer/revoting/shuffle/hidden-result
+flags, optional closing interval/date, and nullable `results`. Every answer has
+`option_id` and formatted `text`. Encode opaque Telegram option bytes as lowercase hex,
+including empty or non-UTF-8 values; never use option position or text as identity.
+IDs are meaningful within the poll. Preserve duplicate labels and result rows whose
+option is not present in the supplied definition.
+
+`PollResults` has `is_min`, nullable `total_voters`, nullable `answers`, and nullable
+formatted `solution`. Each answer result retains `option_id`, nullable `voter_count`,
+nullable `is_chosen`, and nullable `is_correct`. Missing results and an empty result
+vector are distinct; no missing option row or count becomes zero. Reduced results
+withhold current-user selection. Quiz correctness is unknown until Telegram reveals
+it; a reported correct option establishes revealed results, while non-quiz polls
+have no correctness value. Preserve absent versus empty solution text.
+
+`FormattedText` preserves text and entities with their original UTF-16 offsets.
+The shared `Entity` contract also preserves available formatting payloads: URLs,
+preformatted language, mention/custom-emoji IDs as strings, blockquote state,
+formatted-date values/flags, and replacement text. Use the same mapper for message
+bodies, poll questions, options, and solutions. Existing `text_offset`, clipping,
+and `next_text_offset` continue to apply to `Message.text`; formatted poll fields
+are separate metadata and remain intact.
+
+Normalize only fields already present in message responses. No view-counter updates,
+reaction lists, poll-result refreshes, voting, reacting, paid requests, or background
+tracking are introduced. Omit embedded recent replier/reactor/voter lists, paid-reactor
+leaderboards, and option-author identities as well as any access hashes. Poll media
+attachments and detailed voter/statistics APIs remain outside this step. Metadata
+can change between requests; this does not provide a historical engagement snapshot.
+
+Acceptance checks:
+
+1. Raw Telegram fixtures distinguish missing counters from zero and preserve available
+   views/forwards/replies without reading linked discussions or actor lists.
+2. Reaction tests cover emoji/custom/paid/empty/unknown types, native order, absent and
+   empty summaries, chosen order zero, and reduced results without invented selection.
+3. Poll tests cover regular and quiz polls, open/closed and hidden results, formatted
+   Unicode text, arbitrary binary IDs, reordered/orphan results, absent versus empty
+   vectors/solutions, and unknown versus zero vote counts.
+4. Shared entity conversion preserves source offsets and type-specific payloads. Original
+   message text, source links, dates, forwarding/reply/topic metadata, and attachments
+   remain compatible. No actor identity lists or access hashes enter the new fields.
+5. Existing message retrieval paths expose the same fields, including clipping and
+   text continuation. Actual MCP schemas/dispatch work in both modes without new tools,
+   argument changes, additional RPCs, or a new `poll` content-type filter.
+6. README, MCP descriptions, and roadmap are updated; `make check` and GitHub `checks`
+   pass without a Telegram account. Live validation remains a separate task.
+
+Primary references: [message fields](https://core.telegram.org/constructor/message),
+[reply counters](https://core.telegram.org/constructor/messageReplies),
+[reaction summaries](https://core.telegram.org/constructor/messageReactions),
+[reaction counts](https://core.telegram.org/constructor/reactionCount),
+[paid reactions](https://core.telegram.org/api/reactions#paid-reactions),
+[polls](https://core.telegram.org/constructor/poll),
+[poll answers](https://core.telegram.org/constructor/pollAnswer),
+[poll results](https://core.telegram.org/constructor/pollResults), and
+[answer results](https://core.telegram.org/constructor/pollAnswerVoters).
+
+### M2.4 acceptance boundaries
 
 Before each remaining PR, finalize its exact model and tool schemas in this document.
 
-- **Rich metadata:** read counters, reaction summaries, and poll questions/options/results
-  from already returned Telegram objects. Unknown values remain `null`; zero is a known
-  value. Preserve formatted question/answer text and stable option identifiers. Do not
-  fetch voter/reactor identities or perform extra requests for every message.
 - **Albums:** use `album_id` with the chat ID, never globally. Return original messages
   in message order, preserving each caption, attachment, and source link. Bound scans
   and response size; explicitly report unavailable items or uncertain completeness.
