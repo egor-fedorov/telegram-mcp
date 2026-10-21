@@ -108,3 +108,23 @@ boundaries, shared runtime, concurrent connection, cancellation and login cleanu
 
 Run `make check` and require GitHub CI before squash merge. All automated validation is
 offline; live Telegram checks remain a separate task using user-selected sources.
+
+## R2: Shared local transport
+
+R2 retains these layer boundaries and adds transport composition around the same
+application facade. Standalone STDIO still owns its application/runtime. The optional
+foreground HTTP process owns one facade, Telegram runtime, read policy, and cursor
+store for all connected local clients. Tool calls coordinate access to that shared
+state. Client disconnects do not close the application; server shutdown does.
+
+The `connect` command is a STDIO-to-HTTP adapter. It reads the configured loopback
+endpoint and token file without opening the Telegram session. It does not start a
+server or fall back to standalone operation. Bearer authentication protects the
+local endpoint; all accepted clients share the same user trust boundary, rather
+than receiving separate account permissions or cursor namespaces.
+
+Session leases use portable locking on Windows, macOS, and Linux. Private-file
+handling uses POSIX modes where applicable and the user's filesystem ACLs on
+Windows. These transport and platform changes do not introduce new Telegram tools,
+attachment downloads, persistent cursors, or multiple account profiles. See
+[configuration](configuration.md) and [client setup](clients.md) for operational details.

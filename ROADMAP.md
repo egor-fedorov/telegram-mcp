@@ -1,572 +1,95 @@
 # Telegram MCP roadmap
 
-The project aims to provide general-purpose Telegram access for agents: discovering
-sources, retrieving original messages and files, tracking changes, and optionally
-acting on behalf of the user. Job searches, news research, and work conversations
-use the same tools; the calling agent performs content analysis.
+The project aims to provide general-purpose Telegram access for agents: discover sources,
+retrieve original messages and files, and later track changes. The calling agent
+performs content analysis. Reading, downloading, writing, and administration remain
+separate capabilities with separate permissions.
 
-This document records priorities, milestone scope, and acceptance criteria.
-Planned milestones will be refined before implementation.
-No delivery dates have been assigned. See [README](README.md) for current features
-and setup instructions.
+This file tracks priorities and delivery status. Completed implementation contracts
+are preserved in [docs/specs](docs/specs/README.md); current behavior is described in
+[usage](docs/usage.md) and [configuration](docs/configuration.md). Planned milestones
+need a detailed contract before implementation; no delivery dates are assigned.
 
 ## Milestones
 
-| ID | Status | Outcome | Dependencies |
-| --- | --- | --- | --- |
-| M0 | Done | Reliable retrieval: channel references, explicit public-channel access, batched messages, recovery from temporary failures, and fresh authorization status | Base MCP server |
-| M1 | Done | Public-channel discovery and similar sources, followed by existing retrieval tools | M0 |
-| M2 | Done | Forum topic and pinned-message navigation; richer message data, including albums, reactions, polls, and available counters | M0 |
-| R1 | Done | Layered architecture, explicit dependencies and preserved MCP/CLI contracts | M2; before M3 |
-| M3 | Planned | Downloading selected attachments with size limits and file delivery to the calling client | M0; use album structure from M2 |
-| M4 | Planned | New messages and available changes, persistent checkpoints, and export with source references | M0; M2–M3 for their respective content types |
-
-M0 was implemented in commit `b167044`. At that checkpoint, `make check` passed:
-Ruff format/check, ty, and 110 offline tests. This completion record does not include
-validation against a live Telegram account.
-
-M1 adds the two discovery tools, an independent opt-in permission, compact metadata,
-and MCP error propagation with retry delays. `make check` passed with 225 offline
-tests, including both MCP modes and existing retrieval contracts. Live Telegram
-validation remains separate.
-
-M2.1 adds forum topic listings and chat-wide pinned-message retrieval. `make check`
-passed with 325 offline tests, including both MCP modes, native topic pagination,
-access revocation, and temporary-failure recovery.
-
-M2.2 adds optional topic selection to history and pinned-message retrieval, including
-General, with fresh topic checks and preserved message membership. `make check`
-passed with 490 offline tests. Live Telegram validation remains separate.
-
-M2.3 preserves available message counters, aggregate reactions, and formatted poll
-definitions/results without additional requests. `make check` passed with 546 offline
-tests, including native Telegram payloads and both MCP modes.
-
-M2.4 adds bounded retrieval of selected album members, preserving original messages
-and explicitly reporting uncertain completeness. `make check` passed with 665 offline
-tests. M2 is complete. R1 prepares the architecture before M3, selected attachment
-downloads with size limits and client delivery. The detailed M3 contract will be
-finalized before work starts. Live Telegram validation remains separate.
-
-R1 separates domain contracts, application use cases and ports, concrete adapters, and
-bootstrap wiring. `make check` passed with 684 offline tests, including the unchanged
-schemas of all 14 MCP tools in both modes, layer boundaries, and lifecycle cleanup.
-M3 is next; its detailed attachment-delivery contract remains to be agreed.
-
-The row order expresses priority, not a restriction on independent work. “Planned”
-means an agreed direction, not a complete technical specification.
-
-## M1: Public-channel discovery and similar sources
-
-### Goal and user workflow
-
-An agent searches for candidate sources, presents their names and links, and checks
-posts from selected channels through the existing retrieval tools. It can expand
-the selection by requesting channels similar to a specific public source.
-
-Example: search for channels on a topic → select candidates → read their posts from
-the past week → compare the sources with links to original messages. The calling
-agent evaluates relevance and writes recommendations.
-
-### New tools
-
-| Tool | Input | Behavior |
+| ID | Status | Outcome |
 | --- | --- | --- |
-| `search_public_channels` | `query: str`, `limit: int = 20` | Search Telegram entities and return only public broadcast channels |
-| `get_similar_channels` | `chat_ref: str`, `limit: int = 20` | Return similar public channels for one explicitly specified public channel |
-
-- `limit` ranges from 1 to 100, matching existing tools.
-- `query` must be nonempty after trimming whitespace and contain at most 1,000
-  characters. Do not invent a minimum length beyond that: translate Telegram's
-  rejection of a short query into a clear argument error.
-- `chat_ref` is required and uses the shared ID, username, and channel-link resolver.
-  Preserve the suggestion to use a username or link when a numeric ID is unknown.
-  Personalized recommendations without a source channel are outside M1.
-- Return compact metadata: ID, title, active username, public URL, and participant
-  count only when supplied by Telegram. An unknown count is `null`, not zero.
-  Do not populate unknown mute, unread, or folder state using defaults from the
-  dialog-oriented `Chat` model.
-- Return the actual number of results. For recommendations, also preserve Telegram's
-  total count when available and indicate local truncation by `limit` separately.
-  Telegram's count is not the size of a complete directory of matching channels.
-- Neither tool has a cursor. Do not promise exhaustive coverage of Telegram.
-
-### Access policy and scope
-
-Add `allow_public_channel_discovery = false` to configuration, the local `configure`
-command, the example configuration, and `get_status`. When disabled, the new tools
-return `FEATURE_DISABLED` before contacting Telegram, regardless of
-`allow_all_chats` or `allow_public_channel_reads`.
-
-Discovery and retrieval permissions are independent:
-
-- `allow_public_channel_discovery` permits candidate metadata retrieval.
-- The existing read policy (`allow_all_chats`, allowlists, or
-  `allow_public_channel_reads`) governs message retrieval.
-- Discovering a channel does not add it to the allowlist or expand `list_chats`,
-  message searches without explicit sources, or access to linked discussions.
-
-Only accessible public broadcast channels with a primary or active additional
-username are eligible. Exclude users, bots, groups, private channels, and forbidden
-channels. Validate the source of similar-channel recommendations using fresh
-metadata. Existing M0 access checks still apply before reading a discovered channel.
-
-M1 does not include public-group discovery, global post search, joining channels,
-sending messages, paid requests, automatic candidate-post retrieval, a local archive,
-or a semantic index.
-
-### Implementation approach
-
-Preserve the MCP → Service → Backend → Telethon boundary:
-
-- The backend calls `contacts.SearchRequest(..., broadcasts=True)` and
-  `channels.GetChannelRecommendationsRequest`, converting TL objects into independent
-  models. It verifies the real channel type, broadcast/supergroup flags, and public
-  username before producing a public-channel result. Both requests have been
-  verified in the pinned Telethon 1.45.0 package;
-  no dependency upgrade is planned for this milestone.
-- The service validates settings and arguments, deduplicates by ID, and applies
-  the limit. The MCP adapter defines the tools,
-  schemas, and documented restrictions.
-- For search, traverse peers from `my_results` and `results` in their returned order,
-  resolving them through the `chats` metadata. Validate channel type and public
-  visibility even when a server-side filter is used.
-- Use metadata already present in the response instead of fetching full details for
-  every candidate. Validate a recommendation source under the discovery policy,
-  without calling `Service.get_chat`, which requires retrieval permission.
-- Filtering may leave fewer than `limit` results; do not silently issue additional
-  searches to fill the result. For recommendations, apply `limit` locally because
-  the underlying request has neither `limit` nor `offset`.
-- Preserve server-limited recommendation results without trying to bypass the limit.
-  A missing count does not imply zero results or exhaustive coverage.
-- Reuse existing timeouts, error classification, and FloodWait handling. On temporary
-  failure, return its cause and any retry delay; the caller retries with a new tool
-  call. Do not disguise failures as empty results.
-- At the MCP boundary, expose expected domain errors as JSON in error text, including
-  `code`, `message`, and an optional `retry_after_seconds`. Keep unexpected failures
-  redacted by the SDK. This applies consistently to discovery and retrieval tools.
-
-Primary references: [entity search](https://core.telegram.org/method/contacts.search),
-[similar channels](https://core.telegram.org/api/recommend), and
-[channel fields](https://core.telegram.org/constructor/channel).
-[Global post search](https://core.telegram.org/api/search#posts-tab) has separate
-capabilities and constraints and is outside this milestone.
-
-### Work items
-
-- [x] M1.1 — Result models, backend interfaces, and Telethon requests.
-- [x] M1.2 — Discovery policy, configuration, CLI, and the two MCP tools.
-- [x] M1.3 — Offline tests, including real MCP protocol dispatch.
-- [x] M1.4 — README, example configuration, `enabled_tools`, and a
-  “discover → select → read” example; complete `make check`.
-
-### Acceptance criteria
-
-1. Search and recommendations return IDs and links usable by `get_chat` and
-   `get_history`; original messages remain readable only with retrieval permission.
-2. Disabled discovery makes no Telegram RPCs, including authorization checks,
-   catalog retrieval, or source resolution. Test all combinations of discovery
-   and public-read settings, including discovery without permission to read posts.
-3. Mixed Telegram results are filtered correctly. Cover active additional usernames,
-   unavailable sources, duplicates, and preservation of result order.
-4. Cover empty results, empty and too-short queries, invalid references, boundary
-   values of `limit`, and unknown participant counts.
-5. Cover both recommendation responses, `messages.Chats` and `messages.ChatsSlice`,
-   a total count larger than the available result set, and local truncation.
-6. FloodWait, network, and server failures retain a clear cause. There are no hidden
-   joins, payments, post reads, or access-policy changes.
-7. The existing nine tools remain compatible. New tools have correct MCP schemas
-   and read-only annotations. Their descriptions and the server instructions
-   distinguish bounded discovery results from paginated history retrieval.
-   The full `make check` passes.
-
-Offline tests are required and must not need an account. Any live validation is a
-separate check using public sources selected by the user after local configuration.
-
-## M2: Topic navigation and richer message data
-
-### Goal and delivery order
-
-Help agents navigate a permitted conversation and preserve the structure of its
-messages. Deliver the following work in separate PRs; M2 is complete only when all
-four work items meet their acceptance criteria.
-
-- [x] M2.1 — List forum topics and retrieve chat-wide pinned messages.
-- [x] M2.2 — Read a selected topic's history, including General, and filter pins by topic.
-- [x] M2.3 — Preserve available message counters, reaction summaries, and poll data.
-- [x] M2.4 — Retrieve the messages of a selected album using its original grouping.
-
-Keep STDIO, the MCP → Service → Backend boundary, and the locked dependencies.
-No topic creation, pinning/unpinning, voting, reactions, membership changes,
-attachment downloads, or background synchronization are part of M2.
-
-### M2.1: Topic listings and chat-wide pins
-
-| Tool | Input | Result |
-| --- | --- | --- |
-| `list_topics` | `chat_ref: str`, `query: str \| None = None`, `limit: int = 30`, `cursor: str \| None = None` | A `TopicPage` with forum topic metadata and continuation |
-| `get_pinned_messages` | `chat_ref: str`, `limit: int = 30`, `cursor: str \| None = None` | The existing message `Page`, newest messages first |
-
-Both tools accept the shared numeric ID, username, and channel-link references.
-Limits are 1–100. Topic queries use Telegram's name search, are trimmed, and must
-contain 1–1,000 characters when supplied. An omitted query lists all topics.
-
-Access follows the existing retrieval policy. Topic listings require an ordinary
-allowlisted forum supergroup, a permitted folder, or `allow_all_chats`. Public-channel
-read and discovery settings do not authorize groups. Add `Chat.is_forum` for supported
-ordinary forum supergroups; bot forums and monoforums remain outside this step.
-Chat-wide pins may use the explicit public broadcast-channel read exception.
-Linked discussions retain their independent permissions.
-
-`ForumTopic` includes its ID and chat ID, available title and creation time, General,
-closed/hidden/pinned state, icon metadata, unread count, and source references.
-`root_message_ref` identifies the topic-creation message for ordinary topics;
-General (`id=1`) has `root_message_ref=null` and `url=null`. `top_message_ref` identifies the
-last message when known. Use `get_messages` for these message references and
-`get_thread` for ordinary topic roots. Dedicated General-topic history is M2.2.
-
-`TopicPage` contains `topics`, `next_cursor`, `scope`, `issues`,
-`telegram_total_count`, and the Telegram order mode (`creation_date` or
-`last_message_date`). Preserve Telegram's order and deduplicate topic IDs during
-one traversal. Deleted topics retain only their known identity and deletion flag.
-Reduced topic records expose only trustworthy fields; other fields remain `null`.
-Do not fetch details or message content separately for every topic.
-
-Use the pinned Telethon `messages.GetForumTopicsRequest`. Maintain all three native
-offsets: date, last message ID, and topic ID. The response's `order_by_create_date`
-flag determines whether the offset date comes from the topic or its last message.
-Match that last message by both peer and ID. A short page is not proof of exhaustion;
-continue until an empty native page. If a safe continuation cannot be derived from
-the final topic, report `PAGINATION_INCOMPLETE` and do not claim complete coverage.
-
-One topic-list call fetches at most one native topic page. Cursors bind the original
-selector and query to the canonical chat ID; changing `limit` is allowed. Revalidate
-access and forum status before releasing any stored buffer. Temporary failures retain
-the position and a cursor, honor FloodWait without sleeping, and clear on a successful
-retry. Permanent errors remain visible. Repeated offsets or a changed order mode
-terminate with an explicit incomplete result. Topic titles, ordering, and pin membership
-can change during traversal; this is not a transactional snapshot.
-
-Chat-wide pinned-message reads use `InputMessagesFilterPinned` and reuse existing
-message normalization, text budgets, source links, pagination, and retry handling.
-Do not combine Telethon's `reply_to` iterator with this filter: topic-scoped pin
-queries require a separate implementation in M2.2.
-
-Acceptance checks:
-
-1. Raw Telegram fixtures cover both topic order modes, multi-page and short-page
-   traversal, shuffled top messages, General, deleted/reduced records, missing cursor
-   metadata, and rejection of foreign-peer data.
-2. Cursors preserve order and identity, tolerate a changed page size, stop on a
-   non-advancing offset, and cannot bypass access revocation or a changed forum type.
-3. FloodWait and connection/server failures preserve retryable state; calls during
-   the cooldown make no premature page request. Saved checkpoints remain reusable
-   after a failed catalog or access check.
-4. Pins return only pinned messages, preserve original text/entities/links, support
-   multiple pages and recovery, and follow ordinary or explicit-public read permissions.
-5. The MCP tools have read-only annotations and validated schemas in both protocol
-   modes. Existing tools remain compatible; README and `enabled_tools` are updated.
-   `make check` and the PR's GitHub `checks` job pass without a Telegram account.
-
-Primary references: [forum behavior](https://core.telegram.org/api/forum),
-[topic pagination](https://core.telegram.org/constructor/messages.forumTopics),
-[topic fields](https://core.telegram.org/constructor/forumTopic), and
-[pinned-message filter](https://core.telegram.org/constructor/inputMessagesFilterPinned).
-
-### M2.2: Selected-topic history and pins
-
-Extend the existing tools without changing their default behavior or adding tools:
-
-| Tool | New input | Result |
-| --- | --- | --- |
-| `get_history` | `topic_id: int \| None = None` | The selected forum topic's history over the existing date interval and order |
-| `get_pinned_messages` | `topic_id: int \| None = None` | Pinned messages in the selected forum topic, newest first |
-
-An omitted `topic_id` keeps chat-wide retrieval. When supplied, it must be an integer
-from 1 to 2,147,483,647; booleans, strings, and fractional values are rejected.
-`get_history` retains its exactly-one-of-`chat_id`/`chat_ref` rule and existing positional
-arguments. `get_pinned_messages` retains its required `chat_ref`. General is topic `1`;
-other topic IDs come from `list_topics`.
-
-Add optional `Page.topic_id` to identify the selected topic and `Message.topic_id` to
-preserve the message's topic when supported forum metadata makes it known. A topic ID
-is scoped to its chat, not a global identifier. General does not imply a root-message
-reference to message `1`. Preserve actual reply references and creation/service messages
-returned by Telegram; do not fetch or fabricate a root merely to populate history.
-
-Before each selected-topic call, including continuation, require ordinary read access,
-refresh chat metadata, verify a supported forum supergroup, and resolve the exact topic
-with `messages.GetForumTopicsByIDRequest`. A missing, deleted, or mismatched topic returns
-`TOPIC_UNAVAILABLE`; a non-forum returns `FORUM_UNAVAILABLE`. Closed or hidden topics
-remain readable if Telegram allows them. Public-channel discovery/read settings do not
-authorize forum groups. Failed access or topic checks release no saved buffer, and a
-previous cursor remains reusable after a temporary failure.
-
-Use raw `messages.GetRepliesRequest` with the selected topic ID for history, including
-General. This matches TDLib's forum-topic history handling; it does not treat General
-as an ordinary reply thread to message `1`. For pins, use `messages.SearchRequest` with
-`top_msg_id` and `InputMessagesFilterPinned`. Do not combine Telethon's `reply_to` iterator
-with the pin filter, which it ignores. No dependency update is required.
-
-The backend reads at most one native message page per fetch. Preserve existing
-per-call RPC/time limits, text budgets, half-open date intervals, and both history
-orders. Maintain a fixed upper date throughout traversal. A short native page alone
-does not prove exhaustion; advance on trustworthy native message IDs, including
-unavailable-message placeholders, and continue until an empty page or the date boundary.
-Filtered empty pages may retain a cursor. Unsafe or unrelated returned data is omitted
-with an incomplete-result issue instead of expanding the requested scope.
-
-Derive topic membership from the forum flag, creation action, and reply header.
-`reply_to_top_id` identifies an ordinary topic only when the header's `forum_topic`
-flag says so; a General reply may have a normal thread root of its own. Preserve
-the local topic ID when a message replies across chats, and retain the separate
-cross-chat parent reference. Malformed topic headers remain unknown. No parent-message
-lookups are needed to classify a reply, including when its parent is unavailable.
-
-Cursors bind the original selector, canonical chat ID, topic, date interval, and
-order. Page size may change. Page-fetch FloodWait, network, and server failures retain
-the position and continuation; no failed stream is retried in the same call or before
-its wait expires. Clear resolved temporary issues and preserve permanent ones.
-Telegram topic metadata, message membership, and pins can change during traversal;
-this is not a transactional snapshot.
-
-Acceptance checks:
-
-1. Existing chat-wide history, pins, and thread tools remain compatible; both MCP modes
-   expose optional bounded integer topic IDs and reject invalid values before backend calls.
-2. General and ordinary topics return only their own messages/pins. Raw fixtures cover
-   creation events, nested General replies, cross-chat replies, unavailable parents,
-   foreign peers, unknown membership, and original author/text/entity/media data.
-3. Raw request shapes and multi-page traversal cover both history orders, short pages,
-   empty/placeholder pages, date boundaries, fixed upper dates, and non-advancing results.
-4. Access revocation, forum conversion, topic disappearance, and source/topic changes
-   cannot release saved data or redirect a cursor. A failed metadata check leaves the
-   original checkpoint usable; closed/hidden metadata does not disable permitted reads.
-5. Temporary page-fetch failures preserve continuation and ordering without premature
-   FloodWait retries. Text budgets and Unicode continuation remain unchanged.
-6. README and roadmap are updated; `make check` and GitHub `checks` pass offline.
-
-Primary references: [forum semantics](https://core.telegram.org/api/forum),
-[topic lookup](https://core.telegram.org/method/messages.getForumTopicsByID),
-[thread history](https://core.telegram.org/method/messages.getReplies),
-[scoped message search](https://core.telegram.org/method/messages.search),
-[reply headers](https://core.telegram.org/constructor/messageReplyHeader), and
-[TDLib forum history](https://github.com/tdlib/td/blob/master/td/telegram/MessagesManager.cpp).
-
-### M2.3: Counters, reaction summaries, and polls
-
-Extend the existing `Message` output; keep all 13 tools, their arguments, read
-permissions, and the existing content-type filters. Poll messages retain
-`content_type="other"` and gain a structured `poll` payload.
-
-| Field | Contract |
-| --- | --- |
-| `view_count` | Telegram's available view counter; `null` when absent |
-| `forward_count` | Telegram's available forward counter; `null` when absent |
-| `reply_count` | The supplied reply/comment total; `null` without reply metadata |
-| `reactions` | A nullable `ReactionSummary` with native-order counts and reduced-result status |
-| `poll` | Nullable poll definition, formatted options, and available results |
-
-Counters are nonnegative integers. Preserve known zero separately from unknown;
-never derive totals from recent-user lists, sum option votes to invent a voter total,
-or make additional requests to populate missing data. Reply metadata does not grant
-access to a linked discussion or trigger a read of that chat.
-
-`ReactionSummary` has `is_min`, `reactions_as_tags`, and `results`. The tags flag
-distinguishes Saved Messages labels from ordinary reactions. Each result carries a
-reaction `type`
-(`emoji`, `custom_emoji`, `paid`, `empty`, or `unknown`), optional `emoji` or string
-`document_id`, `count`, nullable `is_chosen`, and nullable `chosen_order`. An absent
-summary is `null`; a present empty result list remains `[]`. Reduced (`is_min=true`)
-data has unknown personal selection. Full emoji/custom-emoji rows preserve selection
-and its order, including order zero. Paid, empty, and unknown reaction types leave
-personal selection unknown. Paid reaction counts represent Stars rather than people;
-do not report a combined number of reacting users.
-
-`PollData` carries a string ID, `question: FormattedText`, native-order `answers`,
-closed/quiz/public-voter/multiple-choice flags, open-answer/revoting/shuffle/hidden-result
-flags, optional closing interval/date, and nullable `results`. Every answer has
-`option_id` and formatted `text`. Encode opaque Telegram option bytes as lowercase hex,
-including empty or non-UTF-8 values; never use option position or text as identity.
-IDs are meaningful within the poll. Preserve duplicate labels and result rows whose
-option is not present in the supplied definition.
-
-`PollResults` has `is_min`, nullable `total_voters`, nullable `answers`, and nullable
-formatted `solution`. Each answer result retains `option_id`, nullable `voter_count`,
-nullable `is_chosen`, and nullable `is_correct`. Missing results and an empty result
-vector are distinct; no missing option row or count becomes zero. Reduced results
-withhold current-user selection. Quiz correctness is unknown until Telegram reveals
-it; a reported correct option establishes revealed results, while non-quiz polls
-have no correctness value. Preserve absent versus empty solution text.
-
-`FormattedText` preserves text and entities with their original UTF-16 offsets.
-The shared `Entity` contract also preserves available formatting payloads: URLs,
-preformatted language, mention/custom-emoji IDs as strings, blockquote state,
-formatted-date values/flags, and replacement text. Use the same mapper for message
-bodies, poll questions, options, and solutions. Existing `text_offset`, clipping,
-and `next_text_offset` continue to apply to `Message.text`; formatted poll fields
-are separate metadata and remain intact.
-
-Normalize only fields already present in message responses. No view-counter updates,
-reaction lists, poll-result refreshes, voting, reacting, paid requests, or background
-tracking are introduced. Omit embedded recent replier/reactor/voter lists, paid-reactor
-leaderboards, and option-author identities as well as any access hashes. Poll media
-attachments and detailed voter/statistics APIs remain outside this step. Metadata
-can change between requests; this does not provide a historical engagement snapshot.
-
-Acceptance checks:
-
-1. Raw Telegram fixtures distinguish missing counters from zero and preserve available
-   views/forwards/replies without reading linked discussions or actor lists.
-2. Reaction tests cover emoji/custom/paid/empty/unknown types, native order, absent and
-   empty summaries, chosen order zero, and reduced results without invented selection.
-3. Poll tests cover regular and quiz polls, open/closed and hidden results, formatted
-   Unicode text, arbitrary binary IDs, reordered/orphan results, absent versus empty
-   vectors/solutions, and unknown versus zero vote counts.
-4. Shared entity conversion preserves source offsets and type-specific payloads. Original
-   message text, source links, dates, forwarding/reply/topic metadata, and attachments
-   remain compatible. No actor identity lists or access hashes enter the new fields.
-5. Existing message retrieval paths expose the same fields, including clipping and
-   text continuation. Actual MCP schemas/dispatch work in both modes without new tools,
-   argument changes, additional RPCs, or a new `poll` content-type filter.
-6. README, MCP descriptions, and roadmap are updated; `make check` and GitHub `checks`
-   pass without a Telegram account. Live validation remains a separate task.
-
-Primary references: [message fields](https://core.telegram.org/constructor/message),
-[reply counters](https://core.telegram.org/constructor/messageReplies),
-[reaction summaries](https://core.telegram.org/constructor/messageReactions),
-[reaction counts](https://core.telegram.org/constructor/reactionCount),
-[paid reactions](https://core.telegram.org/api/reactions#paid-reactions),
-[polls](https://core.telegram.org/constructor/poll),
-[poll answers](https://core.telegram.org/constructor/pollAnswer),
-[poll results](https://core.telegram.org/constructor/pollResults), and
-[answer results](https://core.telegram.org/constructor/pollAnswerVoters).
-
-### M2.4: Selected-album retrieval
-
-Add `get_album(ref: str | MessageRef, scan_limit: int = 30) -> AlbumResult`.
-The required reference selects an existing album member using the same Telegram links,
-`chat_id:message_id` strings, or structured references as `get_messages`. `scan_limit`
-is a strict integer from 1 to 100 and bounds each direction independently.
-
-Resolve the canonical chat and check the current retrieval policy before reading the
-anchor. Explicit public-channel access applies only to that chat and request. Do not
-follow linked discussions, replies, forwards, or identically numbered albums in other
-chats. An unavailable anchor yields `MESSAGE_UNAVAILABLE`; an available message without
-an album ID yields `NOT_AN_ALBUM`. Neither case starts a neighborhood scan.
-
-Fetch at most one raw history window before and one after the anchor, each containing
-at most `scan_limit` Telegram rows. Use a dedicated backend operation so Telethon's
-history iterator cannot silently refill the window or discard unavailable placeholders.
-Each attempted direction performs one history RPC, apart from the existing bounded
-transport retries. Do not add content-type or topic filters. The service inspects the
-whole window, retaining only the anchor's canonical chat and album ID; unrelated
-messages can occur between album members. Numeric ID gaps and Telegram's send-time
-album size limit do not establish retrieval completeness.
-
-The result contains:
-
-| Field | Contract |
-| --- | --- |
-| `anchor_ref`, `album_id` | Canonical selected message and its chat-scoped grouping ID |
-| `messages` | Unique original messages, including the anchor, ordered by increasing message ID |
-| `order` | Always `oldest_first`, referring to message order rather than edited timestamps |
-| `completeness` | Always `unknown`; Telegram provides no manifest of the original album |
-| `scan_limit` | Requested maximum raw rows in each direction |
-| `scanned_before`, `scanned_after` | Raw rows examined, including nonmembers and unavailable placeholders |
-| `before_exhausted`, `after_exhausted` | `true` for an observed history end, `false` when the end is not established, `null` for an unfinished/unattempted direction |
-| `issues` | Actual retrieval failures and unavailable-row diagnostics |
-
-Short channel or sliced history responses do not prove exhaustion. Even observed
-ends in both directions cannot establish the original album's size or recover missing
-members. An actual unavailable row may be reported with `MESSAGE_UNAVAILABLE`, but its
-album membership is unknown. Do not invent unavailable members from gaps or assert
-that they were deleted.
-
-Bound the response to at most `1 + 2 * scan_limit` messages (at most 201), 100,000
-message-text characters in total, and 12,000 per message. Preserve each caption,
-attachment, entity, source link, date, and metadata separately; use existing
-`next_text_offset` and `get_messages` for longer text. Do not combine captions into a
-fabricated message or download attachment bytes.
-
-After a scan failure, return the available members with an issue and leave the failed
-direction's exhaustion unknown. A retryable failure also stops subsequent scans in
-that call. There is no album cursor or persistent retry state: repeat the original
-call after any `retry_after_seconds`, rechecking access and rereading the anchor.
-Initial catalog, resolution, access, and anchor failures remain tool errors.
-
-Acceptance checks:
-
-1. Cover anchors at the beginning, middle, and end; sparse and interleaved IDs;
-   duplicate or unordered responses; and identical album IDs in different chats.
-2. Test strict scan bounds, one history RPC per direction, directional offsets,
-   short/empty responses, unavailable rows, unexpected peers, and message-ID boundaries.
-3. Preserve independent captions and all message metadata, including Unicode text
-   continuation and the aggregate text budget, without mutating source messages.
-4. Verify current allowlist/public-channel access, revocation, and no implicit reads
-   of linked sources. Cover unavailable and non-album anchors before scanning.
-5. Preserve partial results and retry delays after FloodWait, network, and server
-   failures without waiting, same-call retries, or false completeness claims.
-6. Add the fourteenth read-only MCP tool, validate both protocol modes, update README
-   and roadmap, and pass `make check` and GitHub `checks` without a Telegram account.
-
-Primary references: [message grouping](https://core.telegram.org/constructor/message),
-[albums and captions](https://core.telegram.org/api/files#albums-grouped-media),
-[history offsets](https://core.telegram.org/api/offsets), and
-[Telethon's warning about interleaved album messages](https://docs.telethon.dev/en/v2/developing/migration-guide.html).
-
-## R1: Layered architecture before attachment downloads
-
-Deliver one focused PR, preserving all 14 MCP tools, their schemas and error behavior,
-CLI commands, local configuration, STDIO and locked dependencies. Internal Python
-imports may change. See [Architecture](docs/architecture.md) for the accepted decision.
-
-- Preserve the pre-refactor MCP schema baseline and the existing behavioral tests.
-- Separate shared contracts/pure rules, application use cases/ports, adapters, and the
-  composition root. Keep Pydantic contracts without a duplicate DTO hierarchy.
-- Split source/access preparation from message pagination; retain distinct topic and
-  album algorithms. Replace universal query flags with typed read requests.
-- Share request-local access policy, injected clocks, retry state and text budgets.
-  Read current policy before each call without exposing credentials to application code.
-- Compose Telegram gateways around one runtime/client and shared entity cache. Preserve
-  connection/authentication, session locking, cleanup and existing RPC behavior.
-- Move local persistence and authentication resource operations out of CLI orchestration.
-  Route MCP shutdown through the application facade.
-- Remove transitional modules, enforce import directions/cycles in CI, and pass full
-  `make check` before the single squash merge. No new Telegram capability is part of R1.
-
-## Later: ideas requiring a separate decision
-
-- Saved searches, local source collections, and unread-message workflows.
-- Selective archives, full-text search, and semantic search with explicit index coverage.
-- Document text extraction, OCR, and audio transcription through optional processors.
-- Scheduled monitoring, notifications, and analytics for selected sources.
-- An optional write mode: drafts, sending and editing messages, scheduled publishing,
-  reactions, folder management, and channel membership changes.
-- An optional administration mode with account-permission checks.
-- Authenticated HTTP, isolated account profiles, and multiple clients sharing one
-  session-owning process per account.
-
-Reading, downloading, sending, and administration must have separate permissions.
-Preserve original content and source links; summaries must not replace originals.
-New capabilities must not require a built-in LLM or a persistent message database
-for basic retrieval.
+| M0 | Done | Reliable references, explicit public reads, batches, recovery, and fresh authorization status |
+| M1 | Done | Opt-in public-channel search and recommendations without granting post access |
+| M2 | Done | Forum topics, pins, counters, reactions, polls, and bounded selected-album retrieval |
+| R1 | Done | Domain/application/adapter layers and explicit dependencies, preserving all 14 tools |
+| R2 | Implemented; release pending | Installable 0.2.0 package, Windows support, shared local HTTP process, client guides, and release automation |
+| M3 | Planned after R2 | Selected attachment downloads with size limits and delivery to the calling client |
+| M4 | Planned after M3 | New messages and available changes, persistent checkpoints, and source-linked export |
+
+The [historical completion records](docs/specs/README.md#historical-completion-records)
+include offline test results. They do not claim live Telegram validation.
+
+## Current stage: R2 — Installation, local sharing, and release 0.2.0
+
+Make the existing tools usable from a published package and several local clients
+without competing for one Telegram session. Deliver the agreed work in one focused
+PR before starting attachment downloads.
+
+- Keep the package name `telegram-context-mcp` and command `telegram-mcp`. Prepare
+  version 0.2.0, `--version`, wheel/source builds, clean-install smoke checks, and
+  pinned `uv tool install`/`uvx` examples.
+- Support Windows, macOS, and Linux on Python 3.12–3.15. Use a portable exclusive
+  session lease, explicit UTF-8 files, and accurate POSIX-permission/Windows-ACL guidance.
+- Preserve `serve` as standalone STDIO. Add explicit foreground
+  `serve --transport http` on `127.0.0.1:8765/mcp`, with a configurable local port and
+  a random bearer token in the user profile.
+- Add `connect` as a STDIO proxy to that existing server. It reads local configuration
+  and the token; it neither starts the server nor falls back to opening a session.
+- Share one account, read policy, and in-memory cursor store across trusted local
+  clients. Preserve tool schemas and semantics, protect shared call/cursor state,
+  and keep the server alive when a client disconnects. This is not tenant isolation.
+- Keep login and configuration local. Local `login`, `configure`, `catalog`, and
+  `status` require the session owner to stop; MCP `get_status` diagnoses the running
+  server. Configuration errors identify their source/field without printing secrets.
+  Enter in `configure` preserves the current values, including `allow_all_chats`.
+- Provide verified client examples for Codex, Claude Desktop, Claude Code, Cursor,
+  and VS Code. Keep a short README and separate usage, configuration, troubleshooting,
+  architecture, security, and release documents.
+- Extend CI with platform/Python tests and distribution checks while retaining the
+  required `checks` job. Review Dependabot PRs manually; its generated `dependabot/`
+  branches are an explicit exception to human branch naming rules.
+- Publish version tags through GitHub OIDC and a PyPI Trusted Publisher. Create the
+  GitHub Release only after successful PyPI publication. See [releasing](docs/releasing.md)
+  for the external publisher setup and exact release procedure.
+
+Completion requires offline `make check`, the CI compatibility/package checks, and
+review of the transport and credential boundaries. Actual PyPI publication additionally
+requires the project name and Trusted Publisher to be configured by its owner; do not
+mark publication complete from repository changes alone. Live Telegram validation is
+separate and uses sources selected by the user.
+
+The implementation is ready for release validation. Publication status is recorded by
+the [Release workflow](https://github.com/egor-fedorov/telegram-mcp/actions/workflows/release.yml)
+and [published releases](https://github.com/egor-fedorov/telegram-mcp/releases).
+
+## Next: M3 — Selected attachment downloads
+
+Use message references and existing attachment/album metadata to select files.
+Before implementation, define size and content limits, temporary-file lifetime,
+resource delivery for both transports, expired Telegram file-reference recovery,
+and behavior for protected or unavailable media. Downloads must enforce current
+source permissions and must not silently fetch whole conversations or archives.
+
+## Later decisions
+
+M4 will define persistent checkpoints and explicit export coverage. Other directions
+remain proposals: saved searches and source collections, local text/semantic indexes,
+OCR or transcription, monitoring and notifications, optional writes or administration,
+and remote access or separately isolated account profiles.
+
+Preserve originals and source links; summaries must not replace them. No basic
+retrieval capability should require a built-in LLM or a persistent message database.
 
 ## Working process
 
-1. Select a bounded work item from the next milestone and clarify its acceptance criteria.
-2. Implement it on a separate Conventional Branch such as `feature/topic-navigation`
-   or `bugfix/cursor-recovery`, preserving existing contracts or explicitly documenting
-   any required change. Use `chore/` for documentation and maintenance work.
-3. Add checks for new behavior, run `make check`, and open a focused pull request to
-   `main` with a Conventional Commits title. Review the diff and GitHub CI results.
-4. Commit agreed changes and update completed roadmap items with the implementation.
-   Squash-merge after the `checks` job passes, then create the next branch from updated
-   `main`. Mark a milestone done only when its acceptance criteria are met.
-5. Before starting the next milestone, add its detailed description here. If task
-   tracking grows, move individual work items to Issues and retain goals, ordering,
-   and issue links in this roadmap.
-
-Track `ROADMAP.md` in Git. Do not include credentials, private conversations, or
-transient execution logs in this document.
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the complete contribution workflow.
+Select a bounded item, finalize its contract, and use a Conventional Branch from the
+latest `main`. Add appropriate offline checks and documentation, open a focused PR,
+wait for the required GitHub `checks` job, and squash-merge. Record completed work
+here and public changes in [CHANGELOG.md](CHANGELOG.md). Archive detailed completed
+specifications instead of growing this status document. See [CONTRIBUTING.md](CONTRIBUTING.md).
