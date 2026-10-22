@@ -20,6 +20,14 @@ in isolated, self-cleaning environments and passed metadata, CLI, STDIO, local H
 and bridge smoke checks. The locked suite used MCP 2.2; fresh installation resolved
 MCP 2.3 and passed the packaging smoke checks.
 
+The first release workflow exposed nondeterministic exact-backoff assertions on
+Windows/Python 3.12: floating-point subtraction could report 38 seconds for a
+37-second wait when the system clock had not advanced. A single rerun reproduced
+the same cause in another test. Both MCP tests now inject the existing fake clock,
+retaining exact delay and no-premature-request assertions. Production retry logic
+is unchanged. The failed attempts published neither PyPI files nor a GitHub Release;
+the unpublished release tag is corrected only after the test fix passes CI.
+
 The offline suite covers permission boundaries, compound search cursors, temporary
 failures, authorization changes, catalog freshness and incremental loading, sparse
 metadata, and all 14 typed MCP tool responses. The live harness has 20 offline tests

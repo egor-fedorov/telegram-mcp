@@ -8,7 +8,7 @@ from telegram_mcp.adapters.config import Settings
 from telegram_mcp.adapters.mcp import create_server
 from telegram_mcp.bootstrap import build_service as Service
 from telegram_mcp.domain.models import Chat, ForumTopic, ToolError
-from tests.fakes import BASE, FakeBackend, msg
+from tests.fakes import BASE, FakeBackend, FakeClock, msg
 
 
 def topic_history_backend() -> FakeBackend:
@@ -236,7 +236,9 @@ async def test_topic_history_mcp_temporary_fetch_failure_retains_topic_and_backo
 ) -> None:
     backend = topic_history_backend()
     backend.faults["-1001"] = ToolError("RATE_LIMITED", "Wait before retrying.", 37)
-    server = create_server(Service(backend, Settings(allowed_chat_ids=["-1001"])))
+    server = create_server(
+        Service(backend, Settings(allowed_chat_ids=["-1001"]), clock=FakeClock())
+    )
     async with Client(server, mode=mode) as client:
         arguments = {"chat_ref": "@project_forum", "topic_id": 1}
         result = await client.call_tool(name, arguments)

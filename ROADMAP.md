@@ -60,6 +60,9 @@ revocation remain covered offline only. The full platform/Python matrix and requ
 Merge status is recorded in the PR; publication is recorded separately by the
 [Release workflow](https://github.com/egor-fedorov/telegram-mcp/actions/workflows/release.yml)
 and [published releases](https://github.com/egor-fedorov/telegram-mcp/releases).
+Release validation also identified two exact-backoff MCP tests that depended on
+system-clock rounding. They now use injected test clocks; production retry logic
+and the requirement to avoid premature requests are unchanged.
 
 ## Next: M3 — Selected attachment downloads
 

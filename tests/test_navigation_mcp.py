@@ -8,7 +8,7 @@ from telegram_mcp.adapters.mcp import create_server
 from telegram_mcp.application.ports import TopicBatch, TopicOffset
 from telegram_mcp.bootstrap import build_service as Service
 from telegram_mcp.domain.models import Chat, ForumTopic, ToolError
-from tests.fakes import BASE, FakeBackend, msg
+from tests.fakes import BASE, FakeBackend, FakeClock, msg
 
 
 def navigation_backend() -> FakeBackend:
@@ -179,7 +179,9 @@ async def test_navigation_mcp_transient_fetch_failures_keep_cursor_and_delay(
     fault = ToolError("RATE_LIMITED", "Wait before retrying.", 37)
     faults = backend.topic_faults if name == "list_topics" else backend.faults
     faults["-1001"] = fault
-    server = create_server(Service(backend, Settings(allowed_chat_ids=["-1001"])))
+    server = create_server(
+        Service(backend, Settings(allowed_chat_ids=["-1001"]), clock=FakeClock())
+    )
     async with Client(server, mode=mode) as client:
         result = await client.call_tool(name, {"chat_ref": "-1001"})
         assert not result.is_error
