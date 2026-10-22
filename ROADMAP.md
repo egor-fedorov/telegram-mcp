@@ -19,16 +19,16 @@ need a detailed contract before implementation; no delivery dates are assigned.
 | M2 | Done | Forum topics, pins, counters, reactions, polls, and bounded selected-album retrieval |
 | R1 | Done | Domain/application/adapter layers and explicit dependencies, preserving all 14 tools |
 | R2 | Done | Installable 0.2.0 package, Windows support, shared local HTTP process, client guides, and release automation |
-| R3 | Implemented; CI/publication pending | Recoverable connections, bounded catalogs/search, and compact typed 0.3 responses |
+| R3 | Done | Recoverable connections, bounded catalogs/search, and compact typed 0.3 responses |
 | M3 | Planned after R3 | Selected attachment downloads with size limits and delivery to the calling client |
 | M4 | Planned after M3 | New messages and available changes, persistent checkpoints, and source-linked export |
 
 The [historical completion records](docs/specs/README.md#historical-completion-records)
 include offline test results. They do not claim live Telegram validation.
 
-## Current stage: R3 — Reliable retrieval and compact responses (0.3.0)
+## Completed stage: R3 — Reliable retrieval and compact responses (0.3.0)
 
-Implementation is complete and prepared for one focused PR before attachment downloads. It adds:
+Implementation and validation are complete in [PR #13](https://github.com/egor-fedorov/telegram-mcp/pull/13), before attachment downloads. It adds:
 
 - Bounded connection recovery and fresh authorization checks before saved-buffer output.
 - A completed-catalog cache (default/max 30 seconds), incremental cold loads, and a
@@ -55,8 +55,11 @@ installation smoke checks passed. The response/schema measurements passed:
 61.6% and 29.8% smaller respectively.
 The selected-source live probe completed 24 checks without issues, including reconnect
 and a subsequent history read. Global search, catalogs, forums, and authorization
-revocation remain covered offline only. Final GitHub checks, merge, and publication
-are pending; implementation completion does not imply a published release.
+revocation remain covered offline only. The full platform/Python matrix and required
+`checks` job [passed](https://github.com/egor-fedorov/telegram-mcp/actions/runs/39761842978).
+Merge status is recorded in the PR; publication is recorded separately by the
+[Release workflow](https://github.com/egor-fedorov/telegram-mcp/actions/workflows/release.yml)
+and [published releases](https://github.com/egor-fedorov/telegram-mcp/releases).
 
 ## Next: M3 — Selected attachment downloads
 

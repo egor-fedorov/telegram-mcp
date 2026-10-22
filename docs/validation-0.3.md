@@ -2,7 +2,10 @@
 
 This record describes checks for the 0.3.0 release candidate on 2026-10-22.
 Implementation, local verification, and selected-source live validation are complete.
-GitHub checks, merge, and publication are pending.
+The implementation's full [GitHub CI run](https://github.com/egor-fedorov/telegram-mcp/actions/runs/39761842978)
+passed, including the required `checks` job. This covers Linux on Python 3.12–3.15
+and macOS/Windows on Python 3.12 and 3.15, with fresh distribution installations.
+Merge status is recorded in [PR #13](https://github.com/egor-fedorov/telegram-mcp/pull/13).
 Release availability is verified through [PyPI](https://pypi.org/project/telegram-context-mcp/)
 and [GitHub Releases](https://github.com/egor-fedorov/telegram-mcp/releases), following
 the [release procedure](releasing.md).
