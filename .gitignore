@@ -1,12 +1,23 @@
+# Python environment and caches
 .venv/
 __pycache__/
 .pytest_cache/
 .ruff_cache/
+
+# Coverage and build outputs
 .coverage
 htmlcov/
 dist/
+
+# Local secrets and configuration
 *.session*
 .env*
 !.env.example
 config.toml
+
+# Editors and agents
+.vscode/
+.claude/
+
+# Operating systems
 .DS_Store
