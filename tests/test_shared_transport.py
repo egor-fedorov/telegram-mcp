@@ -5,7 +5,7 @@ import json
 import socket
 import stat
 import sys
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import AsyncExitStack, asynccontextmanager
 from pathlib import Path
 
@@ -31,7 +31,7 @@ from tests.fakes import FakeBackend, msg
 
 
 @asynccontextmanager
-async def running_server(tmp_path: Path) -> AsyncIterator[tuple[Settings, FakeBackend]]:
+async def running_server(tmp_path: Path) -> AsyncGenerator[tuple[Settings, FakeBackend]]:
     backend = FakeBackend([msg("1", 1), msg("1", 2)])
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
         listener.bind(("127.0.0.1", 0))

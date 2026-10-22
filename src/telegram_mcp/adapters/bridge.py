@@ -1,6 +1,6 @@
 """Expose the shared loopback server to clients that launch STDIO subprocesses."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 import httpx2
@@ -52,7 +52,7 @@ def create_bridge(upstream: Client) -> Server:
 
 
 @asynccontextmanager
-async def shared_client(settings: Settings) -> AsyncIterator[Client]:
+async def shared_client(settings: Settings) -> AsyncGenerator[Client]:
     token = load_token(settings.http_token_path)
     try:
         async with httpx2.AsyncClient(
