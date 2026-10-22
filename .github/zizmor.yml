@@ -1,0 +1,5 @@
+rules:
+  self-repository:
+    # The reusable CI workflow keeps the local ./ path that actionlint and GitHub docs use.
+    ignore:
+      - release.yml:47

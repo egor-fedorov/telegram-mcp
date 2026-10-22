@@ -17,8 +17,8 @@ uv sync --locked --python 3.12
 make check
 ```
 
-`make check` runs Ruff formatting checks, Ruff lint, ty, and pytest. Tests are offline:
-they do not require a Telegram account, login, or network requests to Telegram.
+`make check` runs Ruff formatting checks, Ruff lint, ty, workflow checks with actionlint
+and zizmor, and pytest. Tests are offline: they do not require a Telegram account, login, or network requests to Telegram.
 Dependency installation may require network access. Add tests for changed behavior
 and keep existing MCP contracts compatible, or explain any compatibility changes.
 For documentation-only changes, check links, examples, and formatting.
@@ -29,6 +29,8 @@ On Windows without Make, run the same checks directly:
 uv run --locked ruff format --check .
 uv run --locked ruff check .
 uv run --locked ty check
+uv run --locked actionlint
+uv run --locked zizmor --offline .github
 uv run --locked pytest
 ```
 

@@ -39,6 +39,13 @@ jobs:
         run: uv run --locked ruff check .
       - name: Check types
         run: uv run --locked ty check
+      - name: Lint workflows
+        run: uv run --locked actionlint
+      - name: Audit workflow security
+        env:
+          # Online audits verify that pinned action commits match their version comments.
+          GH_TOKEN: ${{ github.token }}
+        run: uv run --locked zizmor .github
 
   build:
     name: Build distributions
