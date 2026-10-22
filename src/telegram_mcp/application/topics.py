@@ -133,7 +133,7 @@ class TopicService:
                 raise ToolError(
                     "INVALID_ARGUMENT", "query must contain 1 to 1000 characters after trimming."
                 )
-        access = await self.access.load()
+        access = await self.access.load(explicit=True)
         chat = await self.chats.resolve_chat(chat_ref, refresh=True)
         fp = fingerprint([chat_ref, chat.id, query])
         if cursor:

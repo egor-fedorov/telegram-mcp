@@ -53,7 +53,7 @@ async def test_mcp_tool_schemas_and_real_dispatch(mode: str) -> None:
         result = await client.call_tool("search_messages", {"query": "budget", "folder_ids": [1]})
         assert not result.is_error
         assert result.structured_content is not None
-        assert result.structured_content["messages"][0]["message_ref"]["message_id"] == 1
+        assert int(result.structured_content["messages"][0]["message_ref"].split(":")[1]) == 1
         invalid = await client.call_tool("get_history", {"chat_id": "1", "limit": 101})
         assert invalid.is_error
         bad_date = await client.call_tool(
@@ -64,7 +64,7 @@ async def test_mcp_tool_schemas_and_real_dispatch(mode: str) -> None:
             history = await client.call_tool("get_history", selector)
             assert not history.is_error
             assert history.structured_content is not None
-            assert history.structured_content["messages"][0]["message_ref"]["chat_id"] == "1"
+            assert history.structured_content["messages"][0]["message_ref"].split(":")[0] == "1"
         for selector in ({}, {"chat_id": "1", "chat_ref": "1"}):
             assert (await client.call_tool("get_history", selector)).is_error
         folder_result = await client.call_tool("list_folders", {})
@@ -113,9 +113,9 @@ async def test_mcp_discovery_schemas_dispatch_and_failures(mode: str) -> None:
         data = result.structured_content
         assert data is not None
         assert [channel["id"] for channel in data["channels"]] == ["-1001", "-1002"]
-        assert data["channels"][0]["participants_count"] is None
+        assert "participants_count" not in data["channels"][0]
         assert data["returned_count"] == 2
-        assert data["telegram_total_count"] is None
+        assert "telegram_total_count" not in data
         assert data["exhaustive"] is False
         assert data["locally_truncated"] is False
         similar = await client.call_tool(

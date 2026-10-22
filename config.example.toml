@@ -16,6 +16,8 @@ allow_public_channel_reads = false
 allow_public_channel_discovery = false
 rpc_timeout_seconds = 20
 max_dialogs = 10000
+# Reuse a completed catalog for up to 30 seconds; 0 disables snapshot reuse.
+catalog_cache_ttl_seconds = 30
 rpc_pages_per_call = 12
 cursor_ttl_seconds = 900
 max_cursors = 128

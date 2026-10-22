@@ -51,7 +51,13 @@ class AccessFactory:
         self.chats = chats
         self.policies = policies
 
-    async def load(self) -> AccessContext:
+    async def load(self, *, explicit: bool = False) -> AccessContext:
+        policy = self.policies.current()
+        if explicit and not policy.allowed_folder_ids:
+            await self.chats.check_authorization()
+            policy = self.policies.current()
+            if not policy.allowed_folder_ids:
+                return AccessContext([], [], set(policy.allowed_chat_ids), policy, self.chats)
         chats, folders = await self.chats.catalog()
         policy = self.policies.current()
         return AccessContext(

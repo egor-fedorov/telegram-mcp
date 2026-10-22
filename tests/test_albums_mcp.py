@@ -84,19 +84,23 @@ async def test_album_mcp_reference_dispatch_preserves_members_and_metadata(
         result = await client.call_tool("get_album", {"ref": reference})
         assert not result.is_error and result.structured_content is not None
         data = result.structured_content
-        assert data["anchor_ref"] == {"chat_id": chat.id, "message_id": 20}
+        assert data["anchor_ref"] == f"{chat.id}:20"
         assert data["album_id"] == members[1].album_id
         assert data["order"] == "oldest_first" and data["completeness"] == "unknown"
         assert data["scan_limit"] == 30
         assert data["scanned_before"] == data["scanned_after"] == 2
         assert data["before_exhausted"] is data["after_exhausted"] is True
         assert data["issues"] == []
-        assert [item["message_ref"]["message_id"] for item in data["messages"]] == [18, 20, 22]
+        assert [int(item["message_ref"].split(":")[1]) for item in data["messages"]] == [18, 20, 22]
         for item, original in zip(data["messages"], members, strict=True):
             assert_metadata(item, original)
-            serialized = original.model_dump(mode="json")
-            for field in ("text", "attachments", "forward_origin", "sent_at", "edited_at", "url"):
+            serialized = original.model_dump(mode="json", exclude_none=True)
+            for field in ("text", "attachments", "sent_at", "edited_at", "url"):
                 assert item[field] == serialized[field]
+            assert item["forward_origin"] == {
+                "name": "Original author",
+                "saved_from_ref": "-1009:1",
+            }
         assert backend.reads == ["-1001:20"]
         assert backend.history_windows == [("-1001", 20, 30, False), ("-1001", 20, 30, True)]
         assert backend.fetches == []
@@ -151,15 +155,15 @@ async def test_album_mcp_temporary_neighbor_failure_returns_partial_result(
         assert not result.is_error and result.structured_content is not None
         data = result.structured_content
         assert len(data["messages"]) == 1
-        assert data["messages"][0]["message_ref"]["message_id"] == 20
+        assert int(data["messages"][0]["message_ref"].split(":")[1]) == 20
         assert data["completeness"] == "unknown" and "next_cursor" not in data
         assert data["before_exhausted"] is data["after_exhausted"] is None
         assert data["scanned_before"] == data["scanned_after"] == 0
         assert len(data["issues"]) == 1
         issue = data["issues"][0]
         assert issue["code"] == code
-        assert issue["retry_after_seconds"] == (37 if code == "RATE_LIMITED" else None)
-        assert issue["message_ref"] == anchor.message_ref.model_dump()
+        assert issue.get("retry_after_seconds") == (37 if code == "RATE_LIMITED" else None)
+        assert issue["message_ref"] == anchor.message_ref.key
         assert backend.history_windows == [("-1001", 20, 30, False)]
 
 
@@ -198,7 +202,7 @@ async def test_album_mcp_initial_failures_are_errors_without_neighbor_scans(mode
         backend = FakeBackend([album_message(20), msg("-1001", 21)])
         settings = Settings(allowed_chat_ids=[] if failure == "ACCESS_DENIED" else ["-1001"])
         if failure == "AUTH_REQUIRED":
-            backend.catalog_fault = ToolError(failure, "Authorization is required.")
+            backend.authorization_fault = ToolError(failure, "Authorization is required.")
         if failure == "CONNECTION_ERROR":
             backend.message_faults["-1001"] = ToolError(failure, "Anchor retrieval failed.")
         async with Client(create_server(Service(backend, settings)), mode=mode) as client:
@@ -227,7 +231,9 @@ async def test_album_mcp_public_channel_access_is_explicit_and_independent_of_di
             assert bool(result.is_error) is not allow_reads
             if allow_reads:
                 assert result.structured_content is not None
-                assert result.structured_content["messages"][0]["message_ref"]["chat_id"] == chat.id
+                assert (
+                    result.structured_content["messages"][0]["message_ref"].split(":")[0] == chat.id
+                )
                 assert backend.public_checks == [chat.id]
                 assert backend.history_windows == [
                     (chat.id, 20, 30, False),

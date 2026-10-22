@@ -1,4 +1,4 @@
-"""Compare the public schemas against the pre-refactor MCP contract."""
+"""Compare the self-contained public schemas against the compact 0.3 MCP contract."""
 
 import json
 from pathlib import Path
@@ -13,7 +13,7 @@ from tests.fakes import FakeBackend
 
 
 @pytest.mark.parametrize("mode", ["auto", "legacy"])
-async def test_mcp_contract_is_unchanged(mode: str) -> None:
+async def test_mcp_contract_matches_versioned_fixture(mode: str) -> None:
     async with Client(create_server(Service(FakeBackend(), Settings())), mode=mode) as client:
         listing = await client.list_tools()
         definitions = {}
@@ -32,5 +32,7 @@ async def test_mcp_contract_is_unchanged(mode: str) -> None:
                         assert definitions[name] == value
                     definitions[name] = value
             tools[tool.name] = entry
-        expected = json.loads((Path(__file__).parent / "fixtures/mcp_contract.json").read_text())
+        expected = json.loads(
+            (Path(__file__).parent / "fixtures/mcp_contract.json").read_text(encoding="utf-8")
+        )
         assert {"definitions": definitions, "tools": tools} == expected

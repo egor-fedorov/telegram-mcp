@@ -1,12 +1,13 @@
 # Completed specifications
 
-These documents preserve the accepted M1 and M2 specifications. They describe
+These documents preserve accepted delivery specifications. They describe
 the implementation at each milestone; later changes are recorded in the
 [changelog](../../CHANGELOG.md) and [roadmap](../../ROADMAP.md).
 
 - [M1: Public-channel discovery](m1-public-channel-discovery.md)
 - [M2: Message navigation and metadata](m2-message-navigation.md)
 - [R1: Layered architecture](../architecture.md)
+- [R2: Installation, local sharing, and release 0.2.0](r2-general-purpose.md)
 
 ## Historical completion records
 

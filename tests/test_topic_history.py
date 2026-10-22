@@ -89,7 +89,7 @@ async def test_topic_history_resolves_every_source_fresh_before_lookup(reference
         page = await service.get_history(chat_ref=reference, topic_id=10)
     assert message_ids(page) == [21]
     assert page.topic_id == 10 and page.scope.chat_ids == ["1"]
-    assert backend.backend_calls[:3] == ["catalog", "resolve_chat", "get_topic"]
+    assert backend.backend_calls[:3] == ["authorization", "resolve_chat", "get_topic"]
     assert backend.resolve_calls[0] == ("1" if reference == "legacy_id" else reference, True)
     assert backend.topic_lookups == [("1", 10)]
     assert backend.fetch_topic_ids == [10]
@@ -412,7 +412,7 @@ async def test_renamed_forum_and_topic_keep_numeric_cursor_identity() -> None:
         ("forum", "FORUM_UNAVAILABLE"),
         ("deleted", "TOPIC_UNAVAILABLE"),
         ("missing", "TOPIC_UNAVAILABLE"),
-        ("catalog", "CONNECTION_ERROR"),
+        ("authorization", "CONNECTION_ERROR"),
         ("lookup", "CONNECTION_ERROR"),
         ("lookup_flood", "RATE_LIMITED"),
     ],
@@ -442,8 +442,8 @@ async def test_topic_continuation_revalidates_before_buffer_and_original_cursor_
         backend.topics[("1", 10)].is_deleted = True
     elif change == "missing":
         del backend.topics[("1", 10)]
-    elif change == "catalog":
-        backend.catalog_fault = ToolError(code, "Catalog unavailable.")
+    elif change == "authorization":
+        backend.authorization_fault = ToolError(code, "Authorization check unavailable.")
     else:
         backend.topic_lookup_faults[("1", 10)] = ToolError(
             code, "Topic check unavailable.", retry_after=10 if change == "lookup_flood" else None
@@ -454,7 +454,7 @@ async def test_topic_continuation_revalidates_before_buffer_and_original_cursor_
     settings.allowed_chat_ids = ["1"]
     backend.chats[0].is_forum = True
     backend.topics[("1", 10)] = original_topic
-    backend.catalog_fault = None
+    backend.authorization_fault = None
     backend.topic_lookup_faults.clear()
     recovered = await read(first.next_cursor)
     assert message_ids(recovered) == [21]

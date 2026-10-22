@@ -8,7 +8,45 @@ A version entry describes its target artifact. Verify publication on
 
 ## [Unreleased]
 
-No additional changes recorded.
+## [0.3.0] - 2026-10-22
+
+### Added
+
+- Automatic bounded reconnection after a lost Telegram connection, with fresh
+  authorization checks and retry deadlines.
+- A 30-second completed-catalog cache and resumable, bounded cold loads that return
+  `CATALOG_LOADING`; direct reads independent of folders bypass catalog scans.
+- Account-dialog global search with all-chat permission, fair restricted-source preparation with progress,
+  native URL/photo/voice/audio filters, `has_link`, and webpage preview metadata.
+- Typed responses for all 14 tools, deterministic payload/schema size regression
+  checks, and an opt-in bounded live-validation script for explicitly selected sources.
+
+### Changed
+
+- **Breaking output contract:** message references are canonical strings; message
+  responses share brief chat summaries; unknown optional metadata is omitted.
+  `list_folders` returns `{folders: [...]}`. Full compact JSON appears in both text
+  and structured content. See [migration guidance](docs/migration-0.3.md).
+- Restricted search uses numeric chat IDs for same-second ordering; global search keeps
+  Telegram's order within equal timestamps. Search preserves its selected
+  search engine, date ceiling, and scope across continuation calls.
+- Raw message mapping no longer calls Telethon's private `_finish_init` method.
+  Preview images/files no longer become standalone message attachments.
+
+### Compatibility and validation
+
+- Existing read permissions, input references, session files, STDIO, local HTTP, and
+  the bridge remain supported. Global search is restricted to all-chat access without
+  chat, folder, or sender selectors. No paid public-post search is used.
+- Catalog reuse can delay folder membership changes; public-channel grants still use
+  fresh metadata. Expired/partial catalogs do not grant access.
+- The fixed 30-post response preserves all text while reducing the complete MCP
+  result from 83,588 to 32,075 bytes (61.6%); `tools/list` falls from 110,590 to
+  77,653 bytes (29.8%).
+- Selected-source live checks covered history, keyword/link/media searches,
+  explicit messages, context, albums, and reconnect. Global search, catalog loads,
+  forums, and authorization revocation were not live-tested. See the
+  [validation record](docs/validation-0.3.md) for evidence and coverage limits.
 
 ## [0.2.0] - 2026-10-21
 

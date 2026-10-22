@@ -100,6 +100,11 @@ For `RATE_LIMITED`, wait for `retry_after_seconds`. For `CONNECTION_ERROR` or
 `TELEGRAM_UNAVAILABLE`, restore connectivity or retry later. The server does not
 sleep through FloodWait inside a tool call.
 
+Version 0.3 reconnects a disconnected Telegram client on the next call and checks
+authorization again. A failed recovery imposes a five-second cooldown; FloodWait uses
+Telegram's requested delay. A laptop waking from sleep should not require restarting
+the server. Failed requests are not replayed automatically: continue the original cursor.
+
 History, search, topics, and pins can return `next_cursor` with no messages after a
 temporary failure or while preparing ordered output. Repeat the same selectors and
 filters with that cursor. Do not replace it with a new query unless it has expired,
@@ -113,6 +118,29 @@ when both neighboring history boundaries were observed.
 For `CURSOR_MISMATCH`, restore the original filters and source. If a username now
 identifies a different channel, continuation deliberately does not switch channels.
 For an unknown numeric source, resolve it using its username or Telegram URL first.
+
+## `CATALOG_LOADING` or slow first use
+
+The initial dialog scan is shared across calls in one process. Repeat the original
+arguments after `retry_after_seconds`; the error message includes the loaded-dialog
+count. Do not restart the server between retries. No partial catalog or saved message
+buffer is returned while required access metadata is unavailable.
+
+Completed catalogs are reused for up to 30 seconds by default. Direct reads independent
+of folders bypass that scan. Local `catalog` and `configure` wait for completion for up
+to five minutes; `CATALOG_TIMEOUT` means that bounded wait expired.
+
+Restricted searches can still need many empty pages to establish a globally ordered
+result. Inspect `progress.sources_ready` and continue `next_cursor`. Unrestricted searches
+without chat/folder/sender selectors use Telegram global search. Do not enable broader
+permissions merely to avoid preparation pages.
+
+## Response fields changed after upgrading
+
+Version 0.3 returns compact JSON with string message references, a shared chat map,
+and omitted unknown optional metadata. The complete JSON is available in both text and
+structured content. See the [0.3 migration guide](migration-0.3.md); there is no legacy
+response-format switch.
 
 ## Text appears incomplete
 

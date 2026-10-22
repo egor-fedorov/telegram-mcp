@@ -33,7 +33,7 @@ async def test_global_pagination_no_losses_duplicates_or_reordering() -> None:
 async def test_empty_pages_while_priming_are_resumable() -> None:
     service = build_service(
         FakeBackend([msg(str(i), i) for i in range(1, 5)]),
-        Settings(allow_all_chats=True, rpc_pages_per_call=1),
+        Settings(allowed_chat_ids=[str(i) for i in range(1, 5)], rpc_pages_per_call=1),
     )
     page = await service.search_messages(query="budget")
     assert page.messages == []
@@ -107,7 +107,7 @@ async def test_folder_snapshot_and_permission_revocation() -> None:
 async def test_permanent_failures_are_explicit_and_other_sources_continue() -> None:
     backend = FakeBackend([msg("1", 1), msg("2", 2)])
     backend.faults["2"] = ToolError("ACCESS_DENIED", "Unavailable source")
-    page = await build_service(backend, Settings(allow_all_chats=True)).search_messages(
+    page = await build_service(backend, Settings(allowed_chat_ids=["1", "2"])).search_messages(
         query="budget"
     )
     assert [m.chat.id for m in page.messages] == ["1"]
@@ -191,20 +191,13 @@ async def test_history_requires_exactly_one_source() -> None:
     assert page.messages[0].message_ref.key == "1:1"
 
 
-async def test_history_loads_catalog_before_resolving_numeric_reference(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_unknown_numeric_reference_does_not_trigger_catalog_scan() -> None:
     backend = FakeBackend([msg("1", 1)], chats=[])
-
-    async def populate_catalog() -> tuple[list[Chat], list[Folder]]:
-        # A fresh session learns known dialog entities while loading its catalog.
-        backend.chats = [Chat(id="1", title="Known dialog", type="group")]
-        return backend.chats, []
-
-    monkeypatch.setattr(backend, "catalog", populate_catalog)
     service = build_service(backend, Settings(allowed_chat_ids=["1"]))
-    page = await service.get_history(chat_ref="1")
-    assert [message.message_ref.key for message in page.messages] == ["1:1"]
+    with pytest.raises(ToolError, match="NOT_FOUND"):
+        await service.get_history(chat_ref="1")
+    assert "catalog" not in backend.backend_calls
+    assert not backend.fetches
 
 
 async def test_history_cursor_binds_reference_and_resolved_identity() -> None:
@@ -288,7 +281,7 @@ async def test_public_grant_is_revalidated_before_buffered_cursor_output(revocat
     assert backend.fetches == [public.id]
 
 
-@pytest.mark.parametrize("source", ["public", "catalog"])
+@pytest.mark.parametrize("source", ["public", "authorization"])
 async def test_metadata_failure_hides_buffer_and_preserves_original_cursor(source: str) -> None:
     backend, public = public_backend()
     service = build_service(backend, Settings(allow_public_channel_reads=True))
@@ -297,11 +290,11 @@ async def test_metadata_failure_hides_buffer_and_preserves_original_cursor(sourc
     if source == "public":
         backend.public_faults[public.id] = error
     else:
-        backend.catalog_fault = error
+        backend.authorization_fault = error
     with pytest.raises(ToolError, match="CONNECTION_ERROR"):
         await service.get_history(chat_id=public.id, limit=1, cursor=first.next_cursor)
     backend.public_faults.clear()
-    backend.catalog_fault = None
+    backend.authorization_fault = None
     resumed = await service.get_history(chat_id=public.id, limit=1, cursor=first.next_cursor)
     assert [m.message_ref.message_id for m in resumed.messages] == [2]
     assert not resumed.issues
@@ -368,7 +361,7 @@ async def test_retryable_source_failure_preserves_order_and_resumes_after_cooldo
     clock = FakeClock()
     backend = FakeBackend([msg("1", 1), msg("2", 2)])
     backend.faults["2"] = ToolError(code, "Please retry", 20)
-    service = build_service(backend, Settings(allow_all_chats=True), clock=clock)
+    service = build_service(backend, Settings(allowed_chat_ids=["1", "2"]), clock=clock)
     first = await service.search_messages(query="budget")
     assert first.messages == []
     assert first.next_cursor and not first.scope.complete
@@ -390,7 +383,7 @@ async def test_retryable_source_failure_preserves_order_and_resumes_after_cooldo
 async def test_permanent_issue_survives_later_successful_pages() -> None:
     backend = FakeBackend([msg("1", mid) for mid in range(1, 4)] + [msg("2", 4)])
     backend.faults["2"] = ToolError("ACCESS_DENIED", "Unavailable source")
-    service = build_service(backend, Settings(allow_all_chats=True))
+    service = build_service(backend, Settings(allowed_chat_ids=["1", "2"]))
     first = await service.search_messages(query="budget", limit=1)
     assert first.next_cursor
     del backend.faults["2"]

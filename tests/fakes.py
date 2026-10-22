@@ -6,7 +6,11 @@ from pydantic import ValidationError
 from telegram_mcp.application.ports import (
     Batch,
     DiscoveryBatch,
+    GlobalBatch,
+    GlobalOffset,
     HistoryWindow,
+    MessageOffset,
+    SearchAnchor,
     TopicBatch,
     TopicOffset,
 )
@@ -71,6 +75,9 @@ class FakeBackend:
         self.fetches: list[str] = []
         self.faults: dict[str, ToolError] = {}
         self.catalog_fault: ToolError | None = None
+        self.authorization_fault: ToolError | None = None
+        self.global_fault: ToolError | None = None
+        self.global_fetches: list[GlobalOffset] = []
         self.public_faults: dict[str, ToolError] = {}
         self.message_faults: dict[str, ToolError] = {}
         self.public_checks: list[str] = []
@@ -108,9 +115,54 @@ class FakeBackend:
 
     async def catalog(self) -> tuple[list[Chat], list[Folder]]:
         self.backend_calls.append("catalog")
+        await self.check_authorization()
         if self.catalog_fault:
             raise self.catalog_fault
         return list(self.chats), list(self.folders)
+
+    async def check_authorization(self) -> None:
+        self.backend_calls.append("authorization")
+        if self.authorization_fault is not None:
+            raise self.authorization_fault
+
+    async def search_global(
+        self, request: SearchRead, *, offset: GlobalOffset, limit: int, chat_ids: list[str]
+    ) -> GlobalBatch:
+        self.backend_calls.append("search_global")
+        self.global_fetches.append(offset)
+        if self.global_fault is not None:
+            raise self.global_fault
+        filters = request.filters
+        candidates = sorted(
+            (m for m in self.stored_messages if request.query in m.text),
+            key=lambda m: (m.sent_at, int(m.chat.id), m.message_ref.message_id),
+            reverse=True,
+        )
+        if offset.peer_id is not None:
+            candidates = [
+                m
+                for m in candidates
+                if (int(m.sent_at.timestamp()), int(m.chat.id), m.message_ref.message_id)
+                < (offset.rate, int(offset.peer_id), offset.message_id)
+            ]
+        raw = candidates[:limit]
+        filtered = [
+            m
+            for m in raw
+            if m.chat.id in chat_ids
+            and (filters.date_from is None or m.sent_at >= filters.date_from)
+            and (filters.date_to is None or m.sent_at < filters.date_to)
+            and (filters.content_type is None or m.content_type == filters.content_type)
+            and (filters.has_link is None or m.has_link == filters.has_link)
+        ]
+        next_offset = (
+            GlobalOffset(
+                int(raw[-1].sent_at.timestamp()), raw[-1].chat.id, raw[-1].message_ref.message_id
+            )
+            if raw
+            else offset
+        )
+        return GlobalBatch(filtered, next_offset, len(candidates) <= limit)
 
     async def resolve_chat(self, ref: str, *, refresh: bool = False) -> Chat:
         self.backend_calls.append("resolve_chat")
@@ -253,10 +305,12 @@ class FakeBackend:
         chat_id: str,
         request: MessageRead,
         *,
-        offset: int = 0,
+        offset: MessageOffset = 0,
         limit: int = 30,
     ) -> Batch:
         filters = request.filters
+        if isinstance(offset, SearchAnchor):
+            offset = offset.offset_id
         date_from, date_to = filters.date_from, filters.date_to
         content_type, oldest_first = filters.content_type, filters.oldest_first
         query = request.query if isinstance(request, SearchRead) else None
@@ -305,6 +359,7 @@ class FakeBackend:
             if (date_from is None or m.sent_at >= date_from)
             and (date_to is None or m.sent_at < date_to)
             and (content_type is None or m.content_type == content_type)
+            and (filters.has_link is None or m.has_link == filters.has_link)
         ]
         return Batch(
             filtered, raw[-1].message_ref.message_id if raw else offset, len(candidates) <= limit

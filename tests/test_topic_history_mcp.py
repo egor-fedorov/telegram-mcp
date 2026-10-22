@@ -70,9 +70,9 @@ async def test_topic_history_mcp_schema_and_unchanged_chat_wide_defaults(mode: s
             result = await client.call_tool(name, {"chat_ref": "@project_forum"})
             assert not result.is_error and result.structured_content is not None
             data = result.structured_content
-            assert data["topic_id"] is None
+            assert "topic_id" not in data
             assert [
-                message["message_ref"]["message_id"] for message in data["messages"]
+                int(message["message_ref"].split(":")[1]) for message in data["messages"]
             ] == expected
 
 
@@ -98,11 +98,11 @@ async def test_topic_history_mcp_general_and_named_topics_dispatch(mode: str) ->
             assert not result.is_error and result.structured_content is not None
             data = result.structured_content
             assert data["topic_id"] == topic_id
-            assert data["thread_root"] is None
+            assert "thread_root" not in data
             assert data["order"] == "oldest_first"
             assert data["scope"]["complete"] is True
             assert [
-                message["message_ref"]["message_id"] for message in data["messages"]
+                int(message["message_ref"].split(":")[1]) for message in data["messages"]
             ] == expected
             assert all(message["topic_id"] == topic_id for message in data["messages"])
 
@@ -113,9 +113,9 @@ async def test_topic_history_mcp_general_and_named_topics_dispatch(mode: str) ->
             assert not result.is_error and result.structured_content is not None
             data = result.structured_content
             assert data["topic_id"] == topic_id
-            assert data["thread_root"] is None
+            assert "thread_root" not in data
             assert [
-                message["message_ref"]["message_id"] for message in data["messages"]
+                int(message["message_ref"].split(":")[1]) for message in data["messages"]
             ] == expected
 
 
@@ -184,7 +184,7 @@ async def test_topic_history_mcp_cursor_remains_bound_to_original_topic(mode: st
         assert not first.is_error and first.structured_content is not None
         cursor = first.structured_content["next_cursor"]
         assert cursor is not None
-        assert first.structured_content["messages"][0]["message_ref"]["message_id"] == 13
+        assert int(first.structured_content["messages"][0]["message_ref"].split(":")[1]) == 13
         for topic_arguments in ({}, {"topic_id": 10}):
             mismatch = await client.call_tool(
                 "get_history",
@@ -199,7 +199,7 @@ async def test_topic_history_mcp_cursor_remains_bound_to_original_topic(mode: st
         )
         assert not resumed.is_error and resumed.structured_content is not None
         assert resumed.structured_content["topic_id"] == 1
-        assert resumed.structured_content["messages"][0]["message_ref"]["message_id"] == 11
+        assert int(resumed.structured_content["messages"][0]["message_ref"].split(":")[1]) == 11
         assert resumed.structured_content["next_cursor"] is None
 
 
@@ -225,7 +225,7 @@ async def test_topic_history_mcp_lookup_failure_preserves_original_cursor(mode: 
         backend.topic_lookup_faults.clear()
         resumed = await client.call_tool("get_history", {**arguments, "cursor": cursor})
         assert not resumed.is_error and resumed.structured_content is not None
-        assert resumed.structured_content["messages"][0]["message_ref"]["message_id"] == 11
+        assert int(resumed.structured_content["messages"][0]["message_ref"].split(":")[1]) == 11
         assert resumed.structured_content["next_cursor"] is None
 
 

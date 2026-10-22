@@ -6,6 +6,7 @@ from typing import Literal
 from telegram_mcp.application.access import AccessFactory
 from telegram_mcp.application.catalog import CatalogService
 from telegram_mcp.application.discovery import DiscoveryService
+from telegram_mcp.application.global_search import GlobalSearchPager
 from telegram_mcp.application.message_pager import MessagePager
 from telegram_mcp.application.messages import MessageReader
 from telegram_mcp.application.ports import (
@@ -49,7 +50,11 @@ class Service:
         self._catalog = CatalogService(backend, access, cursors, clock)
         self._discovery = DiscoveryService(backend, policy_provider)
         preparation = QueryPreparation(backend, backend, access, cursors, clock)
-        self._queries = QueryService(preparation, MessagePager(backend, cursors, clock, limits))
+        self._queries = QueryService(
+            preparation,
+            MessagePager(backend, cursors, clock, limits),
+            GlobalSearchPager(backend, cursors, clock, limits),
+        )
         self._topics = TopicService(
             backend, access, cursors, clock, TopicPager(backend, cursors, clock)
         )
@@ -135,6 +140,7 @@ class Service:
         date_to: datetime | None = None,
         sender_id: str | None = None,
         content_type: ContentType | None = None,
+        has_link: bool | None = None,
         limit: int = 30,
         cursor: str | None = None,
         order: Literal["newest_first", "oldest_first"] = "newest_first",
@@ -147,6 +153,7 @@ class Service:
             date_to=date_to,
             sender_id=sender_id,
             content_type=content_type,
+            has_link=has_link,
             limit=limit,
             cursor=cursor,
             order=order,

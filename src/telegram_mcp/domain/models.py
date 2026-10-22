@@ -193,6 +193,19 @@ class ForwardOrigin(Model):
     saved_at: datetime | None = None
 
 
+class WebPage(Model):
+    status: Literal["available", "pending", "empty", "not_modified"]
+    id: str | None = None
+    url: str | None = None
+    display_url: str | None = None
+    type: str | None = None
+    site_name: str | None = None
+    title: str | None = None
+    description: str | None = None
+    author: str | None = None
+    pending_until: AwareDatetime | None = None
+
+
 class Message(Model):
     message_ref: MessageRef
     chat: Chat
@@ -201,6 +214,8 @@ class Message(Model):
     edited_at: AwareDatetime | None = None
     text: str = ""
     content_type: ContentType = "text"
+    has_link: bool = False
+    web_page: WebPage | None = None
     entities: list[Entity] = Field(default_factory=list)
     reply_to: MessageRef | None = None
     thread_ref: MessageRef | None = None
@@ -236,6 +251,13 @@ class Scope(Model):
     complete: bool = True
 
 
+class SearchProgress(Model):
+    sources_total: int = Field(ge=0)
+    sources_ready: int = Field(ge=0)
+    sources_exhausted: int = Field(ge=0)
+    rpc_pages_this_call: int = Field(ge=0)
+
+
 class Page(Model):
     messages: list[Message] = Field(default_factory=list)
     next_cursor: str | None = None
@@ -244,6 +266,7 @@ class Page(Model):
     order: Literal["newest_first", "oldest_first"] = "newest_first"
     thread_root: MessageRef | None = None
     topic_id: int | None = Field(default=None, gt=0, le=2**31 - 1)
+    progress: SearchProgress | None = None
 
 
 class TopicPage(Model):
@@ -289,7 +312,7 @@ class ContextResult(Model):
 
 
 def is_retryable(code: str) -> bool:
-    return code in {"RATE_LIMITED", "CONNECTION_ERROR", "TELEGRAM_UNAVAILABLE"}
+    return code in {"RATE_LIMITED", "CONNECTION_ERROR", "TELEGRAM_UNAVAILABLE", "CATALOG_LOADING"}
 
 
 class ToolError(Exception):

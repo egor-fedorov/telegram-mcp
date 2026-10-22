@@ -16,15 +16,17 @@ messages, join channels, mark messages read, or download attachment bytes.
 Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then run:
 
 ```sh
-uv tool install --python 3.12 telegram-context-mcp==0.2.0
+uv tool install --python 3.12 telegram-context-mcp==0.3.0
 telegram-mcp --version
 telegram-mcp login
 telegram-mcp configure
 telegram-mcp status
 ```
 
-These examples target release 0.2.0; check [PyPI](https://pypi.org/project/telegram-context-mcp/)
+These examples target release 0.3.0; check [PyPI](https://pypi.org/project/telegram-context-mcp/)
 for published versions. Use the [source setup](#run-from-source) for unreleased revisions.
+Upgrading from 0.2? Read the [response migration guide](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/migration-0.3.md),
+then restart the server and refresh your client's tool schemas.
 
 Obtain `api_id` and `api_hash` from [my.telegram.org](https://my.telegram.org), then
 enter them in the local login prompt with your phone number, login code, and any 2FA
@@ -39,7 +41,7 @@ The package name is **`telegram-context-mcp`**; the executable is **`telegram-mc
 You can also run a pinned version without installing a persistent command:
 
 ```sh
-uvx --python 3.12 --from telegram-context-mcp==0.2.0 telegram-mcp --version
+uvx --python 3.12 --from telegram-context-mcp==0.3.0 telegram-mcp --version
 ```
 
 ## Connect your clients
@@ -78,7 +80,7 @@ do not paste it into client configuration. This is a local, single-user integrat
 | `get_chat` | Description and linked discussion group |
 | `search_public_channels` | Find public broadcast channels by query; metadata only |
 | `get_similar_channels` | Find similar public channels for one specified public source; metadata only |
-| `search_messages` | Keyword search by chats, folders, dates, sender, or content type |
+| `search_messages` | Search by keywords, chats, folders, dates, sender, media type, or links |
 | `get_history` | Chat or forum-topic history over a time range, in either order |
 | `list_topics` | Forum topics with navigation references, optional title query, and pagination |
 | `get_pinned_messages` | Chat-wide or forum-topic pinned messages, newest first |
@@ -94,8 +96,10 @@ do not paste it into client configuration. This is a local, single-user integrat
   over a timezone-qualified date range.
 - Enable discovery to find candidate public channels, select a source, then read its
   posts with a separate read permission.
-- Follow `next_cursor` with the original filters until it is absent. An empty page
+- Follow `next_cursor` with the original filters until it is `null`. An empty page
   can still have a cursor. Respect `retry_after_seconds` after a temporary failure.
+- For `CATALOG_LOADING`, repeat the original call after the reported delay. The server
+  retains catalog progress; explicit reads independent of folders skip that scan.
 - Use `get_messages` with `next_text_offset` to finish long text. Album completeness
   is explicitly unknown; each member remains a separate source message.
 
@@ -145,6 +149,8 @@ and squash merges after CI. See the
 [architecture](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/architecture.md),
 [changelog](https://github.com/egor-fedorov/telegram-mcp/blob/main/CHANGELOG.md), and
 [release procedure](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/releasing.md).
+The [0.3 validation record](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/validation-0.3.md)
+reports payload-size measurements and the scope of selected-source live checks.
 
 The code is [MIT licensed](https://github.com/egor-fedorov/telegram-mcp/blob/main/LICENSE).
 This does not grant rights to Telegram content. Secret chats are unsupported; attachment

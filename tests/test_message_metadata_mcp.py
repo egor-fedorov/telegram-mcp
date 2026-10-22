@@ -78,9 +78,26 @@ def rich_backend(messages: list[Message]) -> FakeBackend:
 
 
 def assert_metadata(actual: dict[str, object], expected: Message) -> None:
-    original = expected.model_dump(mode="json")
+    original = expected.model_dump(mode="json", exclude_none=True)
+
+    def without_empty_entities(value: object) -> object:
+        if isinstance(value, dict):
+            return {
+                key: without_empty_entities(item)
+                for key, item in value.items()
+                if key != "entities" or item != []
+            }
+        if isinstance(value, list):
+            return [without_empty_entities(item) for item in value]
+        return value
+
+    original = without_empty_entities(original)
+    assert isinstance(original, dict)
     for field in METADATA_FIELDS:
-        assert actual[field] == original[field]
+        if field in original:
+            assert actual[field] == original[field]
+        else:
+            assert field not in actual
 
 
 @pytest.mark.parametrize("mode", ["auto", "legacy"])
@@ -108,7 +125,8 @@ async def test_metadata_mcp_schemas_preserve_read_only_surface_without_actor_lis
             properties = definitions["Message"]["properties"]
             assert set(METADATA_FIELDS) <= properties.keys()
             for field in ("view_count", "forward_count", "reply_count", "reactions", "poll"):
-                assert {"type": "null"} in properties[field]["anyOf"]
+                assert "anyOf" not in properties[field]
+                assert field not in definitions["Message"]["required"]
             assert "option_id" in definitions["PollOption"]["properties"]
             assert "option_id" in definitions["PollAnswerResult"]["properties"]
             assert "reactions_as_tags" in definitions["ReactionSummary"]["properties"]
@@ -176,7 +194,7 @@ async def test_metadata_mcp_pagination_and_text_budget_preserve_nested_fields(
         page = first.structured_content
         assert len(page["messages"]) == 1 and page["next_cursor"]
         item = page["messages"][0]
-        assert item["message_ref"]["message_id"] == 21
+        assert int(item["message_ref"].split(":")[1]) == 21
         assert len(item["text"]) == 12000 and item["next_text_offset"] == 12000
         assert_metadata(item, messages[1])
         second = await client.call_tool(
@@ -228,12 +246,12 @@ async def test_metadata_mcp_preserves_unknown_zero_and_empty_result_distinctions
         result = await client.call_tool("get_messages", {"refs": ["-1001:1", "-1001:2", "-1001:3"]})
         assert not result.is_error and result.structured_content is not None
         absent, empty, incomplete = result.structured_content["messages"]
-        assert all(absent[field] is None for field in METADATA_FIELDS if field != "entities")
+        assert all(field not in absent for field in METADATA_FIELDS)
         assert empty["view_count"] == empty["forward_count"] == empty["reply_count"] == 0
         assert empty["reactions"]["results"] == []
         assert empty["reactions"]["reactions_as_tags"] is True
         assert empty["poll"]["results"]["total_voters"] == 0
         assert empty["poll"]["results"]["answers"] == []
-        assert incomplete["poll"]["results"]["total_voters"] is None
-        assert incomplete["poll"]["results"]["answers"] is None
+        assert "total_voters" not in incomplete["poll"]["results"]
+        assert "answers" not in incomplete["poll"]["results"]
         assert backend.batch_reads == [("-1001", [1, 2, 3])]

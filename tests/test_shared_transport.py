@@ -219,10 +219,7 @@ async def test_two_http_clients_share_cursors_and_only_daemon_owns_shutdown(
                         "get_history", {"chat_id": "1", "limit": 1, "cursor": cursor}
                     )
                     assert continued.structured_content is not None
-                    assert (
-                        continued.structured_content["messages"][0]["message_ref"]["message_id"]
-                        == 1
-                    )
+                    assert continued.structured_content["messages"][0]["message_ref"] == "1:1"
                     settings.allowed_chat_ids.clear()
                     denied = await first.call_tool(
                         "get_history", {"chat_id": "1", "limit": 1, "cursor": cursor}

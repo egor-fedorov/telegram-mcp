@@ -28,6 +28,7 @@ class Settings(Model):
     allow_public_channel_discovery: bool = False
     rpc_timeout_seconds: float = Field(default=20, gt=0, le=60)
     max_dialogs: int = Field(default=10000, ge=1, le=100000)
+    catalog_cache_ttl_seconds: float = Field(default=30, ge=0, le=30)
     rpc_pages_per_call: int = Field(default=12, ge=1, le=100)
     cursor_ttl_seconds: int = Field(default=900, ge=1)
     max_cursors: int = Field(default=128, ge=1)

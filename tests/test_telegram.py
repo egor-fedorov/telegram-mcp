@@ -15,6 +15,7 @@ from telegram_mcp.adapters.telegram.mapping import (
 from telegram_mcp.application.requests import HistoryRead, ReadFilters, SearchRead
 from telegram_mcp.domain.models import Chat, MessageRef, ToolError
 from tests.fakes import BASE
+from tests.test_catalog_refresh import dialog_page, pinned_page
 
 
 def test_folder_mapping_with_formatted_title_and_shared_folder() -> None:
@@ -107,7 +108,11 @@ async def test_real_adapter_filters_dates_without_losing_pagination_position() -
         )
         for i in (4, 3, 2, 1)
     ]
-    client = SimpleNamespace(get_messages=AsyncMock(return_value=raw))
+    client = AsyncMock(
+        return_value=types.messages.Messages(messages=list(raw), users=[], chats=[], topics=[])
+    )
+    client.is_connected = lambda: True
+    client.get_input_entity.return_value = types.InputPeerUser(1, 2)
     backend = TelegramBackend(
         settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
     )
@@ -123,8 +128,11 @@ async def test_real_adapter_filters_dates_without_losing_pagination_position() -
     )
     assert [m.message_ref.message_id for m in result.messages] == [3, 2]
     assert result.next_offset == 1 and result.exhausted
-    assert client.get_messages.await_args.kwargs["search"] == "budget"
-    assert client.get_messages.await_args.kwargs["offset_date"] > BASE + timedelta(minutes=4)
+    assert client.await_args is not None
+    request = client.await_args.args[0]
+    assert isinstance(request, functions.messages.SearchRequest) and request.q == "budget"
+    assert request.max_date > BASE + timedelta(minutes=4)
+    client.assert_awaited_once()
 
 
 async def test_flood_wait_is_structured_and_does_not_sleep() -> None:
@@ -156,6 +164,7 @@ async def test_discussion_root_uses_actual_group_message_id() -> None:
     group_root = types.Message(id=87, peer_id=types.PeerChannel(456), date=BASE, message="post")
     response = SimpleNamespace(messages=[group_root])
     client = AsyncMock(return_value=response)
+    client.is_connected = lambda: True
     client.get_input_entity = AsyncMock(return_value=types.InputPeerChannel(123, 1))
     backend = TelegramBackend(
         settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
@@ -169,8 +178,8 @@ async def test_discussion_root_uses_actual_group_message_id() -> None:
 async def test_catalog_is_not_silently_truncated() -> None:
     settings = Settings(max_dialogs=1)
     chat_cache = {}
-    client = AsyncMock(return_value=SimpleNamespace(filters=[]))
-    client.get_dialogs = AsyncMock(return_value=[object(), object()])
+    client = AsyncMock(side_effect=lambda request: pinned_page([1, 2]))
+    client.is_connected = lambda: True
     backend = TelegramBackend(
         settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
     )
@@ -188,12 +197,22 @@ async def test_saved_messages_peer_in_folder_uses_account_id() -> None:
     )
     settings = Settings()
     chat_cache = {}
-    client = AsyncMock(return_value=SimpleNamespace(filters=[raw]))
-    client.get_dialogs = AsyncMock(return_value=[])
+
+    def respond(request):
+        if isinstance(request, functions.messages.GetPinnedDialogsRequest):
+            return pinned_page([])
+        if isinstance(request, functions.messages.GetDialogsRequest):
+            return dialog_page([])
+        return SimpleNamespace(filters=[raw])
+
+    client = AsyncMock(side_effect=respond)
+    client.is_connected = lambda: True
     client.get_me = AsyncMock(return_value=types.InputPeerUser(123, 456))
     backend = TelegramBackend(
         settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
     )
+    with pytest.raises(ToolError, match="CATALOG_LOADING"):
+        await backend.catalog()
     _, folders = await backend.catalog()
     assert folders[0].included_chat_ids == ["123"]
     assert folders[0].pinned_chat_ids == ["123"]
@@ -232,7 +251,8 @@ async def test_chat_references_resolve_to_canonical_id(reference: str) -> None:
     settings = Settings()
     chat_cache = {}
     client = SimpleNamespace(
-        get_entity=AsyncMock(return_value=channel(broadcast=True, username="example"))
+        is_connected=lambda: True,
+        get_entity=AsyncMock(return_value=channel(broadcast=True, username="example")),
     )
     backend = TelegramBackend(
         settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
@@ -251,7 +271,10 @@ async def test_unknown_numeric_chat_suggests_username_without_leaking_error() ->
     backend = TelegramBackend(
         settings,
         runtime=TelegramRuntime(
-            settings, client=SimpleNamespace(get_entity=AsyncMock(side_effect=ValueError("secret")))
+            settings,
+            client=SimpleNamespace(
+                is_connected=lambda: True, get_entity=AsyncMock(side_effect=ValueError("secret"))
+            ),
         ),
         chat_cache=chat_cache,
     )
@@ -274,7 +297,7 @@ async def test_public_channel_checks_fresh_entity_and_active_usernames(
     settings = Settings()
     chat_cache = {}
     chat_cache["-1000000000123"] = Chat(id="-1000000000123", title="Stale", type="group")
-    client = SimpleNamespace(get_entity=AsyncMock(return_value=entity))
+    client = SimpleNamespace(is_connected=lambda: True, get_entity=AsyncMock(return_value=entity))
     backend = TelegramBackend(
         settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
     )
@@ -305,7 +328,10 @@ async def test_public_exception_rejects_private_and_non_broadcast_entities(entit
     backend = TelegramBackend(
         settings,
         runtime=TelegramRuntime(
-            settings, client=SimpleNamespace(get_entity=AsyncMock(return_value=entity))
+            settings,
+            client=SimpleNamespace(
+                is_connected=lambda: True, get_entity=AsyncMock(return_value=entity)
+            ),
         ),
         chat_cache=chat_cache,
     )
@@ -328,9 +354,10 @@ async def test_batch_lookup_deduplicates_and_retains_missing_ids_and_metadata() 
         entities=[types.MessageEntityBold(offset=2, length=4)],
     )
     client = SimpleNamespace(
+        is_connected=lambda: True,
         get_messages=AsyncMock(
             return_value=[None, message, types.MessageEmpty(id=12, peer_id=types.PeerChannel(123))]
-        )
+        ),
     )
     backend = TelegramBackend(
         settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
@@ -394,7 +421,9 @@ async def test_date_boundaries_and_offsets_across_adapter_pages(oldest_first: bo
         )
         for i in ids
     ]
-    client = SimpleNamespace(get_messages=AsyncMock(side_effect=[raw[:2], raw[2:]]))
+    client = SimpleNamespace(
+        is_connected=lambda: True, get_messages=AsyncMock(side_effect=[raw[:2], raw[2:]])
+    )
     backend = TelegramBackend(
         settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
     )
@@ -441,11 +470,12 @@ async def test_empty_telegram_messages_advance_pagination() -> None:
         runtime=TelegramRuntime(
             settings,
             client=SimpleNamespace(
+                is_connected=lambda: True,
                 get_messages=AsyncMock(
                     return_value=[
                         types.MessageEmpty(id=i, peer_id=types.PeerUser(1)) for i in (20, 19)
                     ]
-                )
+                ),
             ),
         ),
         chat_cache=chat_cache,

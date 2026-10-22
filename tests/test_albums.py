@@ -91,7 +91,7 @@ async def test_album_reference_forms_resolve_to_same_canonical_source(ref_kind: 
     assert result.scan_limit == 30
     assert (result.scanned_before, result.scanned_after) == (1, 1)
     assert result.before_exhausted is True and result.after_exhausted is True
-    assert backend.backend_calls[:2] == ["catalog", "resolve_message"]
+    assert backend.backend_calls[:2] == ["authorization", "resolve_message"]
     assert backend.reads == [f"{CHAT_ID}:20"]
     assert backend.window_calls == [
         (CHAT_ID, {"anchor_id": 20, "limit": 30, "newer": False}),
@@ -156,13 +156,13 @@ async def test_album_folder_permission_revocation_uses_fresh_catalog() -> None:
     assert backend.reads == [f"{CHAT_ID}:20"] and len(backend.window_calls) == 2
 
 
-@pytest.mark.parametrize("failure", ["catalog", "public"])
+@pytest.mark.parametrize("failure", ["authorization", "public"])
 async def test_album_access_check_failure_cannot_release_anchor(failure: str) -> None:
     chat = Chat(id=CHAT_ID, title="Public", type="channel", username="source")
     backend = AlbumBackend([member(20)], chats=[], external_chats=[chat])
     error = ToolError("CONNECTION_ERROR", "Temporary failure")
-    if failure == "catalog":
-        backend.catalog_fault = error
+    if failure == "authorization":
+        backend.authorization_fault = error
     else:
         backend.public_faults[CHAT_ID] = error
     with pytest.raises(ToolError, match="CONNECTION_ERROR"):
@@ -370,7 +370,8 @@ async def test_retrying_album_after_transient_failure_starts_fresh_without_losin
     assert [m.message_ref.message_id for m in second.messages] == [19, 20, 21]
     assert second.issues == []
     assert backend.reads == [f"{CHAT_ID}:20", f"{CHAT_ID}:20"]
-    assert backend.backend_calls.count("catalog") == 2
+    assert backend.backend_calls.count("catalog") == 0
+    assert backend.backend_calls.count("authorization") == 2
 
 
 @pytest.mark.parametrize("count", [1, 3, 11, 201])

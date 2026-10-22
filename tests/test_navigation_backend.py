@@ -99,6 +99,7 @@ def response(
 
 def adapter(result: types.messages.ForumTopics) -> tuple[TelegramBackend, AsyncMock]:
     client = AsyncMock(return_value=result)
+    client.is_connected = lambda: True
     client.get_input_entity = AsyncMock(return_value=types.InputPeerChannel(123, 456))
     settings = Settings()
     chat_cache = {}
@@ -276,6 +277,7 @@ async def test_foreign_topic_is_not_exposed_but_safe_tail_can_continue() -> None
 )
 async def test_unsupported_forums_fail_before_topic_rpc(entity: types.Channel) -> None:
     client = AsyncMock()
+    client.is_connected = lambda: True
     client.get_entity = AsyncMock(return_value=entity)
     settings = Settings()
     chat_cache = {}

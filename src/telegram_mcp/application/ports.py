@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Protocol
 
-from telegram_mcp.application.requests import MessageRead
+from telegram_mcp.application.requests import MessageRead, SearchRead
 from telegram_mcp.domain.models import (
     Chat,
     Folder,
@@ -17,10 +17,36 @@ from telegram_mcp.domain.models import (
 from telegram_mcp.domain.policy import ReadPolicy
 
 
+@dataclass(frozen=True)
+class SearchAnchor:
+    """A completed date-boundary lookup before the first filtered search page."""
+
+    offset_id: int
+
+
+type MessageOffset = int | SearchAnchor
+
+
 @dataclass
 class Batch:
     messages: list[Message]
-    next_offset: int
+    next_offset: MessageOffset
+    exhausted: bool
+    issues: list[Issue] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class GlobalOffset:
+    rate: int = 0
+    peer_id: str | None = None
+    message_id: int = 0
+    access_hash: int | None = None
+
+
+@dataclass
+class GlobalBatch:
+    messages: list[Message]
+    next_offset: GlobalOffset
     exhausted: bool
     issues: list[Issue] = field(default_factory=list)
 
@@ -87,6 +113,7 @@ class RuntimePort(Protocol):
 
 
 class ChatPort(Protocol):
+    async def check_authorization(self) -> None: ...
     async def catalog(self) -> tuple[list[Chat], list[Folder]]: ...
     async def resolve_chat(self, ref: str, *, refresh: bool = False) -> Chat: ...
     async def public_channel(self, chat_id: str) -> Chat: ...
@@ -106,6 +133,9 @@ class ForumPort(Protocol):
 
 
 class MessagePort(Protocol):
+    async def search_global(
+        self, request: SearchRead, *, offset: GlobalOffset, limit: int, chat_ids: list[str]
+    ) -> GlobalBatch: ...
     async def resolve_message(self, ref: str | MessageRef) -> MessageRef: ...
     async def message(self, ref: MessageRef) -> Message | None: ...
     async def messages(self, chat_id: str, message_ids: list[int]) -> dict[int, Message | None]: ...
@@ -115,7 +145,7 @@ class MessagePort(Protocol):
     async def discussion_chat(self, chat: Chat) -> str: ...
     async def thread_root(self, ref: MessageRef, discussion_chat_id: str) -> MessageRef: ...
     async def read(
-        self, chat_id: str, request: MessageRead, *, offset: int = 0, limit: int = 30
+        self, chat_id: str, request: MessageRead, *, offset: MessageOffset = 0, limit: int = 30
     ) -> Batch: ...
 
 

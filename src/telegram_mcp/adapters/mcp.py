@@ -7,26 +7,14 @@ from typing import Annotated, Literal
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError as MCPToolError
-from mcp_types import ToolAnnotations
+from mcp_types import CallToolResult, ToolAnnotations
 from pydantic import AwareDatetime, Field, StringConstraints
 
+from telegram_mcp.adapters import wire
 from telegram_mcp.adapters.tool_gate import ToolCallGate
 from telegram_mcp.adapters.version import get_version
 from telegram_mcp.application.service import Service
-from telegram_mcp.domain.models import (
-    AlbumResult,
-    ChatPage,
-    ChatType,
-    ContentType,
-    ContextResult,
-    DiscoveryResult,
-    Folder,
-    MessageRef,
-    MessageResult,
-    Page,
-    ToolError,
-    TopicPage,
-)
+from telegram_mcp.domain.models import ChatType, ContentType, MessageRef, ToolError
 
 Limit = Annotated[int, Field(ge=1, le=100)]
 ChatID = Annotated[str, Field(pattern=r"^-?[1-9]\d*$")]
@@ -81,11 +69,21 @@ def create_server(
             "Report issues and incomplete scope. "
             "Temporary paginated retrieval failures retain a next_cursor; "
             "respect retry_after_seconds before retrying. "
+            "CATALOG_LOADING means required access metadata is still loading: repeat the same "
+            "call after its retry delay, preserving any original cursor. "
+            "Do not restart the server. "
+            "Completed catalogs can be reused for up to 30 seconds; direct reads independent "
+            "of folder policy skip that scan. A disconnected Telegram client reconnects on "
+            "a later call; failed application requests are not replayed automatically. "
             "Repeat original arguments when continuing a cursor. get_messages supports text_offset "
             "for retrieving truncated text. Entities retain UTF-16 offsets into the original text. "
             "Messages include available counters, aggregate reactions and poll metadata from "
             "the retrieved payload, without extra requests or voter/reactor identity lists. "
-            "Unknown counts and unrevealed quiz correctness remain null; counters and results may "
+            "Unknown optional metadata is omitted; known false/zero values remain explicit. "
+            "Message references are canonical chat_id:message_id strings. Message-bearing results "
+            "share title/type/username in the top-level chats map, keyed by chat ID. "
+            "Use get_chat or list_chats for full chat metadata. Empty entities and "
+            "attachments and an unknown sender are omitted. Counters and results may "
             "change between calls. Paid reaction counts measure Stars, not people. "
             "get_album scans a bounded neighborhood around a message, with no cursor or album "
             "completeness guarantee. Retry the whole call after temporary issues and any reported "
@@ -101,13 +99,13 @@ def create_server(
 
     @server.tool(annotations=readonly)
     @expose
-    async def get_status() -> dict[str, object]:
+    async def get_status() -> Annotated[CallToolResult, wire.Status]:
         """Check fresh Telegram authorization, connection, discovery policy and read scope.
 
         authorized is true if confirmed, false if missing/revoked, or null if the check failed.
         error explains a failure; connected is reported independently.
         """
-        return await service.get_status()
+        return wire.encode(await service.get_status())
 
     @server.tool(annotations=readonly)
     @expose
@@ -116,23 +114,23 @@ def create_server(
             str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1000)
         ],
         limit: Limit = 20,
-    ) -> DiscoveryResult:
+    ) -> Annotated[CallToolResult, wire.DiscoveryResult]:
         """Find public broadcast channels by a trimmed query of 1..1000 characters.
 
         Requires allow_public_channel_discovery. Returns channel metadata, not posts;
         reading selected channels requires separate retrieval permission. Results preserve
         Telegram order, are not exhaustive, and have no cursor. Filtering can return fewer
-        than limit. Unknown participant counts are null. On temporary failure, retry this call after
-        any reported wait.
+        than limit. Unknown participant counts are omitted. On temporary failure, retry this call
+        after any reported wait.
         """
-        return await service.search_public_channels(query, limit)
+        return wire.encode(await service.search_public_channels(query, limit))
 
     @server.tool(annotations=readonly)
     @expose
     async def get_similar_channels(
         chat_ref: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)],
         limit: Limit = 20,
-    ) -> DiscoveryResult:
+    ) -> Annotated[CallToolResult, wire.DiscoveryResult]:
         """Find similar public channels for a required public broadcast source.
 
         chat_ref accepts a numeric ID, @username or t.me[/s]/username URL; an unknown ID
@@ -143,13 +141,15 @@ def create_server(
         recommendations without a source. On temporary failure, retry this call after any
         reported wait.
         """
-        return await service.get_similar_channels(chat_ref, limit)
+        return wire.encode(await service.get_similar_channels(chat_ref, limit))
 
     @server.tool(annotations=readonly)
     @expose
-    async def list_folders(query: str | None = None) -> list[Folder]:
+    async def list_folders(
+        query: str | None = None,
+    ) -> Annotated[CallToolResult, wire.FolderResult]:
         """Discover folder IDs, names, order and rules. Optional case-insensitive name substring."""
-        return await service.list_folders(query)
+        return wire.encode(await service.list_folders(query))
 
     @server.tool(annotations=readonly)
     @expose
@@ -159,24 +159,24 @@ def create_server(
         folder_ids: FolderIDs | None = None,
         limit: Limit = 30,
         cursor: str | None = None,
-    ) -> ChatPage:
+    ) -> Annotated[CallToolResult, wire.ChatPage]:
         """List permitted chats, optionally from a union of folders. Page through all results.
 
         query matches chat title or username.
         Archive chats are included unless folder rules exclude them.
         A cursor freezes the selected chat list; continue with the same filters.
         """
-        return await service.list_chats(query, chat_type, folder_ids, limit, cursor)
+        return wire.encode(await service.list_chats(query, chat_type, folder_ids, limit, cursor))
 
     @server.tool(annotations=readonly)
     @expose
-    async def get_chat(chat_ref: str) -> dict[str, object]:
+    async def get_chat(chat_ref: str) -> Annotated[CallToolResult, wire.ChatDetails]:
         """Read permitted chat metadata by numeric ID, exact @username or t.me[/s]/username URL.
 
         Explicit public channels outside the allowlist require allow_public_channel_reads.
         Unknown numeric IDs may require resolving a username or URL first.
         """
-        return await service.get_chat(chat_ref)
+        return wire.encode(await service.get_chat(chat_ref))
 
     @server.tool(annotations=readonly)
     @expose
@@ -188,7 +188,7 @@ def create_server(
         | None = None,
         limit: Limit = 30,
         cursor: str | None = None,
-    ) -> TopicPage:
+    ) -> Annotated[CallToolResult, wire.TopicPage]:
         """List topics in a permitted forum supergroup by ID, @username or t.me[/s] link.
 
         query optionally searches topic names. Public discovery/read permissions do not
@@ -201,7 +201,7 @@ def create_server(
         get_thread. General (ID 1) has no root_message_ref. Bot forums and monoforums
         are unsupported. Listing topics does not mark them read or modify them.
         """
-        return await service.list_topics(chat_ref, query, limit, cursor)
+        return wire.encode(await service.list_topics(chat_ref, query, limit, cursor))
 
     @server.tool(annotations=readonly)
     @expose
@@ -210,7 +210,7 @@ def create_server(
         limit: Limit = 30,
         cursor: str | None = None,
         topic_id: TopicID | None = None,
-    ) -> Page:
+    ) -> Annotated[CallToolResult, wire.Page]:
         """Read a chat's pinned messages, newest first, by ID, @username or t.me[/s] link.
 
         Omit topic_id for chat-wide pins, or supply a positive forum topic ID (General is 1).
@@ -221,40 +221,46 @@ def create_server(
         on temporary failures. Pin membership can change during traversal. No messages are
         pinned, unpinned, or marked read by this tool.
         """
-        return await service.get_pinned_messages(chat_ref, limit, cursor, topic_id)
+        return wire.encode(await service.get_pinned_messages(chat_ref, limit, cursor, topic_id))
 
     @server.tool(annotations=readonly)
     @expose
     async def search_messages(
-        query: Annotated[str, Field(min_length=1, max_length=1000)],
+        query: Annotated[str, Field(max_length=1000)],
         chat_ids: ChatIDs | None = None,
         folder_ids: FolderIDs | None = None,
         date_from: AwareDatetime | None = None,
         date_to: AwareDatetime | None = None,
         sender_id: ChatID | None = None,
         content_type: ContentType | None = None,
+        has_link: bool | None = None,
         limit: Limit = 30,
         cursor: str | None = None,
-    ) -> Page:
+    ) -> Annotated[CallToolResult, wire.Page]:
         """Search Telegram by words across permitted chats, globally newest first.
 
         Dates include a timezone; interval is [date_from, date_to). Folder IDs form a union;
         explicit chat_ids intersect that union. Omitted selectors use all permitted dialogs.
+        has_link=true selects URL-bearing posts, independently of content_type; only then
+        may query be empty. has_link=false excludes links. Omit it for either kind.
         Uses Telegram keyword search, not semantic search. Native sender search and local
         date/content filtering are combined. Partial/empty pages may carry next_cursor.
         Configured public-channel access applies only to explicit chat_ids, never implicit scope.
         Temporary failures retain next_cursor; respect retry_after_seconds before continuing.
         """
-        return await service.search_messages(
-            query=query,
-            chat_ids=chat_ids,
-            folder_ids=folder_ids,
-            date_from=date_from,
-            date_to=date_to,
-            sender_id=sender_id,
-            content_type=content_type,
-            limit=limit,
-            cursor=cursor,
+        return wire.encode(
+            await service.search_messages(
+                query=query,
+                chat_ids=chat_ids,
+                folder_ids=folder_ids,
+                date_from=date_from,
+                date_to=date_to,
+                sender_id=sender_id,
+                content_type=content_type,
+                has_link=has_link,
+                limit=limit,
+                cursor=cursor,
+            )
         )
 
     @server.tool(annotations=readonly)
@@ -268,7 +274,7 @@ def create_server(
         cursor: str | None = None,
         chat_ref: str | None = None,
         topic_id: TopicID | None = None,
-    ) -> Page:
+    ) -> Annotated[CallToolResult, wire.Page]:
         """Read a chat's history over [date_from, date_to), or recent messages if dates are omitted.
 
         Supply exactly one of chat_id or chat_ref (numeric ID, @username, or t.me[/s]/username).
@@ -281,15 +287,17 @@ def create_server(
         Public channels outside the allowlist require allow_public_channel_reads.
         Temporary failures retain next_cursor; respect retry_after_seconds before continuing.
         """
-        return await service.get_history(
-            chat_id=chat_id,
-            date_from=date_from,
-            date_to=date_to,
-            order=order,
-            limit=limit,
-            cursor=cursor,
-            chat_ref=chat_ref,
-            topic_id=topic_id,
+        return wire.encode(
+            await service.get_history(
+                chat_id=chat_id,
+                date_from=date_from,
+                date_to=date_to,
+                order=order,
+                limit=limit,
+                cursor=cursor,
+                chat_ref=chat_ref,
+                topic_id=topic_id,
+            )
         )
 
     @server.tool(annotations=readonly)
@@ -298,25 +306,27 @@ def create_server(
         refs: Annotated[list[str | MessageRef], Field(min_length=1, max_length=100)],
         text_offset: Annotated[int, Field(ge=0)] = 0,
         text_limit: Annotated[int, Field(ge=1, le=100000)] = 12000,
-    ) -> MessageResult:
+    ) -> Annotated[CallToolResult, wire.MessageResult]:
         """Fetch posts by Telegram URL, 'chat_id:message_id', or {chat_id, message_id}.
 
         Includes authors, reply references, attachments, original links, available counters,
-        aggregate reactions and polls. Unknown counts/results remain null; no extra requests
-        are made for metadata or voter/reactor identities. Polls retain content_type="other".
+        aggregate reactions, polls and available web-page previews. Unknown metadata is omitted;
+        previews come from the message payload without fetching external URLs. has_link is
+        independent of content_type. No extra requests are made for metadata or voter/reactor
+        identities. Polls retain content_type="other".
         Missing messages produce individual issues with zero-based input_index. Input order and
         duplicates are preserved. For truncated text call again with next_text_offset.
         Public channels outside the allowlist require allow_public_channel_reads;
         linked discussions need ordinary access.
         """
-        return await service.get_messages(refs, text_offset, text_limit)
+        return wire.encode(await service.get_messages(refs, text_offset, text_limit))
 
     @server.tool(annotations=readonly)
     @expose
     async def get_album(
         ref: str | MessageRef,
         scan_limit: Annotated[int, Field(ge=1, le=100, strict=True)] = 30,
-    ) -> AlbumResult:
+    ) -> Annotated[CallToolResult, wire.AlbumResult]:
         """Read messages from one album around a member's Telegram URL or message reference.
 
         ref accepts a URL, 'chat_id:message_id', or {chat_id, message_id}. Scans up to
@@ -331,7 +341,7 @@ def create_server(
         Explicit public channels require the existing read permission. This tool does not
         traverse linked discussions, download attachments, or mark messages read.
         """
-        return await service.get_album(ref, scan_limit)
+        return wire.encode(await service.get_album(ref, scan_limit))
 
     @server.tool(annotations=readonly)
     @expose
@@ -340,24 +350,24 @@ def create_server(
         before: Annotated[int, Field(ge=0, le=30)] = 10,
         after: Annotated[int, Field(ge=0, le=30)] = 10,
         reply_depth: Annotated[int, Field(ge=0, le=10)] = 3,
-    ) -> ContextResult:
+    ) -> Annotated[CallToolResult, wire.ContextResult]:
         """Read a message, chronological neighbors, and a bounded chain of parent replies.
 
         This is temporal context; use get_thread for all comments/replies in a discussion.
         Cross-chat reply traversal respects the server access policy.
         """
-        return await service.get_context(ref, before, after, reply_depth)
+        return wire.encode(await service.get_context(ref, before, after, reply_depth))
 
     @server.tool(annotations=readonly)
     @expose
     async def get_thread(
         ref: str | MessageRef, limit: Limit = 30, cursor: str | None = None
-    ) -> Page:
+    ) -> Annotated[CallToolResult, wire.Page]:
         """Read replies to a group thread root or comments on a channel post, newest first.
 
         For channels the linked discussion group must also be permitted. thread_root identifies
         the root in that group; get_messages can fetch it. Unsupported threads return an error.
         """
-        return await service.get_thread(ref, limit, cursor)
+        return wire.encode(await service.get_thread(ref, limit, cursor))
 
     return server

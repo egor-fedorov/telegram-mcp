@@ -5,17 +5,23 @@ from datetime import datetime
 from typing import Literal
 
 from telegram_mcp.application.common import check_limit
-from telegram_mcp.application.ports import Clock, CursorPort, ExecutionLimits, MessagePort
-from telegram_mcp.application.requests import MessageRead
+from telegram_mcp.application.ports import (
+    Clock,
+    CursorPort,
+    ExecutionLimits,
+    MessageOffset,
+    MessagePort,
+)
+from telegram_mcp.application.requests import MessageRead, SearchRead
 from telegram_mcp.application.retry import RetryState
-from telegram_mcp.domain.models import Issue, Message, Page, Scope, ToolError
+from telegram_mcp.domain.models import Issue, Message, Page, Scope, SearchProgress, ToolError
 from telegram_mcp.domain.text import clip
 
 
 @dataclass
 class Stream:
     chat_id: str
-    offset: int = 0
+    offset: MessageOffset = 0
     buffer: list[Message] = field(default_factory=list)
     exhausted: bool = False
     retry: RetryState = field(default_factory=RetryState)
@@ -28,6 +34,7 @@ class QueryState:
     date_to: datetime
     explicit_chat_ids: list[str] = field(default_factory=list)
     issues: list[Issue] = field(default_factory=list)
+    next_source_index: int = 0
 
 
 class MessagePager:
@@ -58,37 +65,45 @@ class MessagePager:
         failed_this_call: set[str] = set()
         while len(output) < limit:
             # Prime every stream before choosing the next globally ordered message.
-            for stream in state.streams:
-                while not stream.buffer and not stream.exhausted:
+            while remaining > 0 and self.clock.monotonic() < deadline:
+                stream = None
+                for _ in state.streams:
+                    candidate = state.streams[state.next_source_index]
+                    state.next_source_index = (state.next_source_index + 1) % len(state.streams)
                     if (
-                        remaining <= 0
-                        or self.clock.monotonic() >= deadline
-                        or stream.chat_id in failed_this_call
-                        or not stream.retry.ready(self.clock)
+                        not candidate.buffer
+                        and not candidate.exhausted
+                        and candidate.chat_id not in failed_this_call
+                        and candidate.retry.ready(self.clock)
                     ):
+                        stream = candidate
                         break
-                    remaining -= 1
-                    try:
-                        batch = await self.messages.read(
-                            stream.chat_id,
-                            request,
-                            offset=stream.offset,
-                            limit=self.limits.page_size,
+                if stream is None:
+                    break
+                remaining -= 1
+                try:
+                    batch = await self.messages.read(
+                        stream.chat_id,
+                        request,
+                        offset=stream.offset,
+                        limit=self.limits.page_size,
+                    )
+                    if not batch.exhausted and batch.next_offset == stream.offset:
+                        raise ToolError(
+                            "PAGINATION_STALLED", "Telegram returned a non-advancing page."
                         )
-                        if not batch.exhausted and batch.next_offset == stream.offset:
-                            raise ToolError(
-                                "PAGINATION_STALLED", "Telegram returned a non-advancing page."
-                            )
-                        stream.offset = batch.next_offset
-                        state.issues.extend(batch.issues)
-                        stream.buffer = batch.messages
-                        stream.exhausted = batch.exhausted
-                        stream.retry.clear()
-                    except ToolError as exc:
-                        if exc.retryable:
-                            stream.retry.record(exc, stream.chat_id, self.clock)
-                            failed_this_call.add(stream.chat_id)
-                            break
+                    stream.offset = batch.next_offset
+                    for issue in batch.issues:
+                        if issue not in state.issues:
+                            state.issues.append(issue)
+                    stream.buffer = batch.messages
+                    stream.exhausted = batch.exhausted
+                    stream.retry.clear()
+                except ToolError as exc:
+                    if exc.retryable:
+                        stream.retry.record(exc, stream.chat_id, self.clock)
+                        failed_this_call.add(stream.chat_id)
+                    else:
                         stream.retry.clear()
                         state.issues.append(exc.issue(stream.chat_id))
                         stream.exhausted = True
@@ -98,9 +113,9 @@ class MessagePager:
             if not candidates:
                 break
 
-            def key(stream: Stream) -> tuple[datetime, str, int]:
+            def key(stream: Stream) -> tuple[datetime, int, int]:
                 head = stream.buffer[0]
-                return head.sent_at, stream.chat_id, head.message_ref.message_id
+                return head.sent_at, int(stream.chat_id), head.message_ref.message_id
 
             selected = min(candidates, key=key) if oldest else max(candidates, key=key)
             output.append(
@@ -131,4 +146,12 @@ class MessagePager:
             issues=issues,
             order=order,
             topic_id=topic_id,
+            progress=SearchProgress(
+                sources_total=len(state.streams),
+                sources_ready=sum(bool(s.buffer) or s.exhausted for s in state.streams),
+                sources_exhausted=sum(s.exhausted and not s.buffer for s in state.streams),
+                rpc_pages_this_call=self.limits.rpc_pages_per_call - remaining,
+            )
+            if isinstance(request, SearchRead)
+            else None,
         )

@@ -31,7 +31,7 @@ fresh metadata and must satisfy the same public-channel criteria. If a numeric I
 be resolved, use its username or link.
 
 Each `PublicChannel` contains `id`, `title`, an active `username`, public `url`, and
-`participants_count`. A participant count unavailable in Telegram's response is `null`,
+`participants_count`. A participant count unavailable in Telegram's response is omitted,
 not zero. Discovery does not invent dialog state such as mute, unread, or folder membership.
 Each `DiscoveryResult` contains:
 
@@ -39,7 +39,7 @@ Each `DiscoveryResult` contains:
 | --- | --- |
 | `channels` | Eligible channels, deduplicated by ID in Telegram's result order |
 | `returned_count` | Actual number of channels returned |
-| `telegram_total_count` | Telegram's recommendation count when provided; otherwise `null` |
+| `telegram_total_count` | Telegram's recommendation count when provided; otherwise omitted |
 | `locally_truncated` | Whether eligible results were cut to the requested `limit` locally |
 | `exhaustive` | Always `false`; discovery does not cover all matching Telegram channels |
 
@@ -109,7 +109,34 @@ not discard results from other chats.
 `forward_origin` stores the original forwarding source and the author's signature
 in `post_author`. Information about the source of a saved forward is stored separately:
 `saved_from_ref`, `saved_from_sender_id`, `saved_from_name`, and `saved_at`.
-Unknown fields are `null`; no additional requests are made to forwarding sources.
+Unknown optional fields are omitted; no additional requests are made to forwarding sources.
+
+### Search links and media efficiently
+
+Use `search_messages(query="", has_link=true, chat_ids=["-1001234567890"])` to find
+link-bearing messages without a keyword. `has_link=false` excludes links; `null`/omission
+adds no link condition. A nonempty keyword remains required unless `has_link=true`.
+The predicate recognizes URL/TextURL entities and Telegram webpage media, without
+regex guesses or network requests to websites. It can be combined with `content_type`.
+
+`web_page` describes available, pending, empty, or not-modified Telegram previews and
+includes supplied URL/display URL, title, description, site, type, author, and pending
+until date. Preview photos/documents are separate from actual message attachments.
+
+URL, photo, voice, and audio filters run on Telegram where their coverage matches the
+requested type. With both link and media conditions, URL is pushed down and the media
+condition is checked locally. Sender searches retain local media filtering because
+Telegram can ignore combined sender/media filters. Text, other, video, and document
+categories retain local filtering to avoid omitting animations, round videos, or stickers.
+All paths enforce exact date and content conditions locally.
+
+With `allow_all_chats=true`, no chat/folder/sender selector and newest-first order,
+search uses `messages.searchGlobal`. It freezes the initial catalog IDs and date ceiling.
+Custom folder IDs are not passed as Telegram archive bucket IDs. Restricted searches
+never fetch content from other chats through global search and filter it afterwards.
+They fairly prime each allowed source and keep strict order, including numeric chat-ID
+tie breaking for messages sent in the same second. Global search preserves Telegram's
+native order within equal timestamps. No paid public-post search is used.
 
 ### Read message counters, reactions, and polls
 
@@ -120,11 +147,11 @@ identities. The tools do not vote, react, send Stars, or mark messages read.
 
 | Message field | Meaning |
 | --- | --- |
-| `view_count` | Telegram's message view count, or `null` when unavailable |
-| `forward_count` | Telegram's message forward count, or `null` when unavailable |
-| `reply_count` | Telegram's reply/comment count, or `null` when unavailable |
-| `reactions` | Aggregate reaction entries and their `is_min` flag, or `null` |
-| `poll` | Poll definition and available result metadata, or `null` |
+| `view_count` | Telegram's message view count, omitted when unavailable |
+| `forward_count` | Telegram's message forward count, omitted when unavailable |
+| `reply_count` | Telegram's reply/comment count, omitted when unavailable |
+| `reactions` | Aggregate reaction entries and their `is_min` flag, omitted when unavailable |
+| `poll` | Poll definition and available result metadata, omitted when unavailable |
 
 An explicit count of `0` is retained; missing counts are never inferred as zero.
 Counters, reactions and poll results can change between calls. Their presence does not
@@ -136,8 +163,8 @@ grant access to linked comments or other messages.
 people**. Unsupported and empty reaction types retain their counts without inventing
 an emoji. `is_chosen` and `chosen_order` describe the current account's selection only
 when Telegram supplies a full result for an ordinary or custom emoji. An `is_min=true`
-summary is partial: its personal selection fields remain `null`. Paid reactions also
-leave personal selection fields `null`. `reactions_as_tags=true` identifies reactions
+summary is partial: its personal selection fields are omitted. Paid reactions also
+omit personal selection fields. `reactions_as_tags=true` identifies reactions
 used as Saved Messages tags. Reactor lists are not returned.
 
 `poll` contains a string `id`, formatted `question`, ordered `answers`, state flags,
@@ -146,13 +173,13 @@ and an `option_id`: a lowercase hexadecimal encoding of Telegram's opaque option
 Use this ID to match results to options; titles and positions are not stable identifiers.
 Polls keep `content_type="other"` for compatibility with existing filters.
 
-`poll.results` is `null` when unavailable. When present, it contains `is_min`, optional
+`poll.results` is omitted when unavailable. When present, it contains `is_min`, optional
 `total_voters`, an optional `answers` result vector, and an optional formatted `solution`.
-The result vector is kept separate from the poll's option list: `null` means the vector
+The result vector is kept separate from the poll's option list: omission means the vector
 was absent, while `[]` means Telegram supplied an empty vector. Each entry keeps its
-`option_id`, nullable `voter_count`, `is_chosen`, and `is_correct`; do not infer zero votes
+`option_id`, optional `voter_count`, `is_chosen`, and `is_correct`; do not infer zero votes
 for options absent from the result. An `is_min=true` result leaves `is_chosen` unknown.
-Quiz correctness remains `null` until Telegram reveals a correct answer; ordinary polls
+Quiz correctness is omitted until Telegram reveals a correct answer; ordinary polls
 have no quiz correctness. `public_voters` describes the poll's setting but does not expose
 voter identities. Recent voters, reactors, reply participants, and answer authors are
 not included in this metadata.
@@ -271,8 +298,8 @@ and `order`. Topics retain Telegram's native ordering: `creation_date` or `last_
 when known. Each `ForumTopic` contains its topic `id`, `chat_id`, available `title` and
 `created_at`, general/closed/hidden/pinned flags, unread count, icon metadata, navigation
 references, and URL. Deleted or short records are marked by `is_deleted` or `is_short`;
-unavailable fields remain `null` rather than invented values. General has topic ID `1`,
-`is_general=true`, and both `root_message_ref` and `url` are `null`; use `topic_id=1`
+unavailable optional fields are omitted rather than invented. General has topic ID `1`,
+`is_general=true`, and both `root_message_ref` and `url` are absent; use `topic_id=1`
 with history or pins. Its `top_message_ref`, when available, identifies a real message.
 General never requires treating message ID `1` as a topic root.
 
@@ -284,9 +311,9 @@ report their cause in `issues`; respect any `retry_after_seconds` before continu
 A failed access check prevents buffered results from being returned.
 
 Selected-topic history and pinned messages use the ordinary `Page` contract, text
-budget, and recovery behavior. `Page.topic_id` identifies a selected topic and is `null`
+budget, and recovery behavior. `Page.topic_id` identifies a selected topic and is omitted
 for chat-wide requests. A message's `topic_id` records its known forum topic; unknown
-membership remains `null`. A cursor cannot be moved between topics or between chat-wide
+membership is omitted. A cursor cannot be moved between topics or between chat-wide
 and selected-topic requests. Temporary retrieval failures retain the cursor; respect
 `retry_after_seconds` before retrying.
 
@@ -295,27 +322,38 @@ provide an immutable snapshot.
 
 ## Retrieval rules
 
+Version 0.3 uses [compact JSON](migration-0.3.md): string references, shared chat metadata,
+and omitted unknown optional fields. Text and structured results carry the same complete
+payload. `list_folders` returns an object with a `folders` array.
+
 - Folders form a union without duplicates. `chat_ids` intersect with selected folders.
   An omitted selector means no additional filter; an empty list is an error.
 - Server restrictions apply in addition to these filters, including linked discussions
   and parent replies. To read channel comments, permit the linked group as well.
   Public-channel permission applies only to the current request and does not grant
   access to the linked group or replies from another chat.
+- Required catalogs load incrementally; repeat `CATALOG_LOADING` with the original
+  arguments after its retry delay. Completed catalogs are reused for up to 30 seconds
+  by default. Direct reads independent of folders skip the catalog.
 - Folder rules account for categories, pinned/explicitly included chats, exclusions,
   archive status, mute/unread state, and unread mentions according to Telegram Desktop rules.
 - Dates must include a timezone; the interval is `[date_from, date_to)`.
   History/search fixes the upper time boundary on the first request.
-- Search uses Telegram's native keyword search. The server additionally filters by
-  date range and content type. There is no semantic index yet.
+- Search uses Telegram's native search index and supported server filters, then applies
+  exact local conditions. There is no semantic index or guarantee of exhaustive account history.
 - Pagination freezes the selected set of chats. Continuation checks current access,
   including the public status of channels outside the allowlist. Revoked access causes
   the call to fail. If catalog/access checks fail, buffered messages are not returned;
   retry the original cursor after resolving the cause.
-- `scope.complete` means the entire selection has been traversed without errors.
+- `scope.complete` means the selected traversal finished without errors. For search,
+  this covers Telegram's returned index, not a proof that every historical message was indexed.
   Keep calling with `next_cursor` until it becomes null. Preserve the original filters;
   `limit` may change.
 - With many chats, an empty page may include `next_cursor`: the server is loading
-  initial source pages to preserve the global ordering of messages by time.
+  initial source pages to preserve global ordering. `progress` reports sources total, ready
+  (buffered or exhausted), exhausted without a buffer, and RPC pages used in this call.
+  A source needing more data can stop being ready; readiness is a current state, not a
+  monotonically increasing percentage.
 - For paginated retrieval, individual chat failures appear in `issues`. Temporary errors
   `RATE_LIMITED`, `CONNECTION_ERROR`, and `TELEGRAM_UNAVAILABLE` preserve the position and `next_cursor`,
   while `scope.complete` remains `false`. Repeat the original arguments with this cursor;

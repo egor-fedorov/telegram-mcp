@@ -336,7 +336,13 @@ async def test_existing_backend_paths_preserve_metadata_without_extra_rpc(method
         entities=[types.MessageEntityCustomEmoji(9, 2, 1234)],
     )
     client = AsyncMock()
+    client.is_connected = lambda: True
     client.get_messages.return_value = [source]
+    if method == "search":
+        client.return_value = types.messages.Messages(
+            messages=[source], users=[], chats=[], topics=[]
+        )
+        client.get_input_entity.return_value = types.InputPeerChannel(123, 456)
     backend = TelegramBackend(
         settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
     )
@@ -355,5 +361,10 @@ async def test_existing_backend_paths_preserve_metadata_without_extra_rpc(method
     assert message.poll is not None and message.poll.results is not None
     assert message.poll.results.total_voters == 0
     assert message.entities[0].document_id == "1234"
-    client.get_messages.assert_awaited_once()
-    assert len(client.mock_calls) == 1
+    if method == "search":
+        client.assert_awaited_once()
+        client.get_messages.assert_not_called()
+        assert len(client.mock_calls) == 2
+    else:
+        client.get_messages.assert_awaited_once()
+        assert len(client.mock_calls) == 1

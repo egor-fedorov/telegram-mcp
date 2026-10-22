@@ -45,7 +45,7 @@ class MessageReader:
         check_limit(len(refs))
         if text_offset < 0 or not 1 <= text_limit <= 100000:
             raise ToolError("INVALID_ARGUMENT", "Invalid text offset or limit (maximum 100000).")
-        access = await self.access.load()
+        access = await self.access.load(explicit=True)
         messages: dict[int, Message] = {}
         issues: dict[int, Issue] = {}
         groups: dict[str, list[tuple[int, MessageRef]]] = {}
@@ -83,7 +83,7 @@ class MessageReader:
     async def get_album(self, ref: str | MessageRef, scan_limit: int = 30) -> AlbumResult:
         if type(scan_limit) is not int or not 1 <= scan_limit <= 100:
             raise ToolError("INVALID_ARGUMENT", "scan_limit must be an integer from 1 to 100.")
-        access = await self.access.load()
+        access = await self.access.load(explicit=True)
         anchor_ref = await self.resolve(ref, access)
         anchor = await self.messages.message(anchor_ref)
         if (
@@ -139,7 +139,7 @@ class MessageReader:
     ) -> ContextResult:
         if not (0 <= before <= 30 and 0 <= after <= 30 and 0 <= reply_depth <= 10):
             raise ToolError("INVALID_ARGUMENT", "before/after: 0..30; reply_depth: 0..10.")
-        access = await self.access.load()
+        access = await self.access.load(explicit=True)
         anchor_ref = await self.resolve(ref, access)
         anchor = await self.messages.message(anchor_ref)
         if anchor is None:
@@ -184,7 +184,7 @@ class MessageReader:
     async def get_thread(
         self, ref: str | MessageRef, limit: int = 30, cursor: str | None = None
     ) -> Page:
-        access = await self.access.load()
+        access = await self.access.load(explicit=True)
         source = await self.resolve(ref, access)
         chat = await self.chats.resolve_chat(source.chat_id)
         discussion_id = await self.messages.discussion_chat(chat)

@@ -31,8 +31,9 @@ retained in the shared domain contracts; separate copies of each model would add
 conversion work without a current consumer requiring it.
 
 `tests/test_architecture.py` checks absolute and relative imports and dependency cycles.
-`tests/fixtures/mcp_contract.json` records the pre-refactor input/output schemas and
-annotations for every tool; both MCP modes are checked against that immutable baseline.
+`tests/fixtures/mcp_contract.json` records versioned input/output schemas and annotations
+for every tool; both MCP modes are checked against the current contract. R1 preserved
+the original baseline; 0.3 deliberately replaces it with the documented compact contract.
 
 ## Application responsibilities
 
@@ -128,3 +129,29 @@ handling uses POSIX modes where applicable and the user's filesystem ACLs on
 Windows. These transport and platform changes do not introduce new Telegram tools,
 attachment downloads, persistent cursors, or multiple account profiles. See
 [configuration](configuration.md) and [client setup](clients.md) for operational details.
+
+## R3: Reliable retrieval and compact transport contracts
+
+R3 keeps the layers and 14 tools while separating public MCP DTOs from domain models.
+The MCP adapter projects message references and shared chat summaries, omits unknown
+optional metadata, and emits a single minified JSON payload in both text and structured
+content. Typed output schemas remain self-contained. Domain text clipping and cursor
+advancement happen before projection; the transport never drops messages to fit a budget.
+
+Explicit source reads independent of folders bypass catalog enumeration. Required catalogs
+use one private resumable builder and atomically published snapshots, with a maximum
+30-second reuse TTL. Fresh authorization and current local policy precede buffered output;
+fresh public metadata remains request-local. Expired or partial catalogs never grant access.
+The runtime restores a disconnected client under its lifecycle lock while retaining the
+session lease, and exposes generation changes to invalidate cached access metadata.
+
+`QueryPreparation` chooses per-chat or unrestricted global search once. `MessagePager`
+primes sources fairly and merges by date, numeric chat ID, and message ID. `GlobalSearchPager`
+owns a compound offset and preserves native ordering across pages. Both keep immutable
+cursor checkpoints and temporary-failure cooldowns. Raw search calls expose explicit
+page budgets, including the date-anchor step for filter-only per-chat search.
+
+Raw payload normalization uses response-local entity maps rather than Telethon's private
+message initializer. Link previews remain separate from actual media attachments.
+Autonomous tests cover these contracts; a bounded user-selected live probe is a separate
+release gate and does not run in CI.

@@ -84,6 +84,7 @@ async def test_search_uses_peer_order_and_filters_raw_entities_without_detail_re
         users=[types.User(id=1, username="person"), types.User(id=40, bot=True, username="bot")],
     )
     client = AsyncMock(return_value=response)
+    client.is_connected = lambda: True
     settings = Settings()
     chat_cache = {}
     backend = TelegramBackend(
@@ -122,7 +123,10 @@ async def test_empty_search_remains_unknown_coverage() -> None:
     backend = TelegramBackend(
         settings,
         runtime=TelegramRuntime(
-            settings, client=AsyncMock(return_value=types.contacts.Found([], [], [], []))
+            settings,
+            client=AsyncMock(
+                return_value=types.contacts.Found([], [], [], []), is_connected=lambda: True
+            ),
         ),
         chat_cache=chat_cache,
     )
@@ -145,6 +149,7 @@ async def test_candidates_exclude_view_bans_but_allow_unjoined_and_send_restrict
         else types.messages.Chats(entries)
     )
     client = AsyncMock(return_value=response)
+    client.is_connected = lambda: True
     client.get_entity = AsyncMock(return_value=channel(10))
     settings = Settings()
     chat_cache = {}
@@ -169,6 +174,7 @@ async def test_candidates_exclude_view_bans_but_allow_unjoined_and_send_restrict
 )
 async def test_similar_allows_unjoined_and_send_restricted_seed(seed: types.Channel) -> None:
     client = AsyncMock(return_value=types.messages.Chats([]))
+    client.is_connected = lambda: True
     client.get_entity = AsyncMock(return_value=seed)
     settings = Settings()
     chat_cache = {}
@@ -187,6 +193,7 @@ async def test_similar_preserves_server_count_order_and_duplicates(with_count: b
         types.messages.ChatsSlice(100, entries) if with_count else types.messages.Chats(entries)
     )
     client = AsyncMock(return_value=response)
+    client.is_connected = lambda: True
     client.get_entity = AsyncMock(return_value=channel(10))
     settings = Settings()
     chat_cache = {}
@@ -220,6 +227,7 @@ async def test_similar_accepts_shared_references_and_alternate_public_username(
     reference: str,
 ) -> None:
     client = AsyncMock(return_value=types.messages.Chats([]))
+    client.is_connected = lambda: True
     client.get_entity = AsyncMock(
         return_value=channel(
             10, username=None, usernames=[types.Username("alternate", active=True)]
@@ -252,6 +260,7 @@ async def test_similar_accepts_shared_references_and_alternate_public_username(
 )
 async def test_similar_requires_fresh_eligible_seed_before_recommendations(seed: object) -> None:
     client = AsyncMock()
+    client.is_connected = lambda: True
     client.get_entity = AsyncMock(return_value=seed)
     settings = Settings()
     chat_cache = {}
@@ -270,6 +279,7 @@ async def test_similar_requires_fresh_eligible_seed_before_recommendations(seed:
 @pytest.mark.parametrize("seed", [channel(10, access_hash=None), channel(10, minimal=True)])
 async def test_similar_rejects_unavailable_input_entity(seed: types.Channel) -> None:
     client = AsyncMock()
+    client.is_connected = lambda: True
     client.get_entity = AsyncMock(return_value=seed)
     settings = Settings()
     chat_cache = {}
@@ -283,6 +293,7 @@ async def test_similar_rejects_unavailable_input_entity(seed: types.Channel) -> 
 
 async def test_similar_invalid_reference_does_not_request_personalized_recommendations() -> None:
     client = AsyncMock()
+    client.is_connected = lambda: True
     settings = Settings()
     chat_cache = {}
     backend = TelegramBackend(
@@ -305,7 +316,9 @@ async def test_telegram_rejected_query_is_an_argument_error(error_type: type[Exc
     chat_cache = {}
     backend = TelegramBackend(
         settings,
-        runtime=TelegramRuntime(settings, client=AsyncMock(side_effect=error_type(None))),
+        runtime=TelegramRuntime(
+            settings, client=AsyncMock(side_effect=error_type(None), is_connected=lambda: True)
+        ),
         chat_cache=chat_cache,
     )
     with pytest.raises(ToolError, match="INVALID_ARGUMENT.*too-short"):
@@ -327,6 +340,7 @@ async def test_discovery_failures_are_not_disguised_as_empty_results(
     method: str, failure: Exception, code: str, retry_after: int | None
 ) -> None:
     client = AsyncMock(side_effect=failure)
+    client.is_connected = lambda: True
     client.get_entity = AsyncMock(return_value=channel(10))
     settings = Settings()
     chat_cache = {}

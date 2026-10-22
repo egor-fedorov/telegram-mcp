@@ -37,6 +37,7 @@ def message_page(rows: list[Any], kind: str = "channel") -> Any:
 
 def adapter(response: Any) -> tuple[TelegramBackend, AsyncMock]:
     client = AsyncMock(return_value=response)
+    client.is_connected = lambda: True
     client.get_input_entity.return_value = types.InputPeerChannel(123, 456)
     client._self_id = 999
     client._mb_entity_cache = SimpleNamespace(get=lambda _: None)

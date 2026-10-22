@@ -18,55 +18,45 @@ need a detailed contract before implementation; no delivery dates are assigned.
 | M1 | Done | Opt-in public-channel search and recommendations without granting post access |
 | M2 | Done | Forum topics, pins, counters, reactions, polls, and bounded selected-album retrieval |
 | R1 | Done | Domain/application/adapter layers and explicit dependencies, preserving all 14 tools |
-| R2 | Implemented | Installable 0.2.0 package, Windows support, shared local HTTP process, client guides, and release automation |
-| M3 | Planned after R2 | Selected attachment downloads with size limits and delivery to the calling client |
+| R2 | Done | Installable 0.2.0 package, Windows support, shared local HTTP process, client guides, and release automation |
+| R3 | Implemented; CI/publication pending | Recoverable connections, bounded catalogs/search, and compact typed 0.3 responses |
+| M3 | Planned after R3 | Selected attachment downloads with size limits and delivery to the calling client |
 | M4 | Planned after M3 | New messages and available changes, persistent checkpoints, and source-linked export |
 
 The [historical completion records](docs/specs/README.md#historical-completion-records)
 include offline test results. They do not claim live Telegram validation.
 
-## Current stage: R2 — Installation, local sharing, and release 0.2.0
+## Current stage: R3 — Reliable retrieval and compact responses (0.3.0)
 
-Make the existing tools usable from a published package and several local clients
-without competing for one Telegram session. Deliver the agreed work in one focused
-PR before starting attachment downloads.
+Implementation is complete and prepared for one focused PR before attachment downloads. It adds:
 
-- Keep the package name `telegram-context-mcp` and command `telegram-mcp`. Prepare
-  version 0.2.0, `--version`, wheel/source builds, clean-install smoke checks, and
-  pinned `uv tool install`/`uvx` examples.
-- Support Windows, macOS, and Linux on Python 3.12–3.15. Use a portable exclusive
-  session lease, explicit UTF-8 files, and accurate POSIX-permission/Windows-ACL guidance.
-- Preserve `serve` as standalone STDIO. Add explicit foreground
-  `serve --transport http` on `127.0.0.1:8765/mcp`, with a configurable local port and
-  a random bearer token in the user profile.
-- Add `connect` as a STDIO proxy to that existing server. It reads local configuration
-  and the token; it neither starts the server nor falls back to opening a session.
-- Share one account, read policy, and in-memory cursor store across trusted local
-  clients. Preserve tool schemas and semantics, protect shared call/cursor state,
-  and keep the server alive when a client disconnects. This is not tenant isolation.
-- Keep login and configuration local. Local `login`, `configure`, `catalog`, and
-  `status` require the session owner to stop; MCP `get_status` diagnoses the running
-  server. Configuration errors identify their source/field without printing secrets.
-  Enter in `configure` preserves the current values, including `allow_all_chats`.
-- Provide verified client examples for Codex, Claude Desktop, Claude Code, Cursor,
-  and VS Code. Keep a short README and separate usage, configuration, troubleshooting,
-  architecture, security, and release documents.
-- Extend CI with platform/Python tests and distribution checks while retaining the
-  required `checks` job. Review Dependabot PRs manually; its generated `dependabot/`
-  branches are an explicit exception to human branch naming rules.
-- Publish version tags through GitHub OIDC and a PyPI Trusted Publisher. Create the
-  GitHub Release only after successful PyPI publication. See [releasing](docs/releasing.md)
-  for the external publisher setup and exact release procedure.
+- Bounded connection recovery and fresh authorization checks before saved-buffer output.
+- A completed-catalog cache (default/max 30 seconds), incremental cold loads, and a
+  direct-source path independent of catalog scans when folder policy is not involved.
+- Native account-dialog global search with all-chat permission, fair restricted-source priming with explicit
+  progress, safe native media/link filters, and webpage preview metadata.
+- Raw payload mapping without Telethon's private message initializer.
+- A compact typed contract for all 14 tools: shared chat summaries, canonical string
+  references, sparse optional metadata, and complete mirrored text/structured JSON.
+- Reproducible response/schema size checks and a bounded selected-source live probe.
 
-Completion requires offline `make check`, the CI compatibility/package checks, and
-review of the transport and credential boundaries. Actual PyPI publication additionally
-requires the project name and Trusted Publisher to be configured by its owner; do not
-mark publication complete from repository changes alone. Live Telegram validation is
-separate and uses sources selected by the user.
+See [migration](docs/migration-0.3.md), [usage](docs/usage.md), and the
+[validation record](docs/validation-0.3.md). Package and installation examples target
+0.3.0; publication is verified separately through the [release workflow](docs/releasing.md).
 
-The implementation is ready for release validation. Publication status is recorded by
-the [Release workflow](https://github.com/egor-fedorov/telegram-mcp/actions/workflows/release.yml)
-and [published releases](https://github.com/egor-fedorov/telegram-mcp/releases).
+Acceptance requires full offline `make check`, GitHub `checks`, diff review, at least
+60% response-size reduction on the fixed 30-post fixture, at least 25% reduction in
+`tools/list`, and bounded user-selected live validation before publication. Global
+live search requires separate account-wide permission; it is not part of the selected
+sources probe. No message content or private source identifiers belong in public reports.
+
+Local `make check` passed with 891 tests and one skipped; wheel and source-distribution
+installation smoke checks passed. The response/schema measurements passed:
+61.6% and 29.8% smaller respectively.
+The selected-source live probe completed 24 checks without issues, including reconnect
+and a subsequent history read. Global search, catalogs, forums, and authorization
+revocation remain covered offline only. Final GitHub checks, merge, and publication
+are pending; implementation completion does not imply a published release.
 
 ## Next: M3 — Selected attachment downloads
 

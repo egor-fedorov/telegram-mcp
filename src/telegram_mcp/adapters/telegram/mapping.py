@@ -22,6 +22,7 @@ from telegram_mcp.domain.models import (
     PublicChannel,
     Sender,
     ToolError,
+    WebPage,
 )
 
 MAX_TOPIC_ID = 2**31 - 1
@@ -189,10 +190,50 @@ def folder_from_tl(raw: Any, position: int, self_id: str | None = None) -> Folde
     )
 
 
-def normalize_message(raw: Any, chat: Chat) -> Message:
+def normalize_web_page(media: Any) -> WebPage | None:
+    if not isinstance(media, types.MessageMediaWebPage):
+        return None
+    raw = media.webpage
+    statuses = {
+        types.WebPage: "available",
+        types.WebPagePending: "pending",
+        types.WebPageEmpty: "empty",
+        types.WebPageNotModified: "not_modified",
+    }
+    status = statuses.get(type(raw))
+    if status is None:
+        return None
+    return WebPage.model_validate(
+        {
+            "status": status,
+            "id": str(raw.id) if getattr(raw, "id", None) is not None else None,
+            **{
+                name: getattr(raw, name, None)
+                for name in (
+                    "url",
+                    "display_url",
+                    "type",
+                    "site_name",
+                    "title",
+                    "description",
+                    "author",
+                )
+            },
+            "pending_until": utc(raw.date)
+            if isinstance(raw, types.WebPagePending) and isinstance(raw.date, datetime)
+            else None,
+        }
+    )
+
+
+def normalize_message(raw: Any, chat: Chat, *, entities: dict[int, Any] | None = None) -> Message:
     ref = MessageRef(chat_id=chat.id, message_id=raw.id)
     author = getattr(raw, "sender", None)
     sender_id = getattr(raw, "sender_id", None)
+    if sender_id is None and getattr(raw, "from_id", None) is not None:
+        sender_id = utils.get_peer_id(raw.from_id)
+    if author is None and entities is not None and sender_id is not None:
+        author = entities.get(sender_id)
     sender = Sender(
         id=str(sender_id) if sender_id else None,
         name=utils.get_display_name(author) if author else getattr(raw, "post_author", None),
@@ -200,9 +241,10 @@ def normalize_message(raw: Any, chat: Chat) -> Message:
     )
     content: ContentType = "text"
     attachments: list[Attachment] = []
-    document = getattr(raw, "document", None)
-    photo = getattr(raw, "photo", None)
-    if document:
+    media = getattr(raw, "media", None)
+    document = media.document if isinstance(media, types.MessageMediaDocument) else None
+    photo = media.photo if isinstance(media, types.MessageMediaPhoto) else None
+    if isinstance(document, types.Document):
         content = (
             "voice" if raw.voice else "video" if raw.video else "audio" if raw.audio else "document"
         )
@@ -216,7 +258,7 @@ def normalize_message(raw: Any, chat: Chat) -> Message:
                 size=document.size,
             )
         )
-    elif photo:
+    elif isinstance(photo, types.Photo):
         content = "photo"
         attachments.append(Attachment(id=f"{ref.key}:photo", type="photo", mime_type="image/jpeg"))
     elif getattr(raw, "media", None) and not isinstance(raw.media, types.MessageMediaWebPage):
@@ -271,6 +313,12 @@ def normalize_message(raw: Any, chat: Chat) -> Message:
         text=text,
         text_total_length=len(text),
         content_type=content,
+        has_link=isinstance(media, types.MessageMediaWebPage)
+        or any(
+            isinstance(entity, (types.MessageEntityUrl, types.MessageEntityTextUrl))
+            for entity in getattr(raw, "entities", None) or []
+        ),
+        web_page=normalize_web_page(media),
         entities=normalize_entities(getattr(raw, "entities", None)),
         reply_to=MessageRef(chat_id=reply_chat, message_id=reply_mid) if reply_mid else None,
         thread_ref=MessageRef(chat_id=thread_chat, message_id=top_mid) if top_mid else None,

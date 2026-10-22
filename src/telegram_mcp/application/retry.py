@@ -15,7 +15,7 @@ class RetryState:
     def ready(self, clock: Clock) -> bool:
         return clock.monotonic() >= self.retry_at
 
-    def record(self, error: ToolError, chat_id: str, clock: Clock) -> None:
+    def record(self, error: ToolError, chat_id: str | None, clock: Clock) -> None:
         self.issue = error.issue(chat_id)
         self.retry_at = clock.monotonic() + (error.retry_after or 0)
 

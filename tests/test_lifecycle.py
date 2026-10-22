@@ -11,6 +11,7 @@ from telegram_mcp.adapters.config import Settings
 from telegram_mcp.adapters.session import SessionLease
 from telegram_mcp.adapters.telegram.runtime import TelegramRuntime
 from telegram_mcp.domain.models import ToolError
+from tests.test_catalog_refresh import pinned_page
 
 
 def settings_for_session(tmp_path: Path) -> Settings:
@@ -71,6 +72,7 @@ async def test_constructor_failure_releases_lock(tmp_path: Path) -> None:
 async def test_disconnect_failure_still_releases_lock(tmp_path: Path) -> None:
     settings = settings_for_session(tmp_path)
     client = AsyncMock()
+    client.is_connected = Mock(return_value=True)
     runtime = TelegramRuntime(settings, client_factory=Mock(return_value=client))
     await runtime.ensure()
     client.disconnect.side_effect = ConnectionError()
@@ -144,6 +146,7 @@ async def test_failed_initial_auth_probe_releases_session_lock(
 async def test_concurrent_reads_share_one_connected_client(tmp_path: Path) -> None:
     settings = settings_for_session(tmp_path)
     client = AsyncMock()
+    client.is_connected = Mock(return_value=True)
     constructor = Mock(return_value=client)
     runtime = TelegramRuntime(settings, client_factory=constructor)
     try:
@@ -166,6 +169,7 @@ async def test_cancelled_connection_releases_session_lease(tmp_path: Path) -> No
         await asyncio.Event().wait()
 
     client = AsyncMock()
+    client.is_connected = Mock(return_value=True)
     client.connect.side_effect = connect
     runtime = TelegramRuntime(settings, client_factory=Mock(return_value=client))
     pending = asyncio.create_task(runtime.ensure())
@@ -198,16 +202,25 @@ async def test_catalog_message_and_forum_gateways_share_one_runtime(tmp_path: Pa
         forum=True,
         megagroup=True,
     )
-    dialog = SimpleNamespace(
-        entity=entity,
-        archived=False,
+    dialog = types.Dialog(
+        peer=types.PeerChannel(123),
+        top_message=1,
+        read_inbox_max_id=0,
+        read_outbox_max_id=0,
         unread_count=0,
-        dialog=SimpleNamespace(notify_settings=types.PeerNotifySettings()),
+        unread_mentions_count=0,
+        unread_reactions_count=0,
+        unread_poll_votes_count=0,
+        notify_settings=types.PeerNotifySettings(),
     )
 
     async def respond(request: object) -> object:
         if isinstance(request, functions.updates.GetStateRequest):
             return None
+        if isinstance(request, functions.messages.GetPinnedDialogsRequest):
+            return pinned_page([])
+        if isinstance(request, functions.messages.GetDialogsRequest):
+            return types.messages.Dialogs(dialogs=[dialog], messages=[], chats=[entity], users=[])
         if isinstance(request, functions.messages.GetDialogFiltersRequest):
             return SimpleNamespace(filters=[])
         assert isinstance(request, functions.messages.GetForumTopicsRequest)
@@ -216,7 +229,7 @@ async def test_catalog_message_and_forum_gateways_share_one_runtime(tmp_path: Pa
         )
 
     client = AsyncMock(side_effect=respond)
-    client.get_dialogs.return_value = [dialog]
+    client.is_connected = Mock(return_value=True)
     client.get_messages.return_value = []
     client.get_input_entity.return_value = types.InputPeerChannel(123, 456)
     constructor = Mock(return_value=client)
@@ -233,7 +246,7 @@ async def test_catalog_message_and_forum_gateways_share_one_runtime(tmp_path: Pa
         client.get_entity.assert_not_called()
         client.get_messages.assert_awaited_once()
         client.get_input_entity.assert_awaited_once()
-        assert client.await_count == 3
+        assert client.await_count == 6
     finally:
         await backend.close()
     client.disconnect.assert_awaited_once()

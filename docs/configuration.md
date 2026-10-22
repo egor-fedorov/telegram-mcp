@@ -132,6 +132,7 @@ constrain this application, not the account credentials themselves. Login codes 
 | --- | --- | --- |
 | `rpc_timeout_seconds` | `20` | Greater than 0, at most 60 |
 | `max_dialogs` | `10000` | 1–100000 |
+| `catalog_cache_ttl_seconds` | `30` | 0–30 seconds; 0 disables completed-snapshot reuse |
 | `rpc_pages_per_call` | `12` | 1–100 |
 | `cursor_ttl_seconds` | `900` | Positive integer |
 | `max_cursors` | `128` | Positive integer |
@@ -139,3 +140,24 @@ constrain this application, not the account credentials themselves. Login codes 
 Cursors additionally share a fixed 64 MiB serialized-data budget. They are process-local
 and may expire or be evicted. Increasing a timeout or page budget does not bypass
 Telegram's FloodWait. See [usage](usage.md#retrieval-rules) for continuation and text budgets.
+
+## Catalog freshness and recovery (0.3)
+
+A completed catalog is reused for at most `catalog_cache_ttl_seconds`. Every request
+still checks current local policy and authorization; explicit public-channel grants
+use fresh Telegram metadata. Folder-derived access can reflect cached membership until
+refresh. Telegram pagination is not an atomic snapshot, so early-page unread, mute,
+and contact metadata can be older than the reuse TTL. Folder definitions are fetched
+at the end of the scan.
+
+Large catalogs load incrementally: up to five RPC steps per call, stopping before
+another step after five seconds of work. Each RPC retains its configured timeout.
+`CATALOG_LOADING` reports progress and a retry delay. Repeat the same call in the same
+server process, including an existing cursor if supplied. No partial or expired catalog
+grants access. Network errors preserve committed progress; inactive builds expire after
+15 minutes. Local `catalog` and `configure` wait for this progress for up to five minutes.
+
+Explicit source reads skip the catalog when no configured folder grant or requested
+folder selector is involved. An unknown numeric entity requires a username/link;
+it does not silently start a complete dialog scan. Connection loss invalidates the
+completed snapshot; authorization loss also clears unfinished catalog state.

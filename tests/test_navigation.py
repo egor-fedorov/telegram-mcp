@@ -95,7 +95,7 @@ async def test_topics_reject_invalid_search_before_backend_calls(query: str) -> 
 
 
 @pytest.mark.parametrize("reference", ["1", "@forum", "https://t.me/forum"])
-async def test_topics_load_catalog_then_resolve_fresh_source(reference: str) -> None:
+async def test_topics_check_authorization_then_resolve_fresh_source(reference: str) -> None:
     backend = forum_backend()
     backend.topic_batches[("1", TopicOffset())] = topic_batch([1], total=1)
     page = await build_service(backend, Settings(allowed_chat_ids=["1"])).list_topics(
@@ -105,7 +105,7 @@ async def test_topics_load_catalog_then_resolve_fresh_source(reference: str) -> 
     assert page.scope.chat_ids == ["1"]
     assert page.scope.complete
     assert page.next_cursor is None
-    assert backend.backend_calls[:2] == ["catalog", "resolve_chat"]
+    assert backend.backend_calls[:2] == ["authorization", "resolve_chat"]
     assert backend.resolve_calls[0] == (reference, True)
     assert backend.topic_fetches[0][3] == "release 🚀"
 
@@ -267,7 +267,7 @@ async def test_topic_cursor_binds_source_reference_identity_and_query(mutation: 
     assert len(backend.topic_fetches) == 1
 
 
-@pytest.mark.parametrize("failure", ["revoked", "not_forum", "catalog", "resolver"])
+@pytest.mark.parametrize("failure", ["revoked", "not_forum", "authorization", "resolver"])
 async def test_topic_resume_revalidates_before_buffer_and_keeps_checkpoint(
     failure: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -281,8 +281,10 @@ async def test_topic_resume_revalidates_before_buffer_and_keeps_checkpoint(
         settings.allowed_chat_ids.clear()
     elif failure == "not_forum":
         backend.chats[0].is_forum = False
-    elif failure == "catalog":
-        backend.catalog_fault = ToolError("CONNECTION_ERROR", "Catalog temporarily unavailable.")
+    elif failure == "authorization":
+        backend.authorization_fault = ToolError(
+            "CONNECTION_ERROR", "Authorization check temporarily unavailable."
+        )
     else:
 
         async def unavailable(ref: str, *, refresh: bool = False) -> Chat:
@@ -294,7 +296,7 @@ async def test_topic_resume_revalidates_before_buffer_and_keeps_checkpoint(
     assert len(backend.topic_fetches) == 1
     settings.allowed_chat_ids = ["1"]
     backend.chats[0].is_forum = True
-    backend.catalog_fault = None
+    backend.authorization_fault = None
     monkeypatch.setattr(backend, "resolve_chat", original_resolver)
     resumed = await service.list_topics("@forum", cursor=first.next_cursor)
     assert topic_ids(resumed) == [4]

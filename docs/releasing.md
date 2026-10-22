@@ -1,7 +1,7 @@
 # Releasing Telegram Context MCP
 
 The distribution is `telegram-context-mcp`; its executable is `telegram-mcp`.
-The first release prepared by this workflow is **0.2.0**. Source changes, a release
+The current release target is **0.3.0**. Source changes, a release
 tag, a GitHub Release, and a published PyPI distribution are separate states. Do not
 announce a PyPI release until the publishing job has succeeded and its files exist.
 
@@ -32,14 +32,18 @@ and [publishing guide](https://docs.pypi.org/trusted-publishers/using-a-publishe
 
 ## Prepare the release PR
 
-1. Start from current `main` on a Conventional Branch, such as `release/v0.2.0`.
+1. Start from current `main` on a Conventional Branch, such as `release/v0.3.0`.
 2. Set the package version and refresh `uv.lock`. Keep `--version`, installation
    examples, and client pins consistent with the release.
 3. Add a dated section to [CHANGELOG.md](../CHANGELOG.md), for example
-   `## [0.2.0] - 2026-10-21`, describing public changes and migration steps.
+   `## [0.3.0] - 2026-10-22`, describing public changes and migration steps.
 4. Run `make check`, build wheel and source distributions, validate metadata, and
    smoke-test an installed wheel. Package checks must not need Telegram credentials.
-5. Review the artifacts and diff, open the release PR, and wait for the required
+5. Record any release-specific validation. For 0.3.0, use the
+   [validation record](validation-0.3.md): response/schema size checks and a bounded
+   [selected-source live probe](live-validation.md). Live validation requires explicit
+   source authorization; an offline check does not authorize account-wide reads.
+6. Review the artifacts and diff, open the release PR, and wait for the required
    GitHub `checks` job. Squash-merge into `main` when the checks pass.
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for the regular check commands and branch rules.
@@ -53,8 +57,8 @@ an annotated version tag:
 ```sh
 git switch main
 git pull --ff-only origin main
-git tag -a v0.2.0 -m "Release 0.2.0"
-git push origin v0.2.0
+git tag -a v0.3.0 -m "Release 0.3.0"
+git push origin v0.3.0
 ```
 
 The tag starts [release.yml](../.github/workflows/release.yml). The pipeline validates
@@ -66,7 +70,7 @@ not confirmation that either publication succeeded.
 Verify the release's wheel and source distribution on PyPI and test a clean install:
 
 ```sh
-uvx --python 3.12 --from telegram-context-mcp==0.2.0 telegram-mcp --version
+uvx --python 3.12 --from telegram-context-mcp==0.3.0 telegram-mcp --version
 ```
 
 Update any publication-pending documentation only after this check succeeds. No live

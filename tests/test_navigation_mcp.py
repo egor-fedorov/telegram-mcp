@@ -95,24 +95,25 @@ async def test_navigation_mcp_schemas_dispatch_and_message_references(mode: str)
         assert data["next_cursor"] is None and data["scope"]["complete"] is True
         assert backend.topic_fetches == [("-1001", TopicOffset(), 30, "Roadmap")]
         ordinary, general, short, deleted = data["topics"]
-        assert general["is_general"] is True and general["root_message_ref"] is None
-        assert general["url"] is None
+        assert general["is_general"] is True and "root_message_ref" not in general
+        assert "url" not in general
         assert short["is_short"] is True and deleted["is_deleted"] is True
         for topic in (short, deleted):
             for field in ("title", "created_at", "unread_count", "is_closed", "is_pinned"):
-                assert topic[field] is None
+                assert field not in topic
         top = await client.call_tool("get_messages", {"refs": [ordinary["top_message_ref"]]})
         assert not top.is_error and top.structured_content is not None
-        assert top.structured_content["messages"][0]["message_ref"]["message_id"] == 12
+        assert int(top.structured_content["messages"][0]["message_ref"].split(":")[1]) == 12
         thread = await client.call_tool("get_thread", {"ref": ordinary["root_message_ref"]})
         assert not thread.is_error and thread.structured_content is not None
-        assert thread.structured_content["messages"][0]["message_ref"]["message_id"] == 12
+        assert int(thread.structured_content["messages"][0]["message_ref"].split(":")[1]) == 12
 
         pins = await client.call_tool("get_pinned_messages", {"chat_ref": " -1001 "})
         assert not pins.is_error and pins.structured_content is not None
         assert pins.structured_content["order"] == "newest_first"
         assert [
-            message["message_ref"]["message_id"] for message in pins.structured_content["messages"]
+            int(message["message_ref"].split(":")[1])
+            for message in pins.structured_content["messages"]
         ] == [20, 10]
         assert backend.fetch_pinned_flags[-1] is True
 

@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 from telegram_mcp.application.access import AccessFactory
 from telegram_mcp.application.common import fingerprint
+from telegram_mcp.application.global_search import GlobalQueryState
 from telegram_mcp.application.message_pager import QueryState, Stream
 from telegram_mcp.application.ports import ChatPort, Clock, CursorPort, ForumPort
 from telegram_mcp.application.requests import (
@@ -56,6 +57,7 @@ class QuerySpec:
                 read.filters.date_to,
                 read.sender_id if isinstance(read, SearchRead) else None,
                 read.filters.content_type,
+                read.filters.has_link,
                 "oldest_first" if read.filters.oldest_first else "newest_first",
                 read.thread_id if isinstance(read, ThreadRead) else None,
                 self.selection.source_ref,
@@ -81,20 +83,26 @@ class QueryPreparation:
         self.cursors = cursors
         self.clock = clock
 
-    async def prepare(self, spec: QuerySpec, cursor: str | None) -> tuple[QueryState, str]:
+    async def prepare(
+        self, spec: QuerySpec, cursor: str | None
+    ) -> tuple[QueryState | GlobalQueryState, str]:
         filters = spec.read.filters
         for date in (filters.date_from, filters.date_to):
             if date is not None and date.utcoffset() is None:
                 raise ToolError("INVALID_ARGUMENT", "Dates must include a timezone.")
         if filters.date_from and filters.date_to and filters.date_from >= filters.date_to:
             raise ToolError("INVALID_ARGUMENT", "date_from must be earlier than date_to.")
-        access = await self.access.load()
-        chats, folders, allowed = access.chats, access.folders, access.allowed
         selection = spec.selection
+        access = await self.access.load(
+            explicit=(
+                selection.folder_ids is None
+                and (selection.chat_ids is not None or selection.source_ref is not None)
+            )
+        )
+        chats, folders, allowed = access.chats, access.folders, access.allowed
         chat_ids = selection.chat_ids
         source_chat = None
         if selection.source_ref is not None:
-            # Loading dialogs first primes the adapter's entity/access-hash cache for IDs.
             source_chat = await self.chats.resolve_chat(selection.source_ref, refresh=True)
             chat_ids = [source_chat.id]
         elif isinstance(spec.read, TopicRead) and chat_ids:
@@ -103,6 +111,13 @@ class QueryPreparation:
         fp = spec.fingerprint(chat_ids)
         if cursor:
             state = self.cursors.get(cursor, spec.kind, fp)
+            if isinstance(state, GlobalQueryState):
+                if not access.policy.allow_all_chats:
+                    raise ToolError(
+                        "ACCESS_DENIED",
+                        "Global search requires allow_all_chats; restart the search.",
+                    )
+                return state, fp
             if not isinstance(state, QueryState):
                 raise ToolError("INVALID_CURSOR", "Wrong cursor type.")
             explicit_ids = state.explicit_chat_ids
@@ -143,10 +158,21 @@ class QueryPreparation:
                 chat_ids=[chat.id for chat in selected],
                 resolved_at=now,
             )
+            date_to = min(filters.date_to, now) if filters.date_to else now
+            if (
+                isinstance(spec.read, SearchRead)
+                and access.policy.allow_all_chats
+                and selection.chat_ids is None
+                and selection.folder_ids is None
+                and selection.source_ref is None
+                and spec.read.sender_id is None
+                and not filters.oldest_first
+            ):
+                return GlobalQueryState(scope, date_to, exhausted=not selected), fp
             state = QueryState(
                 [Stream(chat.id) for chat in selected],
                 scope,
-                min(filters.date_to, now) if filters.date_to else now,
+                date_to,
                 explicit_chat_ids=explicit_ids,
             )
         for stream in state.streams:

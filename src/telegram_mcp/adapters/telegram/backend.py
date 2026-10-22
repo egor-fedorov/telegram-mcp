@@ -11,11 +11,14 @@ from telegram_mcp.application.ports import (
     Batch,
     Clock,
     DiscoveryBatch,
+    GlobalBatch,
+    GlobalOffset,
     HistoryWindow,
+    MessageOffset,
     TopicBatch,
     TopicOffset,
 )
-from telegram_mcp.application.requests import MessageRead
+from telegram_mcp.application.requests import MessageRead, SearchRead
 from telegram_mcp.domain.models import Chat, Folder, ForumTopic, Message, MessageRef
 
 
@@ -34,6 +37,7 @@ class TelegramBackend:
             clock=clock if clock is not None else SystemClock(),
             max_dialogs=settings.max_dialogs,
             cache=chat_cache,
+            catalog_cache_ttl_seconds=settings.catalog_cache_ttl_seconds,
         )
         self.discovery_gateway = DiscoveryGateway(self.runtime, self.chat_gateway)
         self.message_gateway = MessageGateway(self.runtime, self.chat_gateway)
@@ -47,6 +51,9 @@ class TelegramBackend:
 
     async def catalog(self) -> tuple[list[Chat], list[Folder]]:
         return await self.chat_gateway.catalog()
+
+    async def check_authorization(self) -> None:
+        await self.chat_gateway.check_authorization()
 
     async def resolve_chat(self, ref: str, *, refresh: bool = False) -> Chat:
         return await self.chat_gateway.resolve_chat(ref, refresh=refresh)
@@ -96,6 +103,13 @@ class TelegramBackend:
         return await self.message_gateway.thread_root(ref, discussion_chat_id)
 
     async def read(
-        self, chat_id: str, request: MessageRead, *, offset: int = 0, limit: int = 30
+        self, chat_id: str, request: MessageRead, *, offset: MessageOffset = 0, limit: int = 30
     ) -> Batch:
         return await self.message_gateway.read(chat_id, request, offset=offset, limit=limit)
+
+    async def search_global(
+        self, request: SearchRead, *, offset: GlobalOffset, limit: int, chat_ids: list[str]
+    ) -> GlobalBatch:
+        return await self.message_gateway.search_global(
+            request, offset=offset, limit=limit, chat_ids=chat_ids
+        )

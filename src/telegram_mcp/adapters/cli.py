@@ -26,7 +26,7 @@ from telegram_mcp.adapters.mcp import create_server
 from telegram_mcp.adapters.version import get_version
 from telegram_mcp.application.ports import Backend
 from telegram_mcp.application.service import Service
-from telegram_mcp.domain.models import ToolError
+from telegram_mcp.domain.models import Chat, Folder, ToolError
 
 
 async def login(
@@ -69,6 +69,29 @@ async def prompt_boolean(prompt: str, current: bool) -> bool:
         print("Enter y or n, or press Enter to keep the current setting.")
 
 
+async def load_catalog(
+    backend: Backend, *, timeout_seconds: float = 300
+) -> tuple[list[Chat], list[Folder]]:
+    """Keep incremental progress alive while a local command waits for its catalog."""
+    try:
+        async with asyncio.timeout(timeout_seconds):
+            while True:
+                try:
+                    return await backend.catalog()
+                except ToolError as exc:
+                    if exc.code != "CATALOG_LOADING":
+                        raise
+                    print(exc.detail, file=sys.stderr)
+                    await asyncio.sleep(exc.retry_after or 1)
+    except TimeoutError:
+        raise ToolError(
+            "CATALOG_TIMEOUT",
+            "Catalog loading exceeded the local command's time limit. "
+            "Check the Telegram connection and try again; use the running MCP server "
+            "to keep incremental progress between requests.",
+        ) from None
+
+
 async def configure(
     settings: Settings, path: Path, backend_factory: Callable[[Settings], Backend]
 ) -> None:
@@ -79,7 +102,7 @@ async def configure(
     updated = settings.model_copy(deep=True)
     backend = backend_factory(settings)
     try:
-        _, folders = await backend.catalog()
+        _, folders = await load_catalog(backend)
         for folder in folders:
             print(f"{folder.id}: {folder.title}")
         value = (
@@ -133,7 +156,7 @@ async def diagnose(
     backend = dependencies.backend_factory(settings)
     try:
         if catalog:
-            chats, folders = await backend.catalog()
+            chats, folders = await load_catalog(backend)
             output: object = {
                 "folders": [f.model_dump(mode="json") for f in folders],
                 "chats": [c.model_dump(mode="json") for c in chats],

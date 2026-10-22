@@ -69,7 +69,7 @@ class CatalogService:
         )
 
     async def get_chat(self, chat_ref: str) -> dict[str, object]:
-        access = await self.access.load()
+        access = await self.access.load(explicit=True)
         chat = await self.chats.resolve_chat(chat_ref, refresh=True)
         await access.allow_explicit(chat.id)
         chat = access.public.get(chat.id, chat)
