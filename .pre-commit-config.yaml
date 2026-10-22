@@ -1,0 +1,32 @@
+# Optional local checks before each commit: uv run --locked pre-commit install
+# Ruff and ty run from the locked environment, so they match make check and CI.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c # frozen: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: ruff format
+        entry: uv run --locked ruff format
+        language: system
+        types_or: [python, pyi]
+      - id: ruff-check
+        name: ruff check
+        entry: uv run --locked ruff check --fix
+        language: system
+        types_or: [python, pyi]
+      - id: ty
+        name: ty check
+        entry: uv run --locked ty check
+        language: system
+        types_or: [python, pyi]
+        pass_filenames: false

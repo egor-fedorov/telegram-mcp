@@ -23,6 +23,9 @@ Dependency installation may require network access. Add tests for changed behavi
 and keep existing MCP contracts compatible, or explain any compatibility changes.
 For documentation-only changes, check links, examples, and formatting.
 
+To run Ruff, ty, and file hygiene checks before each commit, install the optional
+hook once with `uv run --locked pre-commit install`; `make check` and CI stay the gate.
+
 On Windows without Make, run the same checks directly:
 
 ```sh

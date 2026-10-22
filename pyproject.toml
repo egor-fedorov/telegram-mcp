@@ -46,7 +46,7 @@ Roadmap = "https://github.com/egor-fedorov/telegram-mcp/blob/main/ROADMAP.md"
 Changelog = "https://github.com/egor-fedorov/telegram-mcp/blob/main/CHANGELOG.md"
 
 [dependency-groups]
-dev = ["pytest>=8", "pytest-asyncio>=0.25", "ruff", "ty"]
+dev = ["pre-commit>=4.7", "pytest>=8", "pytest-asyncio>=0.25", "ruff", "ty"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/telegram_mcp"]
