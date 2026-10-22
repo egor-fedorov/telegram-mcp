@@ -1,9 +1,14 @@
 version: 2
+# Each ecosystem gets one monthly pull request for minor and patch updates and one for security
+# updates; every major update gets its own pull request. A release is proposed only after a
+# seven-day cooldown, so a compromised release can be yanked first; security updates skip it.
 updates:
   - package-ecosystem: uv
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 4
     versioning-strategy: lockfile-only
     allow:
@@ -12,16 +17,23 @@ updates:
       prefix: chore
       include: scope
     groups:
-      mcp:
-        patterns: [mcp, mcp-types]
-      other-dependencies:
+      python:
         patterns: ["*"]
-        exclude-patterns: [telethon, mcp, mcp-types]
         update-types: [minor, patch]
+      # mcp-types is released with mcp; a major update must move both together.
+      mcp-major:
+        patterns: [mcp, mcp-types]
+        update-types: [major]
+      python-security:
+        applies-to: security-updates
+        patterns: ["*"]
+  # Actions are pinned to commit SHAs; Dependabot updates the SHA and its version comment.
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 2
     commit-message:
       prefix: chore
@@ -30,3 +42,6 @@ updates:
       actions:
         patterns: ["*"]
         update-types: [minor, patch]
+      actions-security:
+        applies-to: security-updates
+        patterns: ["*"]
