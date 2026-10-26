@@ -25,6 +25,13 @@ A version entry describes its target artifact. Verify publication on
 - Updated the development type checker to ty 0.0.92 with current async context-manager
   annotations. Dependabot now separates development tools from other library updates;
   updates continue to require manual review and passing CI.
+- Updated the locked HTTP libraries and platformdirs after compatibility review.
+
+### Security
+
+- Updated locked PyJWT to 2.15.1 and OpenTelemetry API to 1.45.1 to address the
+  reported vulnerabilities in MCP's transitive dependencies. The local HTTP server
+  continues to authenticate with its configured bearer token.
 
 ## [0.3.0] - 2026-10-22
 
