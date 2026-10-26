@@ -230,11 +230,11 @@ async def test_bridge_exits_on_daemon_shutdown_without_replaying_a_call(tmp_path
         assert backend.backend_calls == ["close"]
 
 
-async def test_http_serializes_entire_tools_but_does_not_block_tool_discovery(
+async def test_http_overlapping_tools_do_not_block_tool_discovery(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     async with running_server(tmp_path) as (settings, backend):
-        entered, release = asyncio.Event(), asyncio.Event()
+        entered, both_entered, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
         calls = 0
         original = backend.status
 
@@ -242,6 +242,8 @@ async def test_http_serializes_entire_tools_but_does_not_block_tool_discovery(
             nonlocal calls
             calls += 1
             entered.set()
+            if calls == 2:
+                both_entered.set()
             await release.wait()
             return await original()
 
@@ -251,8 +253,8 @@ async def test_http_serializes_entire_tools_but_does_not_block_tool_discovery(
             await entered.wait()
             queued = asyncio.create_task(second.call_tool("get_status", {}))
             assert len((await second.list_tools()).tools) == 17
-            await asyncio.sleep(0.02)
-            assert calls == 1
+            await asyncio.wait_for(both_entered.wait(), 5)
+            assert calls == 2
             release.set()
             results = await asyncio.gather(active, queued)
             assert not any(result.is_error for result in results)

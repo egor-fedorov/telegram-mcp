@@ -265,6 +265,7 @@ class Scope(Model):
 
 class SearchProgress(Model):
     sources_total: int = Field(ge=0)
+    sources_started: int = Field(default=0, ge=0)
     sources_ready: int = Field(ge=0)
     sources_exhausted: int = Field(ge=0)
     rpc_pages_this_call: int = Field(ge=0)
@@ -276,6 +277,7 @@ class Page(Model):
     scope: Scope
     issues: list[Issue] = Field(default_factory=list)
     order: Literal["newest_first", "oldest_first"] = "newest_first"
+    ordering: Literal["page", "global"] = "global"
     thread_root: MessageRef | None = None
     topic_id: int | None = Field(default=None, gt=0, le=2**31 - 1)
     progress: SearchProgress | None = None

@@ -19,7 +19,8 @@ A version entry describes its target artifact. Verify publication on
   upper date/ID and resume with checkpoints. Protected/expiring records are omitted explicitly.
 - Temporary UTF-8 export resources through STDIO, HTTP and `connect`, with SHA-256,
   20 MiB parts, a separate 100 MiB / 32-file cache, 15-minute expiry and cleanup.
-  Existing 15 tool contracts remain unchanged; published 0.3.0 is unchanged.
+  The original M4 implementation preserved the previous 15 tool contracts; the 0.4
+  changes below apply to the combined development tree. Published 0.3.0 is unchanged.
 
 - Opt-in `download_attachment` for one selected file up to 20 MiB, with a private
   temporary local path, SHA-256, and an MCP resource available through STDIO, HTTP,
@@ -29,6 +30,21 @@ A version entry describes its target artifact. Verify publication on
 
 ### Changed
 
+- **Breaking 0.4 contract:** scope ID arrays are previews of at most 20 entries, with
+  exact selected/pending counts and explicit truncation flags. Internal authorization
+  and continuation retain the full scope. See [migration guidance](docs/migration-0.4.md).
+- Restricted `search_messages` defaults to `ordering="page"` for early, fairly traversed
+  results sorted within each page; `ordering="global"` retains strict merging. Responses
+  report the actual guarantee and `progress.sources_started`. Both order directions are
+  exposed in MCP. Native unrestricted global search keeps its existing access rules.
+- Dialog cache defaults to 300 seconds plus 300 seconds during background refresh.
+  Current folder definitions and authorization are checked on each dependent call.
+  One shared worker retains scan progress; normal network failures preserve valid
+  snapshots. Cold/hard-expired reads return `CATALOG_LOADING` after a bounded wait.
+- STDIO, HTTP and `connect` now share four active tool/resource slots, a FIFO queue of
+  16 calls and a 120-second queue timeout. Cancellation removes queued work; overflow
+  or timeout returns `SERVER_BUSY` with a five-second retry delay.
+- Set the source version to `0.4.0.dev0`, without a release tag or PyPI publication.
 - Separated Telegram search, topic-history and album-window readers while retaining
   the shared runtime, entity cache, pagination behavior and MCP contracts.
 - Organized tests by layer with explicit shared helpers; refreshed the architecture

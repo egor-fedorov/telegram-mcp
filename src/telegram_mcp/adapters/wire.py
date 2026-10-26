@@ -146,9 +146,13 @@ class FolderResult(TypedDict):
 @with_config(_CONFIG)
 class Scope(TypedDict):
     folder_ids: list[int]
-    chat_ids: list[ChatID]
+    chat_ids: Annotated[list[ChatID], Field(max_length=20)]
+    chat_count: Count
+    chat_ids_truncated: bool
     resolved_at: AwareDatetime
-    pending_chat_ids: list[ChatID]
+    pending_chat_ids: Annotated[list[ChatID], Field(max_length=20)]
+    pending_chat_count: Count
+    pending_chat_ids_truncated: bool
     complete: bool
 
 
@@ -359,6 +363,7 @@ class Message(TypedDict):
 @with_config(_CONFIG)
 class SearchProgress(TypedDict):
     sources_total: Count
+    sources_started: Count
     sources_ready: Count
     sources_exhausted: Count
     rpc_pages_this_call: Count
@@ -376,6 +381,7 @@ class Page(MessageResult):
     next_cursor: str | None
     scope: Scope
     order: Literal["newest_first", "oldest_first"]
+    ordering: Literal["page", "global"]
     thread_root: NotRequired[MessageKey]
     topic_id: NotRequired[TopicID]
     progress: NotRequired[SearchProgress]
@@ -478,6 +484,18 @@ _EMPTY_METADATA = {"entities", "attachments"}
 def _project(value: Any, chats: dict[str, Any]) -> Any:
     if isinstance(value, models.MessageRef):
         return value.key
+    if isinstance(value, models.Scope):
+        return {
+            "folder_ids": value.folder_ids,
+            "chat_ids": value.chat_ids[:20],
+            "chat_count": len(value.chat_ids),
+            "chat_ids_truncated": len(value.chat_ids) > 20,
+            "resolved_at": value.resolved_at,
+            "pending_chat_ids": value.pending_chat_ids[:20],
+            "pending_chat_count": len(value.pending_chat_ids),
+            "pending_chat_ids_truncated": len(value.pending_chat_ids) > 20,
+            "complete": value.complete,
+        }
     if isinstance(value, models.Model):
         data: dict[str, Any] = {}
         if isinstance(value, models.Message):

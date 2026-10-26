@@ -109,7 +109,7 @@ async def test_metadata_mcp_get_messages_keeps_duplicates_and_unicode_continuati
         ("get_history", {"chat_ref": "-1001", "topic_id": 7}),
         ("get_pinned_messages", {"chat_ref": "-1001"}),
         ("get_pinned_messages", {"chat_ref": "-1001", "topic_id": 7}),
-        ("search_messages", {"query": "A", "chat_ids": ["-1001"]}),
+        ("search_messages", {"query": "A", "chat_ids": ["-1001"], "ordering": "global"}),
     ],
 )
 async def test_metadata_mcp_pagination_and_text_budget_preserve_nested_fields(

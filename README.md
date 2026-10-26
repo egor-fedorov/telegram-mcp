@@ -12,6 +12,10 @@ preserves original text, dates, links, entities, and available metadata. It does
 messages, join channels, or mark messages read. Source builds additionally support
 opt-in selected attachment downloads, durable change checkpoints, and JSONL/Markdown
 exports; these features are not in published 0.3.0.
+The source tree targets `0.4.0.dev0`, with bounded scope previews, earlier restricted
+search results, longer dialog reuse and concurrent calls. See the
+[0.4 migration guide](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/migration-0.4.md)
+before upgrading a source checkout.
 
 ## Install and log in
 
@@ -105,6 +109,9 @@ do not paste it into client configuration. This is a local, single-user integrat
   can still have a cursor. Respect `retry_after_seconds` after a temporary failure.
 - For `CATALOG_LOADING`, repeat the original call after the reported delay. The server
   retains catalog progress; explicit reads independent of folders skip that scan.
+- In source version 0.4, search sorts within each page by default. Select
+  `ordering="global"` for order across pages. Scope ID arrays preview at most 20 IDs;
+  use their counts and truncation flags when describing coverage.
 - Use `get_messages` with `next_text_offset` to finish long text. Album completeness
   is explicitly unknown; each member remains a separate source message.
 

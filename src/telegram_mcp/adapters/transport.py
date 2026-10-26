@@ -13,7 +13,6 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from telegram_mcp.adapters.config import Settings
 from telegram_mcp.adapters.http_token import load_token
 from telegram_mcp.adapters.mcp import create_server
-from telegram_mcp.adapters.tool_gate import ToolCallGate
 from telegram_mcp.application.service import Service
 from telegram_mcp.domain.models import ToolError
 
@@ -50,7 +49,7 @@ class BearerAuthMiddleware:
 def create_http_app(
     service: Service, token: str, port: int, *, owns_service: bool = True
 ) -> Starlette:
-    server = create_server(service, gate=ToolCallGate(), owns_service=owns_service)
+    server = create_server(service, owns_service=owns_service)
     hosts = [f"{HOST}:{port}"]
     origins = [f"http://{HOST}:{port}"]
     if port == 80:

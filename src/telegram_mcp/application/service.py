@@ -29,6 +29,7 @@ from telegram_mcp.application.ports import (
     PolicyProvider,
     RuntimePort,
 )
+from telegram_mcp.application.progressive_search import ProgressiveSearchPager
 from telegram_mcp.application.queries import QueryService
 from telegram_mcp.application.query_preparation import QueryPreparation
 from telegram_mcp.application.topics import TopicPager, TopicService
@@ -82,6 +83,7 @@ class Service:
             preparation,
             MessagePager(backend, cursors, clock, limits),
             GlobalSearchPager(backend, cursors, clock, limits),
+            ProgressiveSearchPager(backend, cursors, clock, limits),
         )
         self._topics = TopicService(
             backend, access, cursors, clock, TopicPager(backend, cursors, clock)
@@ -213,6 +215,7 @@ class Service:
         limit: int = 30,
         cursor: str | None = None,
         order: Literal["newest_first", "oldest_first"] = "newest_first",
+        ordering: Literal["page", "global"] = "page",
     ) -> Page:
         return await self._queries.search_messages(
             query=query,
@@ -226,6 +229,7 @@ class Service:
             limit=limit,
             cursor=cursor,
             order=order,
+            ordering=ordering,
         )
 
     async def list_topics(

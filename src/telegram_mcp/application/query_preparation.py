@@ -51,6 +51,7 @@ class QuerySpec:
         return fingerprint(
             [
                 read.query if isinstance(read, SearchRead) else None,
+                read.ordering if isinstance(read, SearchRead) else None,
                 chat_ids,
                 self.selection.folder_ids,
                 read.filters.date_from,

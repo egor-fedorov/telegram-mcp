@@ -6,6 +6,7 @@ from typing import Literal
 from telegram_mcp.application.common import check_limit, check_topic_id
 from telegram_mcp.application.global_search import GlobalQueryState, GlobalSearchPager
 from telegram_mcp.application.message_pager import MessagePager
+from telegram_mcp.application.progressive_search import ProgressiveSearchPager
 from telegram_mcp.application.query_preparation import QueryPreparation, QuerySpec, SourceSelection
 from telegram_mcp.application.requests import (
     HistoryRead,
@@ -21,11 +22,16 @@ from telegram_mcp.domain.models import ContentType, Page, ToolError
 
 class QueryService:
     def __init__(
-        self, preparation: QueryPreparation, pager: MessagePager, global_pager: GlobalSearchPager
+        self,
+        preparation: QueryPreparation,
+        pager: MessagePager,
+        global_pager: GlobalSearchPager,
+        progressive_pager: ProgressiveSearchPager,
     ):
         self.preparation = preparation
         self.pager = pager
         self.global_pager = global_pager
+        self.progressive_pager = progressive_pager
 
     async def execute(self, spec: QuerySpec, limit: int, cursor: str | None) -> Page:
         check_limit(limit)
@@ -34,6 +40,10 @@ class QueryService:
             if not isinstance(spec.read, SearchRead):
                 raise ToolError("INVALID_CURSOR", "Wrong cursor type.")
             return await self.global_pager.page(
+                state, spec.read, fingerprint=fingerprint, limit=limit
+            )
+        if isinstance(spec.read, SearchRead) and spec.read.ordering == "page":
+            return await self.progressive_pager.page(
                 state, spec.read, fingerprint=fingerprint, limit=limit
             )
         return await self.pager.page(
@@ -110,8 +120,11 @@ class QueryService:
         limit: int = 30,
         cursor: str | None = None,
         order: Literal["newest_first", "oldest_first"] = "newest_first",
+        ordering: Literal["page", "global"] = "page",
     ) -> Page:
         check_limit(limit)
+        if ordering not in ("page", "global") or order not in ("newest_first", "oldest_first"):
+            raise ToolError("INVALID_ARGUMENT", "Use ordering page/global and a valid order.")
         if not query.strip() and has_link is not True:
             raise ToolError(
                 "INVALID_ARGUMENT",
@@ -123,6 +136,7 @@ class QueryService:
             query,
             ReadFilters(date_from, date_to, content_type, order == "oldest_first", has_link),
             sender_id,
+            ordering,
         )
         return await self.execute(
             QuerySpec(read, SourceSelection(chat_ids, folder_ids)), limit, cursor

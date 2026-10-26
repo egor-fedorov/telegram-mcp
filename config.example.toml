@@ -19,8 +19,11 @@ allow_public_channel_discovery = false
 allow_attachment_downloads = false
 rpc_timeout_seconds = 20
 max_dialogs = 10000
-# Reuse a completed catalog for up to 30 seconds; 0 disables snapshot reuse.
-catalog_cache_ttl_seconds = 30
+# Reuse dialog metadata for five minutes, then refresh on demand in the background.
+# Folder definitions and authorization are checked on every dependent call.
+# TTL 0 disables reuse; stale 0 requires a fresh snapshot after the TTL.
+catalog_cache_ttl_seconds = 300
+catalog_cache_stale_seconds = 300
 rpc_pages_per_call = 12
 cursor_ttl_seconds = 900
 max_cursors = 128

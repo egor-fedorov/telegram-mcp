@@ -86,7 +86,6 @@ class TelegramRuntime:
                 ) from None
             raise ToolError("TELEGRAM_ERROR", type(exc).__name__) from None
         except (TimeoutError, ConnectionError, OSError):
-            self.generation += 1
             raise ToolError(
                 "CONNECTION_ERROR", "Telegram request timed out or connection failed."
             ) from None

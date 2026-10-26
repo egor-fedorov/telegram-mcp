@@ -35,11 +35,13 @@ async def test_empty_pages_while_priming_are_resumable() -> None:
         FakeBackend([msg(str(i), i) for i in range(1, 5)]),
         Settings(allowed_chat_ids=[str(i) for i in range(1, 5)], rpc_pages_per_call=1),
     )
-    page = await service.search_messages(query="budget")
+    page = await service.search_messages(ordering="global", query="budget")
     assert page.messages == []
     assert page.next_cursor and not page.scope.complete
     for _ in range(3):
-        page = await service.search_messages(query="budget", cursor=page.next_cursor)
+        page = await service.search_messages(
+            ordering="global", query="budget", cursor=page.next_cursor
+        )
     assert [m.message_ref.message_id for m in page.messages] == [4, 3, 2, 1]
     assert page.scope.complete
 
@@ -362,18 +364,22 @@ async def test_retryable_source_failure_preserves_order_and_resumes_after_cooldo
     backend = FakeBackend([msg("1", 1), msg("2", 2)])
     backend.faults["2"] = ToolError(code, "Please retry", 20)
     service = build_service(backend, Settings(allowed_chat_ids=["1", "2"]), clock=clock)
-    first = await service.search_messages(query="budget")
+    first = await service.search_messages(ordering="global", query="budget")
     assert first.messages == []
     assert first.next_cursor and not first.scope.complete
     assert set(first.scope.pending_chat_ids) == {"1", "2"}
     assert [(issue.chat_id, issue.code) for issue in first.issues] == [("2", code)]
     del backend.faults["2"]
     clock.time += 1
-    waiting = await service.search_messages(query="budget", cursor=first.next_cursor)
+    waiting = await service.search_messages(
+        ordering="global", query="budget", cursor=first.next_cursor
+    )
     assert not waiting.messages and waiting.next_cursor
     assert backend.fetches == ["1", "2"]
     clock.time += 20
-    resumed = await service.search_messages(query="budget", cursor=waiting.next_cursor)
+    resumed = await service.search_messages(
+        ordering="global", query="budget", cursor=waiting.next_cursor
+    )
     assert [m.message_ref.key for m in resumed.messages] == ["2:2", "1:1"]
     assert resumed.scope.complete
     assert not resumed.issues and resumed.next_cursor is None
@@ -384,10 +390,12 @@ async def test_permanent_issue_survives_later_successful_pages() -> None:
     backend = FakeBackend([msg("1", mid) for mid in range(1, 4)] + [msg("2", 4)])
     backend.faults["2"] = ToolError("ACCESS_DENIED", "Unavailable source")
     service = build_service(backend, Settings(allowed_chat_ids=["1", "2"]))
-    first = await service.search_messages(query="budget", limit=1)
+    first = await service.search_messages(ordering="global", query="budget", limit=1)
     assert first.next_cursor
     del backend.faults["2"]
-    final = await service.search_messages(query="budget", cursor=first.next_cursor)
+    final = await service.search_messages(
+        ordering="global", query="budget", cursor=first.next_cursor
+    )
     assert [m.message_ref.message_id for m in first.messages + final.messages] == [3, 2, 1]
     assert final.next_cursor is None and not final.scope.complete
     assert [(issue.code, issue.chat_id) for issue in final.issues] == [("ACCESS_DENIED", "2")]

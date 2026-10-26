@@ -65,7 +65,12 @@ class CatalogService:
         return ChatPage(
             chats=page,
             next_cursor=token,
-            scope=state.scope.model_copy(update={"complete": not more}),
+            scope=state.scope.model_copy(
+                update={
+                    "complete": not more,
+                    "pending_chat_ids": [chat.id for chat in state.chats[state.index :]],
+                }
+            ),
         )
 
     async def get_chat(self, chat_ref: str) -> dict[str, object]:

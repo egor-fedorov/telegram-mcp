@@ -24,6 +24,7 @@ class Stream:
     offset: MessageOffset = 0
     buffer: list[Message] = field(default_factory=list)
     exhausted: bool = False
+    started: bool = False
     retry: RetryState = field(default_factory=RetryState)
 
 
@@ -81,32 +82,10 @@ class MessagePager:
                 if stream is None:
                     break
                 remaining -= 1
-                try:
-                    batch = await self.messages.read(
-                        stream.chat_id,
-                        request,
-                        offset=stream.offset,
-                        limit=self.limits.page_size,
-                    )
-                    if not batch.exhausted and batch.next_offset == stream.offset:
-                        raise ToolError(
-                            "PAGINATION_STALLED", "Telegram returned a non-advancing page."
-                        )
-                    stream.offset = batch.next_offset
-                    for issue in batch.issues:
-                        if issue not in state.issues:
-                            state.issues.append(issue)
-                    stream.buffer = batch.messages
-                    stream.exhausted = batch.exhausted
-                    stream.retry.clear()
-                except ToolError as exc:
-                    if exc.retryable:
-                        stream.retry.record(exc, stream.chat_id, self.clock)
-                        failed_this_call.add(stream.chat_id)
-                    else:
-                        stream.retry.clear()
-                        state.issues.append(exc.issue(stream.chat_id))
-                        stream.exhausted = True
+                if not await load_stream(
+                    self.messages, state, stream, request, self.limits.page_size, self.clock
+                ):
+                    failed_this_call.add(stream.chat_id)
             if any(not stream.buffer and not stream.exhausted for stream in state.streams):
                 break
             candidates = [stream for stream in state.streams if stream.buffer]
@@ -124,34 +103,92 @@ class MessagePager:
                     min(self.limits.text_limit, self.limits.text_budget // limit),
                 )
             )
-        pending = [
-            stream.chat_id for stream in state.streams if stream.buffer or not stream.exhausted
-        ]
-        issues = list(state.issues)
-        for stream in state.streams:
-            issue = stream.retry.current_issue(self.clock)
-            if issue is not None:
-                issues.append(issue)
-        token = self.cursors.put(kind, fingerprint, state) if pending else None
-        scope = state.scope.model_copy(
-            update={"pending_chat_ids": pending, "complete": not pending and not issues}
-        )
-        order: Literal["newest_first", "oldest_first"] = (
-            "oldest_first" if oldest else "newest_first"
-        )
-        return Page(
-            messages=output,
-            next_cursor=token,
-            scope=scope,
-            issues=issues,
-            order=order,
+        return finish_page(
+            state,
+            output,
+            self.cursors,
+            self.clock,
+            kind=kind,
+            fingerprint=fingerprint,
+            request=request,
+            rpc_pages=self.limits.rpc_pages_per_call - remaining,
             topic_id=topic_id,
-            progress=SearchProgress(
-                sources_total=len(state.streams),
-                sources_ready=sum(bool(s.buffer) or s.exhausted for s in state.streams),
-                sources_exhausted=sum(s.exhausted and not s.buffer for s in state.streams),
-                rpc_pages_this_call=self.limits.rpc_pages_per_call - remaining,
-            )
-            if isinstance(request, SearchRead)
-            else None,
         )
+
+
+async def load_stream(
+    messages: MessagePort,
+    state: QueryState,
+    stream: Stream,
+    request: MessageRead,
+    limit: int,
+    clock: Clock,
+) -> bool:
+    """Commit a validated batch, or retain the position and record its failure."""
+    try:
+        batch = await messages.read(stream.chat_id, request, offset=stream.offset, limit=limit)
+        if not batch.exhausted and batch.next_offset == stream.offset:
+            raise ToolError("PAGINATION_STALLED", "Telegram returned a non-advancing page.")
+        stream.offset = batch.next_offset
+        for issue in batch.issues:
+            if issue not in state.issues:
+                state.issues.append(issue)
+        stream.buffer = batch.messages
+        stream.exhausted = batch.exhausted
+        stream.started = True
+        stream.retry.clear()
+        return True
+    except ToolError as exc:
+        if exc.retryable:
+            stream.retry.record(exc, stream.chat_id, clock)
+        else:
+            stream.retry.clear()
+            state.issues.append(exc.issue(stream.chat_id))
+            stream.exhausted = True
+        return False
+
+
+def finish_page(
+    state: QueryState,
+    output: list[Message],
+    cursors: CursorPort,
+    clock: Clock,
+    *,
+    kind: str,
+    fingerprint: str,
+    request: MessageRead,
+    rpc_pages: int,
+    ordering: Literal["page", "global"] = "global",
+    topic_id: int | None = None,
+) -> Page:
+    pending = [stream.chat_id for stream in state.streams if stream.buffer or not stream.exhausted]
+    issues = list(state.issues)
+    for stream in state.streams:
+        issue = stream.retry.current_issue(clock)
+        if issue is not None:
+            issues.append(issue)
+    token = cursors.put(kind, fingerprint, state) if pending else None
+    scope = state.scope.model_copy(
+        update={"pending_chat_ids": pending, "complete": not pending and not issues}
+    )
+    order: Literal["newest_first", "oldest_first"] = (
+        "oldest_first" if request.filters.oldest_first else "newest_first"
+    )
+    return Page(
+        messages=output,
+        next_cursor=token,
+        scope=scope,
+        issues=issues,
+        order=order,
+        ordering=ordering,
+        topic_id=topic_id,
+        progress=SearchProgress(
+            sources_total=len(state.streams),
+            sources_started=sum(s.started for s in state.streams),
+            sources_ready=sum(bool(s.buffer) or s.exhausted for s in state.streams),
+            sources_exhausted=sum(s.exhausted and not s.buffer for s in state.streams),
+            rpc_pages_this_call=rpc_pages,
+        )
+        if isinstance(request, SearchRead)
+        else None,
+    )

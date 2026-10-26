@@ -38,8 +38,9 @@ Start it before the proxies. For a token mismatch, stop and reconnect proxies us
 the same token file as the server. See [token rotation](configuration.md#files-and-credentials).
 Do not paste the token into an issue, chat, client JSON, or command-line argument.
 
-`SERVER_BUSY` means another client still has a Telegram tool call in progress. Retry
-after `retry_after_seconds`; it is not an authorization or session-lock error.
+In the 0.4 development version, all transports allow four active tool/resource calls
+and 16 FIFO waiters. `SERVER_BUSY` means the queue is full or its 120-second wait expired.
+Retry after `retry_after_seconds`; it is not an authorization or session-lock error.
 
 ## `SESSION_IN_USE`
 
@@ -126,21 +127,27 @@ arguments after `retry_after_seconds`; the error message includes the loaded-dia
 count. Do not restart the server between retries. No partial catalog or saved message
 buffer is returned while required access metadata is unavailable.
 
-Completed catalogs are reused for up to 30 seconds by default. Direct reads independent
-of folders bypass that scan. Local `catalog` and `configure` wait for completion for up
-to five minutes; `CATALOG_TIMEOUT` means that bounded wait expired.
+The 0.4 defaults reuse dialog metadata for five minutes, then allow another five minutes
+while a shared worker refreshes it. Folder definitions and authorization are checked on
+each dependent call. Direct reads independent of folders bypass that scan. Local
+`catalog` and `configure` wait up to five minutes; `CATALOG_TIMEOUT` means that wait expired.
+See [freshness settings](configuration.md#catalog-freshness-and-recovery-04-unreleased).
 
-Restricted searches can still need many empty pages to establish a globally ordered
-result. Inspect `progress.sources_ready` and continue `next_cursor`. Unrestricted searches
-without chat/folder/sender selectors use Telegram global search. Do not enable broader
-permissions merely to avoid preparation pages.
+Restricted search defaults to `ordering="page"`, returning matches without waiting
+for every source. Use `ordering="global"` only when ordering across pages is needed;
+it can require many empty preparation pages. Inspect `progress.sources_started` and
+continue `next_cursor` for full coverage. Unrestricted newest-first searches without
+chat/folder/sender selectors retain native global search. Broader permissions are not
+needed for early restricted-search results.
 
 ## Response fields changed after upgrading
 
 Version 0.3 returns compact JSON with string message references, a shared chat map,
 and omitted unknown optional metadata. The complete JSON is available in both text and
 structured content. See the [0.3 migration guide](migration-0.3.md); there is no legacy
-response-format switch.
+response-format switch. Source version 0.4 also limits scope ID previews and changes
+the default search ordering; see its [migration guide](migration-0.4.md). Refresh client
+tool schemas after restarting the server.
 
 ## Text appears incomplete
 

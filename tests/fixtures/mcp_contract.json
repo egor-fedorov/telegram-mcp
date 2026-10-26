@@ -231,7 +231,8 @@
             "pattern": "^-?[1-9]\\d*$",
             "type": "string"
           },
-          "type": "array"
+          "type": "array",
+          "maxItems": 20
         },
         "resolved_at": {
           "format": "date-time",
@@ -242,17 +243,36 @@
             "pattern": "^-?[1-9]\\d*$",
             "type": "string"
           },
-          "type": "array"
+          "type": "array",
+          "maxItems": 20
         },
         "complete": {
+          "type": "boolean"
+        },
+        "chat_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "chat_ids_truncated": {
+          "type": "boolean"
+        },
+        "pending_chat_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pending_chat_ids_truncated": {
           "type": "boolean"
         }
       },
       "required": [
         "folder_ids",
         "chat_ids",
+        "chat_count",
+        "chat_ids_truncated",
         "resolved_at",
         "pending_chat_ids",
+        "pending_chat_count",
+        "pending_chat_ids_truncated",
         "complete"
       ],
       "type": "object"
@@ -826,10 +846,15 @@
         "rpc_pages_this_call": {
           "minimum": 0,
           "type": "integer"
+        },
+        "sources_started": {
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
         "sources_total",
+        "sources_started",
         "sources_ready",
         "sources_exhausted",
         "rpc_pages_this_call"
@@ -1711,6 +1736,13 @@
           },
           "progress": {
             "$ref": "#/$defs/SearchProgress"
+          },
+          "ordering": {
+            "enum": [
+              "page",
+              "global"
+            ],
+            "type": "string"
           }
         },
         "required": [
@@ -1719,7 +1751,8 @@
           "issues",
           "next_cursor",
           "scope",
-          "order"
+          "order",
+          "ordering"
         ],
         "type": "object"
       },
@@ -1865,6 +1898,24 @@
             ],
             "default": null,
             "title": "Cursor"
+          },
+          "order": {
+            "default": "newest_first",
+            "enum": [
+              "newest_first",
+              "oldest_first"
+            ],
+            "title": "Order",
+            "type": "string"
+          },
+          "ordering": {
+            "default": "page",
+            "enum": [
+              "page",
+              "global"
+            ],
+            "title": "Ordering",
+            "type": "string"
           }
         },
         "required": [
@@ -1926,6 +1977,13 @@
           },
           "progress": {
             "$ref": "#/$defs/SearchProgress"
+          },
+          "ordering": {
+            "enum": [
+              "page",
+              "global"
+            ],
+            "type": "string"
           }
         },
         "required": [
@@ -1934,7 +1992,8 @@
           "issues",
           "next_cursor",
           "scope",
-          "order"
+          "order",
+          "ordering"
         ],
         "type": "object"
       },
@@ -2100,6 +2159,13 @@
           },
           "progress": {
             "$ref": "#/$defs/SearchProgress"
+          },
+          "ordering": {
+            "enum": [
+              "page",
+              "global"
+            ],
+            "type": "string"
           }
         },
         "required": [
@@ -2108,7 +2174,8 @@
           "issues",
           "next_cursor",
           "scope",
-          "order"
+          "order",
+          "ordering"
         ],
         "type": "object"
       },
@@ -2525,6 +2592,13 @@
           },
           "progress": {
             "$ref": "#/$defs/SearchProgress"
+          },
+          "ordering": {
+            "enum": [
+              "page",
+              "global"
+            ],
+            "type": "string"
           }
         },
         "required": [
@@ -2533,7 +2607,8 @@
           "issues",
           "next_cursor",
           "scope",
-          "order"
+          "order",
+          "ordering"
         ],
         "type": "object"
       },

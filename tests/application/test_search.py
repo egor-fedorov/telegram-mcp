@@ -53,19 +53,23 @@ async def test_restricted_or_specialized_search_never_calls_global(selector: str
 async def test_restricted_300_source_search_reports_progress_and_strict_order() -> None:
     backend = FakeBackend([msg(str(i), 1) for i in range(1, 301)])
     service = build_service(backend, Settings(allowed_chat_ids=[c.id for c in backend.chats]))
-    page = await service.search_messages(query="budget", limit=100)
+    page = await service.search_messages(ordering="global", query="budget", limit=100)
     assert not page.messages and page.progress
     assert page.progress.sources_total == 300
     assert page.progress.sources_ready == 12
     for call_number in range(2, 26):
         assert page.next_cursor
-        page = await service.search_messages(query="budget", limit=100, cursor=page.next_cursor)
+        page = await service.search_messages(
+            ordering="global", query="budget", limit=100, cursor=page.next_cursor
+        )
         if call_number < 25:
             assert not page.messages
             assert page.progress and page.progress.sources_ready == 12 * call_number
     found = list(page.messages)
     while page.next_cursor:
-        page = await service.search_messages(query="budget", limit=100, cursor=page.next_cursor)
+        page = await service.search_messages(
+            ordering="global", query="budget", limit=100, cursor=page.next_cursor
+        )
         found.extend(page.messages)
     assert [int(m.chat.id) for m in found] == list(range(300, 0, -1))
     assert len(backend.fetches) == 300 and not backend.global_fetches
@@ -80,18 +84,18 @@ async def test_sparse_source_cannot_starve_other_sources_during_priming() -> Non
     service = build_service(
         backend, Settings(allowed_chat_ids=["1", "2", "3"], rpc_pages_per_call=1)
     )
-    page = await service.search_messages(query="budget", content_type="voice")
+    page = await service.search_messages(ordering="global", query="budget", content_type="voice")
     assert backend.fetches == ["1"]
     for _ in range(2):
         page = await service.search_messages(
-            query="budget", content_type="voice", cursor=page.next_cursor
+            ordering="global", query="budget", content_type="voice", cursor=page.next_cursor
         )
     assert backend.fetches == ["1", "2", "3"]
     assert page.progress and page.progress.sources_ready == 2
     assert not page.messages
     while page.next_cursor:
         page = await service.search_messages(
-            query="budget", content_type="voice", cursor=page.next_cursor
+            ordering="global", query="budget", content_type="voice", cursor=page.next_cursor
         )
     assert [m.chat.id for m in page.messages] == ["3", "2", "1"]
 

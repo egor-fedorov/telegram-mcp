@@ -3,7 +3,7 @@ import stat
 from pathlib import Path
 
 import pytest
-from pydantic import SecretStr
+from pydantic import SecretStr, ValidationError
 
 from telegram_mcp.adapters.config import Settings, load_settings, save_settings
 
@@ -60,3 +60,20 @@ def test_attachment_permission_defaults_off_and_roundtrips(tmp_path: Path) -> No
     path = tmp_path / "config.toml"
     save_settings(Settings(allow_attachment_downloads=True), path)
     assert load_settings(path).allow_attachment_downloads
+
+
+@pytest.mark.parametrize("ttl,stale", [(0, 300), (300, 0), (30, 120), (300, 300)])
+def test_catalog_age_settings_roundtrip(tmp_path: Path, ttl: int, stale: int) -> None:
+    assert Settings().catalog_cache_ttl_seconds == 300
+    assert Settings().catalog_cache_stale_seconds == 300
+    path = tmp_path / "config.toml"
+    save_settings(Settings(catalog_cache_ttl_seconds=ttl, catalog_cache_stale_seconds=stale), path)
+    settings = load_settings(path)
+    assert settings.catalog_cache_ttl_seconds == ttl
+    assert settings.catalog_cache_stale_seconds == stale
+
+
+@pytest.mark.parametrize("value", [-1, 301])
+def test_catalog_stale_age_is_bounded(value: int) -> None:
+    with pytest.raises(ValidationError, match="catalog_cache_stale_seconds"):
+        Settings(catalog_cache_stale_seconds=value)

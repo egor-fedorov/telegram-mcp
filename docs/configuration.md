@@ -121,7 +121,11 @@ or fall back to standalone STDIO if the server is unavailable.
 Every connected client belongs to the same local user and trust boundary. They share
 one account, one read policy, and in-memory cursor state. A cursor is not a per-client
 authorization boundary. Stopping a proxy does not stop the server; restarting the
-server invalidates all cursors. Concurrent clients may wait for shared server work.
+server invalidates all cursors. All transports admit up to four tool/resource calls at
+once, with a FIFO queue of 16 additional calls and a 120-second queue wait. Queue
+overflow or timeout returns `SERVER_BUSY` with a five-second retry delay. Queued work
+does not run after cancellation. Download and checkpoint operations retain their own
+locks; admitting a call does not bypass those limits.
 
 Only one process can hold the Telegram session lease. Stop the shared HTTP server or
 standalone STDIO process before local `login`, `configure`, `catalog`, or `status`.
@@ -151,7 +155,8 @@ constrain this application, not the account credentials themselves. Login codes 
 | --- | --- | --- |
 | `rpc_timeout_seconds` | `20` | Greater than 0, at most 60 |
 | `max_dialogs` | `10000` | 1–100000 |
-| `catalog_cache_ttl_seconds` | `30` | 0–30 seconds; 0 disables completed-snapshot reuse |
+| `catalog_cache_ttl_seconds` | `300` | 0–300 seconds; 0 disables completed-snapshot reuse |
+| `catalog_cache_stale_seconds` | `300` | 0–300 seconds after the TTL; 0 disables serving an older snapshot during refresh |
 | `rpc_pages_per_call` | `12` | 1–100 |
 | `cursor_ttl_seconds` | `900` | Positive integer |
 | `max_cursors` | `128` | Positive integer |
@@ -160,26 +165,36 @@ Cursors additionally share a fixed 64 MiB serialized-data budget. They are proce
 and may expire or be evicted. Increasing a timeout or page budget does not bypass
 Telegram's FloodWait. See [usage](usage.md#retrieval-rules) for continuation and text budgets.
 
-## Catalog freshness and recovery (0.3)
+## Catalog freshness and recovery (0.4, unreleased)
 
-A completed catalog is reused for at most `catalog_cache_ttl_seconds`. Every request
-still checks current local policy and authorization; explicit public-channel grants
-use fresh Telegram metadata. Folder-derived access can reflect cached membership until
-refresh. Telegram pagination is not an atomic snapshot, so early-page unread, mute,
-and contact metadata can be older than the reuse TTL. Folder definitions are fetched
-at the end of the scan.
+Each catalog-dependent call checks authorization and retrieves current folder definitions
+with `GetDialogFilters`. Removing a folder, changing its categories, or explicitly
+excluding a chat affects the next call, including cursor continuation. A failed check
+does not release buffered messages; the original cursor remains reusable. Explicit
+public-channel grants still use fresh channel metadata.
 
-Large catalogs load incrementally: up to five RPC steps per call, stopping before
-another step after five seconds of work. Each RPC retains its configured timeout.
-`CATALOG_LOADING` reports progress and a retry delay. Repeat the same call in the same
-server process, including an existing cursor if supplied. No partial or expired catalog
-grants access. Network errors preserve committed progress; inactive builds expire after
-15 minutes. Local `catalog` and `configure` wait for this progress for up to five minutes.
+Dialog metadata has a separate cache. By default, a completed snapshot is reused for
+five minutes. The first access after that starts one shared background refresh and may
+serve the previous complete snapshot for up to another five minutes. Age is measured
+from scan completion; Telegram pagination is not atomic. Unread, mute, archive and
+contact state, and newly joined dialogs, can lag until the next completed scan. Current
+folder rules are applied to that cached state. Lower the TTL/grace or set the TTL to
+zero to require new scans. Existing explicit TTL settings retain their value.
+
+A cold load or a snapshot beyond the hard age limit waits up to five seconds for the
+shared worker, then returns `CATALOG_LOADING`. The worker scans in batches of up to five
+RPC steps or five seconds of work before yielding; each RPC keeps its configured timeout.
+It publishes only complete snapshots and stops on failure. Network errors preserve
+committed progress and an age-valid snapshot. A later call can resume after any retry
+deadline; there is no periodic polling or automatic delayed retry. Inactive unfinished
+builds expire after 15 minutes, and shutdown cancels the worker. Local `catalog` and
+`configure` wait for progress for up to five minutes.
 
 Explicit source reads skip the catalog when no configured folder grant or requested
 folder selector is involved. An unknown numeric entity requires a username/link;
-it does not silently start a complete dialog scan. Connection loss invalidates the
-completed snapshot; authorization loss also clears unfinished catalog state.
+it does not silently start a complete dialog scan. A normal timeout or reconnection
+with unchanged authorization preserves the snapshot. Authorization loss or replacement
+invalidates both completed and unfinished state. See [migration guidance](migration-0.4.md).
 
 ## Selected download limits (unreleased)
 

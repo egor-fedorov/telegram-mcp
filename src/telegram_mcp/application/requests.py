@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Literal
 
 from telegram_mcp.domain.models import ContentType
 
@@ -25,6 +26,7 @@ class SearchRead:
     query: str
     filters: ReadFilters = field(default_factory=ReadFilters)
     sender_id: str | None = None
+    ordering: Literal["page", "global"] = "page"
 
 
 @dataclass(frozen=True)

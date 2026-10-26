@@ -20,12 +20,14 @@ from tests.support.resources import (
 
 
 @asynccontextmanager
-async def running_server(tmp_path: Path) -> AsyncGenerator[tuple[Settings, FakeBackend]]:
-    backend = FakeBackend([msg("1", 1), msg("1", 2)])
+async def running_server(
+    tmp_path: Path, backend: FakeBackend | None = None
+) -> AsyncGenerator[tuple[Settings, FakeBackend]]:
+    backend = backend if backend is not None else FakeBackend([msg("1", 1), msg("1", 2)])
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
         listener.bind(("127.0.0.1", 0))
         settings = Settings(
-            allowed_chat_ids=["1"],
+            allowed_chat_ids=[chat.id for chat in backend.chats],
             session_path=tmp_path / "account.session",
             http_port=listener.getsockname()[1],
             http_token_path=tmp_path / "mcp.token",

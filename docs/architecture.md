@@ -1,8 +1,8 @@
 # Architecture
 
 The server separates domain contracts, application policy and concrete adapters.
-This document describes the current source tree, including the unreleased attachment
-capability. The [roadmap](../ROADMAP.md) and [changelog](../CHANGELOG.md) track delivery;
+This document describes the current 0.4 development tree, including unreleased attachment,
+change and export capabilities. The [roadmap](../ROADMAP.md) and [changelog](../CHANGELOG.md) track delivery;
 [completed specifications](specs/README.md) preserve milestone contracts.
 
 ## Dependency rules
@@ -20,7 +20,9 @@ not import Telethon, the MCP SDK, concrete adapters or local configuration I/O.
 
 Domain models deliberately use Pydantic. The MCP adapter owns separate compact wire
 models because its public contract shares chat summaries, encodes canonical references
-and omits unknown optional metadata. Other boundaries reuse domain models where a
+and omits unknown optional metadata. Scope projection limits ID previews to 20 each
+and adds exact counts/truncation flags; internal authorization and cursor state retain
+every ID. Other boundaries reuse domain models where a
 second representation would add no useful behavior. Internal Python imports and
 constructors are not a supported compatibility surface.
 
@@ -41,9 +43,12 @@ The aggregate backend protocol is confined to assembly and local command wiring.
 - `QueryService` creates typed history, search, pins, topic and thread requests.
   `QueryPreparation` resolves sources, checks access/topic state and selects per-chat
   or unrestricted global search once for the cursor's lifetime.
-- `MessagePager` fairly primes permitted streams and merges by date, numeric chat ID
-  and message ID. `GlobalSearchPager` owns the native compound offset and preserves
-  Telegram's ordering within equal timestamps. Both enforce budgets and retry state.
+- `ProgressiveSearchPager` visits permitted sources round-robin, stops fetching once
+  the page is full, and sorts within that page. `MessagePager` supplies the opt-in
+  global ordering guarantee by priming all streams before merging by date, numeric
+  chat ID and message ID. They share batch validation, retry and response assembly.
+  `GlobalSearchPager` owns the unrestricted native search offset and preserves Telegram's
+  ordering within equal timestamps. All enforce budgets and retain fixed source/date scope.
 - `TopicService` and `TopicPager` retain the topic-specific offset/order state machine.
   They share the small `RetryState` helper with message pagination, not its algorithm.
 - `MessageReader` handles batches, context, albums and discussion preparation. Album
@@ -62,8 +67,9 @@ snapshots; execution budgets are injected separately.
 `TelegramBackend` composes chat, discovery, message, forum, attachment and incremental gateways.
 They share one `TelegramRuntime` and chat/entity cache. Runtime owns the client,
 lifecycle lock, session lease, authorization probes, timeouts and sanitized errors.
-It restores disconnected clients under that lock while retaining the lease; generation
-changes invalidate cached access metadata. Injected clients and factories support
+It restores disconnected clients under that lock while retaining the lease. Authorization
+generation changes invalidate catalog state; ordinary network errors and reconnection
+do not. Injected clients and factories support
 raw-response and lifecycle tests without a Telegram account.
 
 `MessageGateway` resolves references, reads batches and ordinary history, and composes
@@ -81,19 +87,27 @@ pure helpers. Raw responses use response-local entities without Telethon's priva
 message initializer. Link previews remain separate from actual media attachments.
 Ordinary history, topic history and album windows retain distinct exhaustion rules.
 
-`ChatGateway` owns a resumable catalog builder and publishes only completed snapshots,
-reused for at most 30 seconds. Expired or partial catalogs never grant access. Fresh
-public-channel metadata remains request-local, and authorization is checked before
-saved-buffer output. Direct-source reads do not depend on a cold catalog when folder
-policy is absent.
+`ChatGateway` delegates catalog ownership to `DialogCatalog`. `DialogScanner` handles
+bounded raw pagination independently of folder definitions. Each dependent call checks
+authorization and fresh folder rules; one worker owns the resumable dialog scan and
+atomically publishes complete snapshots. Defaults allow five minutes of reuse plus
+five minutes while refreshing. Cold/hard-expired reads wait at most five seconds for
+the worker; partial state cannot grant access. Transient failures retain progress and
+stop the worker until a later call after the retry deadline. Shutdown cancels and awaits
+it. Self/notification lookups needed by new folder rules are separately serialized.
+Fresh public-channel metadata remains request-local. Direct reads skip the catalog
+when folder policy is absent. See [freshness limits](configuration.md#catalog-freshness-and-recovery-04-unreleased).
 
 ## Transports and local resources
 
 Standalone STDIO owns its application/runtime. The foreground local HTTP process owns
 one facade, runtime, policy, cursor store, checkpoint store and temporary file stores
 shared by its clients.
-The tool gate coordinates calls to shared state; disconnecting a client does not close
-the application. Server shutdown closes it through the facade.
+All MCP transports share the same admission gate: four active calls, 16 FIFO waiters,
+and a 120-second queue timeout. Tool and resource operations use this gate; runtime,
+download and incremental operations retain their narrower locks. Cancellation releases
+slots without running queued work. Disconnecting a client does not close the application;
+server shutdown closes the gate before the facade and cancels outstanding calls.
 
 `connect` proxies STDIO to the authenticated loopback HTTP endpoint, including resource
 requests. It never opens a Telegram session, starts a server or falls back to standalone
@@ -145,7 +159,9 @@ over all transports without adding a file-serving HTTP route.
 - Access and topic checks precede saved-buffer output; failed checks leave the original
   cursor reusable. Cursors are deep-copy snapshots with bounded size, expiry and eviction.
   Their canonical source IDs, date ceilings and selected search engine stay fixed.
-- Every unfinished per-chat stream needs a head before merged output can be chosen.
+- Strict global ordering needs a head from every unfinished per-chat stream. Page
+  ordering can return other sources while one is unavailable and makes no cross-page
+  ordering promise. The requested ordering is part of the cursor fingerprint.
   Temporary errors retain position, clear after recovery and prevent early or same-call
   retries. An injected clock controls deadlines, cooldowns and cursor expiry.
 - RPC budgets include date-anchor requests. Album scans do not refill pages, and topic

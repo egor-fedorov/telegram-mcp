@@ -22,6 +22,7 @@ need a detailed contract before implementation; no delivery dates are assigned.
 | R3 | Done | Recoverable connections, bounded catalogs/search, and compact typed 0.3 responses |
 | M3 | Implemented, unreleased | Selected attachment downloads with size limits and delivery to the calling client |
 | M4 | Implemented, unreleased | New messages, bounded recent revisions, persistent checkpoints, and source-linked JSONL/Markdown export |
+| R4 | Implemented, unreleased | Bounded scope previews, early restricted-search results, reusable dialog snapshots and concurrent transport calls |
 
 The [historical completion records](docs/specs/README.md#historical-completion-records)
 include offline test results. They do not claim live Telegram validation.
@@ -80,9 +81,26 @@ protection omissions, Unicode, part limits and all three resource transports.
 `make check` passes: formatting, lint, types, and 1118 tests (2 platform-specific skips).
 Selected-source live validation remains separate. No tag or package is published here.
 
+## R4 — Large-account retrieval (unreleased)
+
+The source version is `0.4.0.dev0`. Scope responses preview at most 20 selected and
+pending IDs with exact counts. Restricted search defaults to page-local ordering and
+returns early; strict global ordering remains an explicit choice. No outside-allowlist
+message reads are introduced. Dialog snapshots default to five minutes of reuse plus
+five minutes during one shared background refresh; folder definitions and authorization
+remain fresh on each dependent call. All transports admit four concurrent calls and
+up to 16 FIFO waiters with a 120-second queue timeout.
+
+Offline regressions cover 3000-source payload sizes, 100/300-source search traversal,
+2000-dialog reuse and hard expiry, access revocation, FloodWait, worker cancellation,
+and overlapping calls/cursor replay through STDIO, HTTP and the proxy. See the
+[0.4 migration](docs/migration-0.4.md) and [architecture](docs/architecture.md).
+Local `make check` passes: formatting, lint, types, and 1164 tests (2 platform-specific skips).
+Dependency versions are unchanged. Live validation, tags and package publication are separate.
+
 ## Next: validate and release
 
-Complete the selected-source live validation of M3/M4 before publishing these capabilities.
+Complete the selected-source live validation of M3/M4 and the 0.4 retrieval changes before publication.
 Follow the release procedure separately; a merged implementation is not a published package.
 
 ## Later decisions

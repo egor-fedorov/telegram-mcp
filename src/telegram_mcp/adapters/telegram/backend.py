@@ -48,6 +48,7 @@ class TelegramBackend:
             max_dialogs=settings.max_dialogs,
             cache=chat_cache,
             catalog_cache_ttl_seconds=settings.catalog_cache_ttl_seconds,
+            catalog_cache_stale_seconds=settings.catalog_cache_stale_seconds,
         )
         self.discovery_gateway = DiscoveryGateway(self.runtime, self.chat_gateway)
         self.message_gateway = MessageGateway(self.runtime, self.chat_gateway)
@@ -88,7 +89,10 @@ class TelegramBackend:
         return await self.runtime.status()
 
     async def close(self) -> None:
-        await self.runtime.close()
+        try:
+            await self.chat_gateway.close()
+        finally:
+            await self.runtime.close()
 
     async def catalog(self) -> tuple[list[Chat], list[Folder]]:
         return await self.chat_gateway.catalog()

@@ -112,6 +112,8 @@ def expose_tool_errors[**P, R](
 def create_server(
     service: Service, *, gate: ToolCallGate | None = None, owns_service: bool = True
 ) -> MCPServer[None]:
+    gate = gate if gate is not None else ToolCallGate()
+
     def expose[**P, R](fn: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
         return expose_tool_errors(fn, gate=gate)
 
@@ -120,6 +122,7 @@ def create_server(
         try:
             yield None
         finally:
+            await gate.close()
             if owns_service:
                 await service.close()
 
@@ -143,7 +146,9 @@ def create_server(
             "CATALOG_LOADING means required access metadata is still loading: repeat the same "
             "call after its retry delay, preserving any original cursor. "
             "Do not restart the server. "
-            "Completed catalogs can be reused for up to 30 seconds; direct reads independent "
+            "Folder definitions and authorization are checked on every dependent call. Dialog "
+            "metadata is reused for five minutes by default, with up to five more minutes "
+            "while refreshing in the background; direct reads independent "
             "of folder policy skip that scan. A disconnected Telegram client reconnects on "
             "a later call; failed application requests are not replayed automatically. "
             "Repeat original arguments when continuing a cursor. get_messages supports text_offset "
@@ -151,8 +156,12 @@ def create_server(
             "Messages include available counters, aggregate reactions and poll metadata from "
             "the retrieved payload, without extra requests or voter/reactor identity lists. "
             "Unknown optional metadata is omitted; known false/zero values remain explicit. "
-            "Message references are canonical chat_id:message_id strings. Message-bearing results "
-            "share title/type/username in the top-level chats map, keyed by chat ID. "
+            "Message references are canonical chat_id:message_id strings. "
+            "Scope ID arrays are previews of at most 20 IDs: use chat_count, pending_chat_count "
+            "and their truncation flags for coverage. Search defaults to ordering=page, sorted "
+            "within each page only; choose ordering=global for order across pages. "
+            "Message-bearing results share title/type/username in the top-level chats map, "
+            "keyed by chat ID. "
             "Use get_chat or list_chats for full chat metadata. Empty entities and "
             "attachments and an unknown sender are omitted. Counters and results may "
             "change between calls. Paid reaction counts measure Stars, not people. "
@@ -394,8 +403,16 @@ def create_server(
         has_link: bool | None = None,
         limit: Limit = 30,
         cursor: str | None = None,
+        order: Literal["newest_first", "oldest_first"] = "newest_first",
+        ordering: Literal["page", "global"] = "page",
     ) -> Annotated[CallToolResult, wire.Page]:
-        """Search Telegram by words across permitted chats, globally newest first.
+        """Search permitted chats with early results, sorted within each page by default.
+
+        ordering=page visits sources fairly without waiting for every source. Ordering
+        between pages is not guaranteed. Use ordering=global for a strictly ordered
+        traversal, which can require empty preparation pages. The response reports the
+        actual ordering guarantee. order chooses newest_first or oldest_first. Repeat
+        both parameters with a cursor. Restricted searches only fetch permitted chats.
 
         Dates include a timezone; interval is [date_from, date_to). Folder IDs form a union;
         explicit chat_ids intersect that union. Omitted selectors use all permitted dialogs.
@@ -418,6 +435,8 @@ def create_server(
                 has_link=has_link,
                 limit=limit,
                 cursor=cursor,
+                order=order,
+                ordering=ordering,
             )
         )
 

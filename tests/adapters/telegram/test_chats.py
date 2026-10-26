@@ -14,13 +14,22 @@ from tests.support.fakes import BASE
 async def test_catalog_is_not_silently_truncated() -> None:
     settings = Settings(max_dialogs=1)
     chat_cache = {}
-    client = AsyncMock(side_effect=lambda request: pinned_page([1, 2]))
+
+    def respond(request):
+        if isinstance(request, functions.updates.GetStateRequest):
+            return None
+        if isinstance(request, functions.messages.GetDialogFiltersRequest):
+            return SimpleNamespace(filters=[])
+        return pinned_page([1, 2])
+
+    client = AsyncMock(side_effect=respond)
     client.is_connected = lambda: True
     backend = TelegramBackend(
         settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
     )
     with pytest.raises(ToolError, match="CATALOG_LIMIT"):
         await backend.catalog()
+    await backend.close()
 
 
 async def test_saved_messages_peer_in_folder_uses_account_id() -> None:
@@ -47,11 +56,11 @@ async def test_saved_messages_peer_in_folder_uses_account_id() -> None:
     backend = TelegramBackend(
         settings, runtime=TelegramRuntime(settings, client=client), chat_cache=chat_cache
     )
-    with pytest.raises(ToolError, match="CATALOG_LOADING"):
-        await backend.catalog()
     _, folders = await backend.catalog()
     assert folders[0].included_chat_ids == ["123"]
     assert folders[0].pinned_chat_ids == ["123"]
+    client.get_me.assert_awaited_once_with(input_peer=True)
+    await backend.close()
 
 
 def channel(

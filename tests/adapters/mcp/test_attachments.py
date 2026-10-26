@@ -91,7 +91,7 @@ async def test_resource_errors_are_safe_protocol_errors(
 
 async def test_resource_uses_the_same_gate_as_tools(tmp_path: Path) -> None:
     service = ResourceService(tmp_path)
-    gate = ToolCallGate(timeout_seconds=0.01)
+    gate = ToolCallGate(timeout_seconds=0.01, capacity=1)
     entered, release = asyncio.Event(), asyncio.Event()
 
     async def hold_gate() -> None:

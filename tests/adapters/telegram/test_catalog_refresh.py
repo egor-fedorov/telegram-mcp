@@ -1,7 +1,6 @@
 """Bounded raw catalog loading, immutable snapshots, and fail-closed refreshes."""
 
 import asyncio
-import inspect
 from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -11,38 +10,9 @@ import pytest
 from telethon import errors, functions, types
 
 from telegram_mcp.adapters.config import Settings, load_settings, save_settings
-from telegram_mcp.adapters.telegram.chats import ChatGateway
-from telegram_mcp.adapters.telegram.runtime import TelegramRuntime
 from telegram_mcp.domain.models import ToolError
-from tests.support.catalog import dialog_page, pinned_page
-from tests.support.fakes import BASE, FakeClock
-
-
-def gateway(respond, *, ttl: float = 30, maximum: int = 10000):
-    clock = FakeClock(now=BASE)
-
-    async def with_pinned(request):
-        if isinstance(request, functions.messages.GetPinnedDialogsRequest):
-            return pinned_page([])
-        result = respond(request)
-        return await result if inspect.isawaitable(result) else result
-
-    client = AsyncMock(side_effect=with_pinned)
-    client.is_connected = Mock(return_value=True)
-    runtime = TelegramRuntime(Settings(), client=client, clock=clock)
-    chats = ChatGateway(runtime, clock=clock, max_dialogs=maximum, catalog_cache_ttl_seconds=ttl)
-    return chats, client, clock
-
-
-def simple_response(request):
-    if isinstance(request, functions.messages.GetPinnedDialogsRequest):
-        return pinned_page([])
-    if isinstance(request, functions.updates.GetStateRequest):
-        return None
-    if isinstance(request, functions.messages.GetDialogFiltersRequest):
-        return SimpleNamespace(filters=[])
-    assert isinstance(request, functions.messages.GetDialogsRequest)
-    return dialog_page([1])
+from tests.support.catalog import dialog_page, gateway, pinned_page, simple_response
+from tests.support.fakes import BASE
 
 
 async def test_snapshot_ttl_copies_and_fresh_authorization_without_dialog_rpcs() -> None:
@@ -51,47 +21,44 @@ async def test_snapshot_ttl_copies_and_fresh_authorization_without_dialog_rpcs()
     result[0].title = "Caller mutation"
     result.clear()
     folders.clear()
+    clock.time += 31
     warm, _ = await chats.catalog()
     assert warm[0].title == "User 1"
-    assert [type(call.args[0]) for call in client.await_args_list] == [
-        functions.messages.GetPinnedDialogsRequest,
-        functions.messages.GetPinnedDialogsRequest,
-        functions.messages.GetDialogsRequest,
-        functions.messages.GetDialogFiltersRequest,
-        functions.updates.GetStateRequest,
-    ]
-    clock.time += 30
-    await chats.catalog()
-    assert (
-        sum(
-            isinstance(call.args[0], functions.messages.GetDialogsRequest)
-            for call in client.await_args_list
-        )
-        == 2
-    )
+    methods = [type(call.args[0]) for call in client.await_args_list]
+    assert methods.count(functions.messages.GetDialogsRequest) == 1
+    assert methods.count(functions.messages.GetDialogFiltersRequest) == 2
+    assert methods.count(functions.updates.GetStateRequest) == 2
+    await chats.close()
 
 
 async def test_cold_catalog_progress_is_retained_and_never_published_partially() -> None:
-    def respond(request):
-        if isinstance(request, functions.messages.GetDialogFiltersRequest):
-            return SimpleNamespace(filters=[])
-        assert isinstance(request, functions.messages.GetDialogsRequest)
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    async def respond(request):
         high = 601 if request.offset_id == 0 else request.offset_id - 1
-        assert request.limit == 100
-        assert request.exclude_pinned is True
+        assert request.limit == 100 and request.exclude_pinned is True
+        if high == 301:
+            entered.set()
+            await release.wait()
         return dialog_page(list(range(high, max(0, high - 100), -1)), sliced=high > 100)
 
     chats, client, _ = gateway(respond)
+    chats.dialog_catalog.wait_seconds = 0.01
     with pytest.raises(ToolError, match="CATALOG_LOADING") as caught:
         await chats.catalog()
-    assert caught.value.retry_after == 1 and "300 dialogs" in caught.value.detail
-    assert chats.cache == {}
+    assert entered.is_set() and caught.value.retry_after == 1
+    assert "300 dialogs" in caught.value.detail and chats.cache == {}
+    release.set()
     rows, _ = await chats.catalog()
-    assert len(rows) == 601 and len({row.id for row in rows}) == 601
-    assert len(client.await_args_list) == 10
-    assert isinstance(
-        client.await_args_list[-1].args[0], functions.messages.GetDialogFiltersRequest
+    assert len(rows) == len({row.id for row in rows}) == 601
+    assert (
+        sum(
+            isinstance(c.args[0], functions.messages.GetDialogsRequest)
+            for c in client.await_args_list
+        )
+        == 7
     )
+    await chats.close()
 
 
 async def test_expired_snapshot_is_not_returned_when_refresh_fails() -> None:
@@ -150,21 +117,15 @@ async def test_soft_budget_retains_progress_and_ttl_starts_at_completion() -> No
     def respond(request):
         nonlocal count
         clock.time += 6
-        if isinstance(request, functions.updates.GetStateRequest):
-            return None
-        if isinstance(request, functions.messages.GetDialogFiltersRequest):
-            return SimpleNamespace(filters=[])
         count += 1
         return dialog_page(list(range(1000 - count * 100, 900 - count * 100, -1)), sliced=count < 6)
 
     chats, _, clock = gateway(respond)
-    for _ in range(6):
-        with pytest.raises(ToolError, match="CATALOG_LOADING"):
-            await chats.catalog()
     rows, _ = await chats.catalog()
     assert len(rows) == 600 and clock.time > 130
     await chats.catalog()
     assert count == 6
+    await chats.close()
 
 
 async def test_concurrent_catalog_calls_share_one_refresh() -> None:
@@ -196,14 +157,23 @@ async def test_zero_ttl_and_forced_refresh_bypass_completed_snapshot() -> None:
     chats, client, _ = gateway(simple_response, ttl=0)
     await chats.catalog()
     await chats.catalog()
-    assert client.await_count == 8
-    chats.catalog_cache_ttl_seconds = 30
-    await chats.catalog()
-    client.side_effect = ConnectionError()
-    with pytest.raises(ToolError, match="CONNECTION_ERROR"):
-        await chats.catalog(refresh=True)
-    with pytest.raises(ToolError, match="CONNECTION_ERROR"):
-        await chats.catalog()
+    assert (
+        sum(
+            isinstance(c.args[0], functions.messages.GetDialogsRequest)
+            for c in client.await_args_list
+        )
+        == 2
+    )
+    chats.dialog_catalog.ttl = 300
+    await chats.catalog(refresh=True)
+    assert (
+        sum(
+            isinstance(c.args[0], functions.messages.GetDialogsRequest)
+            for c in client.await_args_list
+        )
+        == 3
+    )
+    await chats.close()
 
 
 async def test_limit_and_nonadvancing_pages_do_not_publish_a_catalog() -> None:
@@ -217,45 +187,40 @@ async def test_limit_and_nonadvancing_pages_do_not_publish_a_catalog() -> None:
     assert chats.cache == {}
 
 
-async def test_notification_defaults_are_followed_by_fresh_folder_definitions() -> None:
+async def test_new_folder_mute_rule_loads_missing_defaults_without_dialog_rescan() -> None:
     folder = types.DialogFilter(
         id=2,
-        title=types.TextWithEntities("Unread", []),
+        title=types.TextWithEntities("Folder", []),
         pinned_peers=[],
         include_peers=[],
         exclude_peers=[],
-        exclude_muted=True,
+        non_contacts=True,
     )
-    order = []
 
     def respond(request):
-        order.append(type(request))
-        if isinstance(request, functions.messages.GetDialogFiltersRequest):
-            if order.count(functions.messages.GetDialogFiltersRequest) == 2:
-                folder.title = types.TextWithEntities("Fresh definition", [])
-            return SimpleNamespace(filters=[folder])
         if isinstance(request, functions.account.GetNotifySettingsRequest):
             return types.PeerNotifySettings(mute_until=BASE + timedelta(days=1))
         return dialog_page([1])
 
-    chats, _, _ = gateway(respond)
-    with pytest.raises(ToolError, match="CATALOG_LOADING"):
-        await chats.catalog()
+    chats, client, _ = gateway(respond, folders=[folder])
+    await chats.catalog()
+    folder.exclude_muted = True
     rows, folders = await chats.catalog()
     assert rows[0].is_muted and folders[0].exclude_muted
-    assert folders[0].title == "Fresh definition"
-    assert order[-1] is functions.messages.GetDialogFiltersRequest
-    assert order.count(functions.messages.GetDialogFiltersRequest) == 2
+    methods = [type(c.args[0]) for c in client.await_args_list]
+    assert methods.count(functions.messages.GetDialogsRequest) == 1
+    assert methods.count(functions.account.GetNotifySettingsRequest) == 3
+    await chats.close()
 
 
-@pytest.mark.parametrize("ttl", [0, 5, 30])
+@pytest.mark.parametrize("ttl", [0, 5, 30, 300])
 def test_catalog_ttl_configuration_roundtrip(tmp_path: Path, ttl: int) -> None:
     path = tmp_path / "config.toml"
     save_settings(Settings(catalog_cache_ttl_seconds=ttl), path)
     assert load_settings(path).catalog_cache_ttl_seconds == ttl
 
 
-@pytest.mark.parametrize("value", [-1, 31, "invalid"])
+@pytest.mark.parametrize("value", [-1, 301, "invalid"])
 def test_invalid_catalog_ttl_configuration_is_actionable(tmp_path: Path, value) -> None:
     path = tmp_path / "config.toml"
     path.write_text(f"catalog_cache_ttl_seconds = {value!r}\n")
@@ -288,83 +253,78 @@ async def test_network_failure_resumes_the_uncommitted_page() -> None:
     assert len(result) == 101 and offsets == [0, 101, 101]
 
 
-async def test_cancelled_page_keeps_only_previously_validated_progress() -> None:
-    entered = asyncio.Event()
-    blocked = True
+async def test_cancelled_waiter_does_not_cancel_shared_refresh() -> None:
+    entered, release = asyncio.Event(), asyncio.Event()
     offsets = []
 
     async def respond(request):
-        if isinstance(request, functions.messages.GetDialogFiltersRequest):
-            return SimpleNamespace(filters=[])
-        assert isinstance(request, functions.messages.GetDialogsRequest)
         offsets.append(request.offset_id)
         if not request.offset_id:
             return dialog_page(list(range(200, 100, -1)), sliced=True)
-        if blocked:
-            entered.set()
-            await asyncio.Event().wait()
+        entered.set()
+        await release.wait()
         return dialog_page([100])
 
     chats, _, _ = gateway(respond)
     pending = asyncio.create_task(chats.catalog())
-    await entered.wait()
+    await asyncio.wait_for(entered.wait(), 1)
     pending.cancel()
     with pytest.raises(asyncio.CancelledError):
         await pending
     assert chats.cache == {}
-    blocked = False
+    release.set()
     result, _ = await chats.catalog()
-    assert len(result) == 101 and offsets == [0, 101, 101]
+    assert len(result) == 101 and offsets == [0, 101]
+    await chats.close()
 
 
 async def test_inactive_builder_expires_after_fifteen_minutes() -> None:
     offsets = []
 
     def respond(request):
-        assert isinstance(request, functions.messages.GetDialogsRequest)
         offsets.append(request.offset_id)
-        high = 1000 if not request.offset_id else request.offset_id - 1
-        return dialog_page(list(range(high, high - 100, -1)), sliced=True)
+        if request.offset_id:
+            raise ConnectionError()
+        return dialog_page(list(range(200, 100, -1)), sliced=True)
 
     chats, _, clock = gateway(respond)
-    with pytest.raises(ToolError, match="CATALOG_LOADING"):
+    with pytest.raises(ToolError, match="CONNECTION_ERROR"):
         await chats.catalog()
     clock.time += 900
-    with pytest.raises(ToolError, match="CATALOG_LOADING"):
+    with pytest.raises(ToolError, match="CONNECTION_ERROR"):
         await chats.catalog()
-    assert offsets[0] == offsets[3] == 0 and chats.cache == {}
+    assert offsets == [0, 101, 0, 101] and chats.cache == {}
+    await chats.close()
 
 
-async def test_reconnect_invalidates_snapshot_but_keeps_partial_builder() -> None:
+async def test_reconnect_preserves_snapshot_and_partial_builder() -> None:
     offsets = []
-    connected = True
+    fail = True
 
     def respond(request):
-        if isinstance(request, functions.updates.GetStateRequest):
-            return None
-        if isinstance(request, functions.messages.GetDialogFiltersRequest):
-            return SimpleNamespace(filters=[])
         offsets.append(request.offset_id)
-        high = 501 if not request.offset_id else request.offset_id - 1
-        return dialog_page(list(range(high, max(0, high - 100), -1)), sliced=high > 100)
+        if not request.offset_id:
+            return dialog_page(list(range(200, 100, -1)), sliced=True)
+        if fail:
+            raise ConnectionError()
+        return dialog_page([100])
 
     chats, client, _ = gateway(respond)
-    client.is_connected = Mock(side_effect=lambda: connected)
+    with pytest.raises(ToolError, match="CONNECTION_ERROR"):
+        await chats.catalog()
 
     async def reconnect():
-        nonlocal connected
-        connected = True
+        client.is_connected.return_value = True
 
     client.connect.side_effect = reconnect
-    with pytest.raises(ToolError, match="CATALOG_LOADING"):
-        await chats.catalog()
-    connected = False
+    client.is_connected.return_value = False
+    fail = False
     result, _ = await chats.catalog()
-    assert len(result) == 501 and offsets == [0, 402, 302, 202, 102, 2]
-    connected = False
-    with pytest.raises(ToolError, match="CATALOG_LOADING"):
-        await chats.catalog()
-    assert offsets[6] == 0 and client.connect.await_count == 2
+    assert len(result) == 101 and offsets == [0, 101, 101]
+    client.is_connected.return_value = False
+    await chats.catalog()
+    assert offsets == [0, 101, 101] and client.connect.await_count == 2
+    await chats.close()
 
 
 async def test_revoked_authorization_discards_partial_catalog() -> None:
@@ -448,6 +408,8 @@ async def test_pinned_dialogs_are_separate_from_unpinned_chronological_paginatio
     calls = []
 
     def respond(request):
+        if isinstance(request, functions.updates.GetStateRequest):
+            return None
         calls.append(request)
         if isinstance(request, functions.messages.GetPinnedDialogsRequest):
             if request.folder_id == 0:
@@ -475,16 +437,23 @@ async def test_pinned_dialogs_are_separate_from_unpinned_chronological_paginatio
     assert {row.id for row in rows if row.is_archived} == {"111", "112", "113"}
     assert "1000" in found
     assert len(calls) == 4
-    assert [request.folder_id for request in calls[:2]] == [0, 1]
+    assert [
+        request.folder_id
+        for request in calls
+        if isinstance(request, functions.messages.GetPinnedDialogsRequest)
+    ] == [0, 1]
 
 
 async def test_pinned_dialogs_obey_catalog_limit_before_loading_ordinary_dialogs() -> None:
     chats, client, _ = gateway(simple_response, maximum=1)
-    client.side_effect = lambda request: pinned_page([1, 2])
+    client.side_effect = lambda request: (
+        pinned_page([1, 2])
+        if isinstance(request, functions.messages.GetPinnedDialogsRequest)
+        else simple_response(request)
+    )
     with pytest.raises(ToolError, match="CATALOG_LIMIT"):
         await chats.catalog()
     assert chats.cache == {}
-    client.assert_awaited_once()
     assert isinstance(client.await_args.args[0], functions.messages.GetPinnedDialogsRequest)
 
 
@@ -503,18 +472,16 @@ async def test_snapshot_is_rechecked_after_authorization_probe(change: str) -> N
 
         def respond(request):
             if isinstance(request, functions.updates.GetStateRequest):
-                clock.time += 30
+                clock.time += 600
             return simple_response(request)
 
         client.side_effect = respond
     await chats.catalog()
-    assert (
-        sum(
-            isinstance(call.args[0], functions.messages.GetDialogsRequest)
-            for call in client.await_args_list
-        )
-        == 2
-    )
+    assert sum(
+        isinstance(call.args[0], functions.messages.GetDialogsRequest)
+        for call in client.await_args_list
+    ) == (2 if change == "expiry" else 1)
+    await chats.close()
 
 
 async def test_catalog_cannot_publish_after_concurrent_authorization_loss() -> None:
@@ -526,7 +493,8 @@ async def test_catalog_cannot_publish_after_concurrent_authorization_loss() -> N
             await release.wait()
         return simple_response(request)
 
-    chats, _, _ = gateway(respond)
+    chats, client, _ = gateway(respond)
+    client.side_effect = respond
     pending = asyncio.create_task(chats.catalog())
     await entered.wait()
     try:
@@ -537,4 +505,4 @@ async def test_catalog_cannot_publish_after_concurrent_authorization_loss() -> N
     with pytest.raises(ToolError, match="AUTH_REQUIRED"):
         await pending
     assert chats.cache == {}
-    assert chats._snapshot is None and chats._builder is None
+    assert chats.dialog_catalog._snapshot is None and chats.dialog_catalog._builder is None
