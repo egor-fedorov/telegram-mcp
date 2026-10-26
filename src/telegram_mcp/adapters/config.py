@@ -9,10 +9,10 @@ from contextlib import suppress
 from pathlib import Path
 
 from platformdirs import user_config_path, user_data_path
-from pydantic import Field, SecretStr, ValidationError
+from pydantic import Field, SecretStr, ValidationError, field_validator
 
 from telegram_mcp.domain.models import Model, ToolError
-from telegram_mcp.domain.policy import ReadPolicy
+from telegram_mcp.domain.policy import SERVICE_NOTIFICATIONS_ID, ReadPolicy
 
 
 class Settings(Model):
@@ -37,6 +37,16 @@ class Settings(Model):
     http_token_path: Path = Field(
         default_factory=lambda: user_data_path("telegram-mcp") / "mcp.token"
     )
+
+    @field_validator("allowed_chat_ids")
+    @classmethod
+    def _refuse_service_notifications(cls, value: list[str]) -> list[str]:
+        if SERVICE_NOTIFICATIONS_ID in value:
+            raise ValueError(
+                f"remove {SERVICE_NOTIFICATIONS_ID}; Telegram service notifications contain "
+                "login codes and are never readable"
+            )
+        return value
 
     def credentials(self) -> tuple[int, str]:
         if self.api_id is None or self.api_hash is None:

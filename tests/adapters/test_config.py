@@ -6,6 +6,7 @@ import pytest
 from pydantic import SecretStr
 
 from telegram_mcp.adapters.config import Settings, load_settings, save_settings
+from telegram_mcp.domain.models import ToolError
 
 
 def test_configuration_roundtrip_and_file_permissions(
@@ -60,3 +61,11 @@ def test_attachment_permission_defaults_off_and_roundtrips(tmp_path: Path) -> No
     path = tmp_path / "config.toml"
     save_settings(Settings(allow_attachment_downloads=True), path)
     assert load_settings(path).allow_attachment_downloads
+
+
+def test_service_notifications_cannot_be_allowlisted(tmp_path: Path) -> None:
+    path = tmp_path / "config.toml"
+    path.write_text('allowed_chat_ids = ["1", "777000"]\n')
+    with pytest.raises(ToolError, match="INVALID_CONFIGURATION") as error:
+        load_settings(path)
+    assert "777000" in error.value.detail

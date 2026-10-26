@@ -48,6 +48,9 @@ Updates receive manual compatibility review and offline/CI validation.
 CI and release workflows also use reviewed patch updates of the SHA-pinned setup
 and artifact actions.
 
+Telegram service notifications (`777000`), which deliver login codes, are excluded from
+every read path and cannot be allowlisted.
+
 ## M3 — Selected attachment downloads (unreleased)
 
 Adds opt-in `download_attachment` for one selected attachment up to 20 MiB, with a

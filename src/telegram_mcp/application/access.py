@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from telegram_mcp.application.ports import ChatPort, PolicyProvider
 from telegram_mcp.domain.folders import allowed_ids
 from telegram_mcp.domain.models import Chat, Folder, ToolError
-from telegram_mcp.domain.policy import ReadPolicy
+from telegram_mcp.domain.policy import SERVICE_NOTIFICATIONS_ID, ReadPolicy
 
 
 @dataclass
@@ -19,6 +19,11 @@ class AccessContext:
 
     def require_access(self, chat_id: str, *, same_source: str | None = None) -> None:
         """Linked peers require normal access; parents may share their anchor's grant."""
+        if chat_id == SERVICE_NOTIFICATIONS_ID:
+            raise ToolError(
+                "ACCESS_DENIED",
+                "Telegram service notifications contain login codes and are never readable.",
+            )
         if (
             not self.policy.allow_all_chats
             and chat_id not in self.allowed
@@ -30,6 +35,8 @@ class AccessContext:
 
     async def allow_explicit(self, chat_id: str) -> None:
         """Authorize a user-selected source without extending the dialog catalog."""
+        if chat_id == SERVICE_NOTIFICATIONS_ID:
+            self.require_access(chat_id)
         if self.policy.allow_all_chats or chat_id in self.allowed or chat_id in self.public:
             return
         if not self.policy.allow_public_channel_reads:

@@ -76,6 +76,10 @@ groups, or linked discussion groups. It applies only to explicit references or `
 within the request; it does not expand `list_chats` or searches without a selector.
 Discovery remains independent even when `allow_all_chats` is enabled.
 
+Telegram service notifications (`777000`) deliver login codes and are never readable:
+all-chat and folder access exclude them, and listing them in `allowed_chat_ids` is a
+configuration error.
+
 Folders form a union; explicit `chat_ids` intersect with selected folders. Query filters
 cannot expand server permissions. Comments and parent replies from another chat require
 permission for that other chat. No operation automatically joins a source.

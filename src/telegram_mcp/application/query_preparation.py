@@ -16,6 +16,7 @@ from telegram_mcp.application.requests import (
 )
 from telegram_mcp.domain.folders import select_chats
 from telegram_mcp.domain.models import Scope, ToolError
+from telegram_mcp.domain.policy import SERVICE_NOTIFICATIONS_ID
 
 
 @dataclass(frozen=True)
@@ -148,7 +149,7 @@ class QueryPreparation:
                     )
                     known.add(chat_id)
             if access.policy.allow_all_chats:
-                effective_allowed = {chat.id for chat in chats}
+                effective_allowed = {chat.id for chat in chats} - {SERVICE_NOTIFICATIONS_ID}
             selected = select_chats(
                 chats, folders, effective_allowed, selection.folder_ids, chat_ids
             )

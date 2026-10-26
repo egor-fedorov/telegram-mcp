@@ -34,6 +34,9 @@ A version entry describes its target artifact. Verify publication on
 - Updated locked PyJWT to 2.15.1 and OpenTelemetry API to 1.45.1 to address the
   reported vulnerabilities in MCP's transitive dependencies. The local HTTP server
   continues to authenticate with its configured bearer token.
+- Telegram service notifications (`777000`), which deliver login codes, are never
+  readable: they are excluded from all-chat and folder access, explicit reads are
+  denied, and configuration that allowlists them is rejected.
 
 ## [0.3.0] - 2026-10-22
 

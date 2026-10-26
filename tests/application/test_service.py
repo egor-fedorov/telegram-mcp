@@ -461,3 +461,21 @@ async def test_unicode_message_chunks_use_character_offsets_and_reconstruct_exac
         assert message.next_text_offset == offset + 5
         offset = message.next_text_offset
     assert "".join(pieces) == original
+
+
+async def test_service_notifications_are_never_readable() -> None:
+    backend = FakeBackend([msg("1", 1), msg("777000", 2)])
+    service = build_service(backend, Settings(allow_all_chats=True))
+    listed = await service.list_chats()
+    assert [chat.id for chat in listed.chats] == ["1"]
+    page = await service.search_messages(query="budget")
+    assert [m.chat.id for m in page.messages] == ["1"]
+    history = await service.search_messages(query="budget", chat_ids=["1"])
+    assert [m.chat.id for m in history.messages] == ["1"]
+    result = await service.get_messages(["777000:2"])
+    assert not result.messages and result.issues[0].code == "ACCESS_DENIED"
+    with pytest.raises(ToolError, match="ACCESS_DENIED"):
+        await service.get_chat("777000")
+    with pytest.raises(ToolError, match="ACCESS_DENIED"):
+        await service.search_messages(query="budget", chat_ids=["777000"])
+    assert "777000:2" not in backend.reads
