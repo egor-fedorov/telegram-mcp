@@ -7,8 +7,10 @@ the implementation at each milestone; later changes are recorded in the
 - [M1: Public-channel discovery](m1-public-channel-discovery.md)
 - [M2: Message navigation and metadata](m2-message-navigation.md)
 - [M3: Selected attachment downloads (unreleased)](m3-attachment-downloads.md)
-- [R1: Layered architecture](../architecture.md)
 - [R2: Installation, local sharing, and release 0.2.0](r2-general-purpose.md)
+
+See [current layered architecture](../architecture.md) for the maintained design,
+including the R1 separation and subsequent retrieval, transport, and download work.
 
 ## Historical completion records
 
@@ -35,11 +37,8 @@ tests, including native Telegram payloads and both MCP modes.
 
 M2.4 adds bounded retrieval of selected album members, preserving original messages
 and explicitly reporting uncertain completeness. `make check` passed with 665 offline
-tests. M2 is complete. R1 prepares the architecture before M3, selected attachment
-downloads with size limits and client delivery. The detailed M3 contract will be
-finalized before work starts. Live Telegram validation remains separate.
+tests. M2 is complete. Live Telegram validation remains separate.
 
 R1 separates domain contracts, application use cases and ports, concrete adapters, and
 bootstrap wiring. `make check` passed with 684 offline tests, including the unchanged
 schemas of all 14 MCP tools in both modes, layer boundaries, and lifecycle cleanup.
-M3 is next; its detailed attachment-delivery contract remains to be agreed.

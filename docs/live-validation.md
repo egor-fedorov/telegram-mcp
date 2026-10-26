@@ -105,6 +105,6 @@ reported check names when recording validation results. Do not describe global
 search, unselected sources, or authorization revocation as live-tested by this
 harness.
 
-`tests/test_live_probe.py` verifies bounds, source rejection, output redaction,
+`tests/integration/test_live_probe.py` verifies bounds, source rejection, output redaction,
 failure handling, and reconnect ownership using fake backends without a Telegram
 account.

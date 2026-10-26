@@ -4,7 +4,7 @@ Use English for repository documentation, code comments, CLI text, commit messag
 and pull requests. Keep multilingual fixtures when their language matters to a test.
 See [ROADMAP.md](ROADMAP.md) for current priorities, [Architecture](docs/architecture.md)
 for dependency boundaries, and [completed specifications](docs/specs/README.md) for
-the accepted M1/M2 contracts.
+the accepted milestone contracts.
 
 ## Local setup and checks
 
@@ -45,6 +45,37 @@ within a contract version. Intentional versioned changes require updated fixture
 migration guidance, and transport parity tests. See the [0.3 migration](docs/migration-0.3.md)
 and [bounded live validation](docs/live-validation.md).
 
+## Test layout
+
+Place tests beside others covering the same layer; reserve integration suites for
+behavior that crosses adapter boundaries or starts real transports and processes.
+
+| Directory | Coverage |
+| --- | --- |
+| `tests/domain/` | Pure domain rules |
+| `tests/application/` | Use cases, access policy, pagination and recovery with fake ports |
+| `tests/adapters/` | Configuration, CLI, storage and other local adapters |
+| `tests/adapters/telegram/` | Telegram requests, raw payload mapping and runtime lifecycle |
+| `tests/adapters/mcp/` | MCP tool behavior, compact output and schema-size checks |
+| `tests/integration/` | Shared transports, resource delivery, subprocesses and packaging |
+| `tests/contracts/` | Versioned MCP contract and architectural boundaries |
+| `tests/support/` | Explicitly imported fakes, builders and reusable test contexts |
+
+Test modules must not import other test modules. Put genuinely shared helpers in
+`tests/support/`; keep local helpers in their own suite. Subprocesses import support
+modules directly, without collecting a test module. Avoid an implicit fixture registry
+in `conftest.py`. The shared `paths` module locates the project and fixtures independently
+of test depth; keep the versioned schema fixture at `tests/fixtures/mcp_contract.json`.
+
+For a focused run, use the appropriate directory or file:
+
+```sh
+uv run --locked pytest tests/adapters/telegram tests/application
+uv run --locked pytest tests/integration/test_attachment_resources.py
+```
+
+Run the complete `make check` before opening or merging a PR.
+
 ## Branches, commits, and pull requests
 
 1. Start from the current `main` and create a branch for one bounded change. Follow
@@ -74,8 +105,18 @@ criteria are met; distinguish offline checks from any separately performed live 
 
 Commit `uv.lock` alongside dependency changes. Review release notes and the lockfile
 diff, then run the appropriate compatibility checks. Dependabot opens update PRs for
-review; it does not merge them automatically. Updates to pinned GitHub Actions follow
-the same review and CI process as Python dependencies.
+review; it does not merge them automatically. Weekly version updates separate the
+MCP packages, development tools (`pytest`, `pytest-asyncio`, Ruff and ty), and other
+dependencies. Telethon updates receive their own PRs. Development-tool and other
+dependency groups combine only minor/patch updates; major updates stay individual.
+GitHub Actions have their own weekly minor/patch group and follow the same review
+and CI process. These groups keep a type-checker or linter change from blocking a
+library update.
+
+Keep Dependabot alerts and security updates enabled in the repository settings.
+Security fixes open separate PRs as needed, independently of the weekly version-update
+groups, and require manual review and passing CI too. When an update fails, fix the
+compatibility issue or narrow that update; do not disable checks or enable auto-merge.
 
 Changes intended for users should have a concise entry in [CHANGELOG.md](CHANGELOG.md).
 Release preparation belongs in a PR; a version tag is pushed only after that PR has

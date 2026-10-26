@@ -16,6 +16,16 @@ A version entry describes its target artifact. Verify publication on
 - Bounded storage (100 MiB / 32 files), 15-minute expiry, cleanup, controlled Telegram
   file-reference recovery, and FloodWait cooldowns. Published 0.3.0 is unchanged.
 
+### Changed
+
+- Separated Telegram search, topic-history and album-window readers while retaining
+  the shared runtime, entity cache, pagination behavior and MCP contracts.
+- Organized tests by layer with explicit shared helpers; refreshed the architecture
+  guide, shortened the roadmap and added navigation to the usage guide.
+- Updated the development type checker to ty 0.0.92 with current async context-manager
+  annotations. Dependabot now separates development tools from other library updates;
+  updates continue to require manual review and passing CI.
+
 ## [0.3.0] - 2026-10-22
 
 ### Added
@@ -95,4 +105,4 @@ M0–M2 added reliable retrieval, public-channel discovery, topic and pinned-mes
 navigation, counters, reactions, polls, and bounded album retrieval. R1 separated
 domain, application, adapters, and bootstrap while preserving all tool contracts.
 See the [completed specifications](docs/specs/README.md) and
-[architecture decision](docs/architecture.md) for those implementation records.
+[current architecture](docs/architecture.md) for the maintained design.

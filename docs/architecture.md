@@ -1,171 +1,137 @@
-# Architecture decision: explicit layers and dependency injection
+# Architecture
 
-Status: accepted for the R1 refactor, before attachment downloads (M3).
-
-## Context
-
-The original application already separated MCP, service policy, and a backend protocol.
-After M2, one service coordinated access, source selection, several pagination algorithms,
-retry checkpoints, and message assembly. The Telegram backend also owned connection
-lifecycle, locking, entity resolution, mapping, discovery, and all message queries.
-Adding another capability required understanding unrelated responsibilities.
-
-The refactor preserves all 14 MCP tools, their schemas, error codes and payloads, CLI
-commands, local configuration, STDIO, and locked dependencies. Internal Python imports
-and constructors are not a supported compatibility surface. No new Telegram feature,
-database, DI framework, or duplicate domain/transport model hierarchy is introduced.
+The server separates domain contracts, application policy and concrete adapters.
+This document describes the current source tree, including the unreleased attachment
+capability. The [roadmap](../ROADMAP.md) and [changelog](../CHANGELOG.md) track delivery;
+[completed specifications](specs/README.md) preserve milestone contracts.
 
 ## Dependency rules
 
 | Layer | Responsibility | Allowed internal dependencies |
 | --- | --- | --- |
-| `domain` | Pydantic contracts, errors, read-policy snapshots, folder matching and text clipping | Domain only |
+| `domain` | Models, errors, read-policy snapshots, folder matching and text clipping | Domain only |
 | `application` | Use cases, access decisions, typed requests, pagers and dependency ports | Application and domain |
-| `adapters` | MCP/CLI, Telethon, configuration, cursor storage, session leases and real time | Application, domain and other adapters |
+| `adapters` | MCP/CLI, Telethon, configuration, cursor/download storage, session leases and real time | Application, domain and other adapters |
 | `bootstrap` | Select concrete adapters and assemble the application | All layers |
 
-Outbound adapters cannot import the MCP or CLI adapters. The stable `telegram_mcp.cli`
-entry point delegates to bootstrap. Neither domain nor application imports Telethon,
-the MCP SDK, concrete adapters, or local configuration I/O. Pydantic is deliberately
-retained in the shared domain contracts; separate copies of each model would add
-conversion work without a current consumer requiring it.
+Outbound adapters cannot import the MCP, CLI or transport entry adapters. The stable
+`telegram_mcp.cli` entry point delegates to bootstrap. Domain and application code do
+not import Telethon, the MCP SDK, concrete adapters or local configuration I/O.
 
-`tests/test_architecture.py` checks absolute and relative imports and dependency cycles.
-`tests/fixtures/mcp_contract.json` records versioned input/output schemas and annotations
-for every tool; both MCP modes are checked against the current contract. R1 preserved
-the original baseline; 0.3 deliberately replaces it with the documented compact contract.
+Domain models deliberately use Pydantic. The MCP adapter owns separate compact wire
+models because its public contract shares chat summaries, encodes canonical references
+and omits unknown optional metadata. Other boundaries reuse domain models where a
+second representation would add no useful behavior. Internal Python imports and
+constructors are not a supported compatibility surface.
 
 ## Application responsibilities
 
 The `Service` facade delegates public operations and exposes `close()`. Its constructor
-assembles application use cases from injected ports; bootstrap chooses the concrete
-backend, policy provider, clock and cursor store. Consumers depend on capability ports
-for chats, discovery, messages, forums and runtime, rather than the combined backend.
+assembles use cases from injected capability ports; bootstrap chooses the backend,
+policy provider, clock, cursor store and download store. Individual use cases depend
+on the chat, discovery, message, forum, attachment or runtime operations they consume.
 The aggregate backend protocol is confined to assembly and local command wiring.
 
-- `AccessFactory` loads the current catalog and a fresh credential-free policy snapshot.
-  `AccessContext` distinguishes explicit public sources, ordinary linked sources and
-  forums. Grants live only within that request and never extend the stored allowlist.
-- `CatalogService` and `DiscoveryService` handle their respective selection and feature
-  gates. Disabled discovery still returns before any backend request.
+- `AccessFactory` obtains current policy and authorization before constructing a
+  request-local `AccessContext`. Explicit reads bypass catalog enumeration when folder
+  permissions are not involved. Public grants never extend the stored allowlist or
+  authorize a linked discussion.
+- `CatalogService` and `DiscoveryService` handle source selection and feature gates.
+  Disabled discovery returns before any backend request.
 - `QueryService` creates typed history, search, pins, topic and thread requests.
-  `QueryPreparation` resolves sources, checks access/topic state and loads checkpoints.
-  `MessagePager` advances only those authorized streams, respecting the RPC budget,
-  deadline, cooldown and global order.
+  `QueryPreparation` resolves sources, checks access/topic state and selects per-chat
+  or unrestricted global search once for the cursor's lifetime.
+- `MessagePager` fairly primes permitted streams and merges by date, numeric chat ID
+  and message ID. `GlobalSearchPager` owns the native compound offset and preserves
+  Telegram's ordering within equal timestamps. Both enforce budgets and retry state.
 - `TopicService` and `TopicPager` retain the topic-specific offset/order state machine.
   They share the small `RetryState` helper with message pagination, not its algorithm.
 - `MessageReader` handles batches, context, albums and discussion preparation. Album
-  windows keep their separate raw-row budget and unknown-completeness contract.
+  windows retain their separate raw-row budget and unknown-completeness contract.
+- `AttachmentService` uses `AttachmentPort` and `DownloadStorePort` for selected-file
+  downloads and resource reads, with fresh access checks, a bounded deadline,
+  serialized downloads and FloodWait cooldowns.
 
-`ConfiguredPolicyProvider` reads current in-memory settings on every call. Changes
-between calls therefore revoke access before saved buffers can be returned. It does
-not reread the configuration file automatically. Credentials and session paths never
-enter application policy snapshots. Execution budgets are injected separately.
+`ConfiguredPolicyProvider` reads current in-memory settings on every call, so policy
+changes between calls revoke access before saved output is returned. It does not reload
+configuration files automatically. Credentials and session paths never enter policy
+snapshots; execution budgets are injected separately.
 
-## Telegram and local resources
+## Telegram readers and lifecycle
 
-`TelegramBackend` composes chat, discovery, message and forum gateways. They share one
-`TelegramRuntime` and one chat/entity cache. Runtime owns the client, connection mutex,
-session lease, fresh authorization probes, timeout and sanitized error translation.
-Client and client-factory injection lets raw-response tests avoid a real account while
-lifecycle tests still exercise acquisition, cancellation and cleanup.
+`TelegramBackend` composes chat, discovery, message, forum and attachment gateways.
+They share one `TelegramRuntime` and chat/entity cache. Runtime owns the client,
+lifecycle lock, session lease, authorization probes, timeouts and sanitized errors.
+It restores disconnected clients under that lock while retaining the lease; generation
+changes invalidate cached access metadata. Injected clients and factories support
+raw-response and lifecycle tests without a Telegram account.
 
-`SessionLease` provides the same exclusive nonblocking lock for reads and interactive
-login. Login retains its own prompting/authentication flow and restrictive permissions;
-read-only startup never initiates login or creates a missing session database.
-Configuration persistence remains atomic. MCP closes the application through its
-facade rather than reaching into the backend.
+`MessageGateway` resolves references, reads batches and ordinary history, and composes
+three specialized readers with the same runtime and `ChatGateway`:
 
-Pure mapping functions preserve Telegram content, formatting and optional fields.
-Ordinary history, topic history and album windows keep distinct exhaustion rules.
-Only their common data structures and factual mapping helpers are shared.
+| Reader | Responsibility |
+| --- | --- |
+| `MessageSearch` | Per-chat/global search requests, date anchors, native filters and continuation positions |
+| `TopicHistoryReader` | Topic-specific raw history and membership checks |
+| `AlbumWindowReader` | Bounded raw history windows around an album anchor |
 
-## Invariants and tradeoffs
-
-- Access and topic checks precede saved-buffer output. Failed checks leave the original
-  cursor reusable; public-channel permission never authorizes a linked discussion.
-- Cursor snapshots are deep copies, with the existing expiry, eviction and size limits.
-  Upper dates, canonical IDs and fingerprint inputs remain unchanged. Cursors remain
-  process-local and expire on restart; there is no persisted-data migration.
-- Every unfinished stream needs a head before merged output is chosen. Temporary errors
-  preserve position, clear after recovery, and prevent early or same-call retries.
-- RPC requests, timeouts, retries, limits and source content stay unchanged. In particular,
-  album scans do not refill pages and topic scans do not infer exhaustion from sparse data.
-- The injected clock covers pagination deadlines, cooldowns and cursor expiry. A fake
-  clock replaces module-level time monkeypatches in tests.
-
-The extra modules make dependencies explicit at the cost of some assembly and delegation
-code. There is no class-per-tool rule, inheritance hierarchy, generic repository, event
-bus, or line-count threshold. Future capabilities should add a cohesive use case and
-the required port/adapter behavior without growing a universal flag-based query method.
-
-## Validation and delivery
-
-R1 is delivered in one PR with a contract-baseline commit followed by the implementation
-and architecture documentation. Existing behavioral checks remain, including native TL
-fixtures, no-extra-RPC assertions, policy revocation, pagination recovery, Unicode text,
-both MCP modes and a real STDIO process. New checks cover the schema baseline, layer
-boundaries, shared runtime, concurrent connection, cancellation and login cleanup.
-
-Run `make check` and require GitHub CI before squash merge. All automated validation is
-offline; live Telegram checks remain a separate task using user-selected sources.
-
-## R2: Shared local transport
-
-R2 retains these layer boundaries and adds transport composition around the same
-application facade. Standalone STDIO still owns its application/runtime. The optional
-foreground HTTP process owns one facade, Telegram runtime, read policy, and cursor
-store for all connected local clients. Tool calls coordinate access to that shared
-state. Client disconnects do not close the application; server shutdown does.
-
-The `connect` command is a STDIO-to-HTTP adapter. It reads the configured loopback
-endpoint and token file without opening the Telegram session. It does not start a
-server or fall back to standalone operation. Bearer authentication protects the
-local endpoint; all accepted clients share the same user trust boundary, rather
-than receiving separate account permissions or cursor namespaces.
-
-Session leases use portable locking on Windows, macOS, and Linux. Private-file
-handling uses POSIX modes where applicable and the user's filesystem ACLs on
-Windows. These transport and platform changes do not introduce new Telegram tools,
-attachment downloads, persistent cursors, or multiple account profiles. See
-[configuration](configuration.md) and [client setup](clients.md) for operational details.
-
-## R3: Reliable retrieval and compact transport contracts
-
-R3 keeps the layers and 14 tools while separating public MCP DTOs from domain models.
-The MCP adapter projects message references and shared chat summaries, omits unknown
-optional metadata, and emits a single minified JSON payload in both text and structured
-content. Typed output schemas remain self-contained. Domain text clipping and cursor
-advancement happen before projection; the transport never drops messages to fit a budget.
-
-Explicit source reads independent of folders bypass catalog enumeration. Required catalogs
-use one private resumable builder and atomically published snapshots, with a maximum
-30-second reuse TTL. Fresh authorization and current local policy precede buffered output;
-fresh public metadata remains request-local. Expired or partial catalogs never grant access.
-The runtime restores a disconnected client under its lifecycle lock while retaining the
-session lease, and exposes generation changes to invalidate cached access metadata.
-
-`QueryPreparation` chooses per-chat or unrestricted global search once. `MessagePager`
-primes sources fairly and merges by date, numeric chat ID, and message ID. `GlobalSearchPager`
-owns a compound offset and preserves native ordering across pages. Both keep immutable
-cursor checkpoints and temporary-failure cooldowns. Raw search calls expose explicit
-page budgets, including the date-anchor step for filter-only per-chat search.
-
-Raw payload normalization uses response-local entity maps rather than Telethon's private
+Request construction and response parsing are separated within search. Common factual
+filtering lives in `message_filters`; normalization and optional metadata mapping remain
+pure helpers. Raw responses use response-local entities without Telethon's private
 message initializer. Link previews remain separate from actual media attachments.
-Autonomous tests cover these contracts; a bounded user-selected live probe is a separate
-release gate and does not run in CI.
+Ordinary history, topic history and album windows retain distinct exhaustion rules.
 
-## M3: Selected attachment downloads
+`ChatGateway` owns a resumable catalog builder and publishes only completed snapshots,
+reused for at most 30 seconds. Expired or partial catalogs never grant access. Fresh
+public-channel metadata remains request-local, and authorization is checked before
+saved-buffer output. Direct-source reads do not depend on a cold catalog when folder
+policy is absent.
 
-`AttachmentService` owns explicit access checks, a bounded operation deadline,
-serialization and FloodWait cooldown through `AttachmentPort` and `DownloadStorePort`.
-The Telegram gateway refreshes current protection/media metadata and uses public
-Telethon downloads with one identity-checked file-reference recovery. The independent
-store adapter owns quota, private generated files, expiry, cleanup and a process lease.
-It starts only after an authorized request; ordinary retrieval creates no download files.
+## Transports and local resources
 
-MCP adds one tool and opaque temporary resources, using public SDK resource hooks.
-The bridge forwards resource requests. Resource reads reauthorize the source and verify
-media identity and stored bytes. The existing 14 retrieval tools keep their contracts;
-no general HTTP file endpoint or persistent storage layer is introduced.
+Standalone STDIO owns its application/runtime. The foreground local HTTP process owns
+one facade, runtime, policy, cursor store and download store shared by its clients.
+The tool gate coordinates calls to shared state; disconnecting a client does not close
+the application. Server shutdown closes it through the facade.
+
+`connect` proxies STDIO to the authenticated loopback HTTP endpoint, including resource
+requests. It never opens a Telegram session, starts a server or falls back to standalone
+mode. Accepted clients share one local user's permissions and cursor namespace.
+See [configuration](configuration.md) and [client setup](clients.md).
+
+`SessionLease` provides an exclusive nonblocking lock for reads and interactive login
+on Windows, macOS and Linux. Login owns its prompting and authentication flow; read-only
+startup never initiates login or creates a missing session database. Configuration is
+saved atomically; private files use POSIX modes or Windows ACLs as appropriate.
+
+The download store starts only after an authorized request. It owns private generated
+files, quota reservations, expiry, cleanup and a process lease. The Telegram attachment
+gateway refreshes protection/media metadata and allows one identity-checked recovery
+of a stale file reference. Resource reads reauthorize the source and verify current
+media identity and stored bytes. The MCP adapter exposes opaque resource URIs without
+a general HTTP file endpoint or persistent message database.
+
+## Invariants and validation
+
+- Access and topic checks precede saved-buffer output; failed checks leave the original
+  cursor reusable. Cursors are deep-copy snapshots with bounded size, expiry and eviction.
+  Their canonical source IDs, date ceilings and selected search engine stay fixed.
+- Every unfinished per-chat stream needs a head before merged output can be chosen.
+  Temporary errors retain position, clear after recovery and prevent early or same-call
+  retries. An injected clock controls deadlines, cooldowns and cursor expiry.
+- RPC budgets include date-anchor requests. Album scans do not refill pages, and topic
+  scans do not infer exhaustion from sparse data. Text clipping and cursor advancement
+  precede MCP projection; projection does not drop messages to fit a budget.
+- MCP emits the same compact JSON in text and structured content with self-contained
+  schemas. Cursors and resources are process-local; server restarts invalidate them.
+
+[Architecture tests](../tests/contracts/test_architecture.py) check imports and cycles.
+[Contract tests](../tests/contracts/test_mcp.py) compare both MCP modes with the versioned
+[fixture](../tests/fixtures/mcp_contract.json). Layer-specific tests preserve pagination,
+retry, mapping and no-extra-RPC behavior. Integration tests exercise real STDIO, HTTP
+and bridge delivery, including full-size resources. See the [test layout](../CONTRIBUTING.md#test-layout).
+
+Run `make check` and require GitHub CI before squash merge. Automated checks are offline;
+[bounded live validation](live-validation.md) uses separately selected sources.
+Add cohesive use cases and adapters where needed; keep distinct pagination algorithms
+explicit rather than building a universal flag-driven query method.

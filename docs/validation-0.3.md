@@ -48,13 +48,13 @@ serialized MCP objects, including both text fallback and structured content.
 These exceed the acceptance thresholds of 60% and 25%. The tests check both
 automatic and legacy MCP negotiation modes; these modes share the new response
 contract. They do not restore the 0.2 output shape. See
-[test_wire_mcp.py](../tests/test_wire_mcp.py) for the fixture, frozen baselines,
+[test_wire.py](../tests/adapters/mcp/test_wire.py) for the fixture, frozen baselines,
 serialization settings, and checks that every text character survives.
 
 Reproduce the regression checks with:
 
 ```sh
-uv run --locked pytest tests/test_wire_mcp.py
+uv run --locked pytest tests/adapters/mcp/test_wire.py
 ```
 
 The percentages describe this fixture and serialized byte sizes, not a universal

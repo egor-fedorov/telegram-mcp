@@ -26,43 +26,21 @@ need a detailed contract before implementation; no delivery dates are assigned.
 The [historical completion records](docs/specs/README.md#historical-completion-records)
 include offline test results. They do not claim live Telegram validation.
 
-## Completed stage: R3 — Reliable retrieval and compact responses (0.3.0)
+The published 0.3.0 retrieval work is recorded in the [changelog](CHANGELOG.md#030---2026-10-22),
+[migration guide](docs/migration-0.3.md) and [validation record](docs/validation-0.3.md).
+Release and live-validation evidence belongs there, rather than in this priority list.
 
-Implementation and validation are complete in [PR #13](https://github.com/egor-fedorov/telegram-mcp/pull/13), before attachment downloads. It adds:
+## Completed maintenance: repository organization
 
-- Bounded connection recovery and fresh authorization checks before saved-buffer output.
-- A completed-catalog cache (default/max 30 seconds), incremental cold loads, and a
-  direct-source path independent of catalog scans when folder policy is not involved.
-- Native account-dialog global search with all-chat permission, fair restricted-source priming with explicit
-  progress, safe native media/link filters, and webpage preview metadata.
-- Raw payload mapping without Telethon's private message initializer.
-- A compact typed contract for all 14 tools: shared chat summaries, canonical string
-  references, sparse optional metadata, and complete mirrored text/structured JSON.
-- Reproducible response/schema size checks and a bounded selected-source live probe.
+Tests now follow the domain, application, adapter, integration and contract boundaries;
+shared helpers are explicit support modules. Telegram search, topic history and album
+windows have focused readers sharing the existing runtime and entity cache. Existing
+MCP contracts and retrieval behavior are preserved. The architecture and contributor
+guides describe the current structure, and the usage guide has a navigation index.
 
-See [migration](docs/migration-0.3.md), [usage](docs/usage.md), and the
-[validation record](docs/validation-0.3.md). Package and installation examples target
-0.3.0; publication is verified separately through the [release workflow](docs/releasing.md).
-
-Acceptance requires full offline `make check`, GitHub `checks`, diff review, at least
-60% response-size reduction on the fixed 30-post fixture, at least 25% reduction in
-`tools/list`, and bounded user-selected live validation before publication. Global
-live search requires separate account-wide permission; it is not part of the selected
-sources probe. No message content or private source identifiers belong in public reports.
-
-Local `make check` passed with 891 tests and one skipped; wheel and source-distribution
-installation smoke checks passed. The response/schema measurements passed:
-61.6% and 29.8% smaller respectively.
-The selected-source live probe completed 24 checks without issues, including reconnect
-and a subsequent history read. Global search, catalogs, forums, and authorization
-revocation remain covered offline only. The full platform/Python matrix and required
-`checks` job [passed](https://github.com/egor-fedorov/telegram-mcp/actions/runs/39761842978).
-Merge status is recorded in the PR; publication is recorded separately by the
-[Release workflow](https://github.com/egor-fedorov/telegram-mcp/actions/workflows/release.yml)
-and [published releases](https://github.com/egor-fedorov/telegram-mcp/releases).
-Release validation also identified two exact-backoff MCP tests that depended on
-system-clock rounding. They now use injected test clocks; production retry logic
-and the requirement to avoid premature requests are unchanged.
+Development maintenance also updates ty to 0.0.92, corrects async context-manager
+annotations, and separates development-tool updates in Dependabot while retaining
+manual review and CI. See [contributor guidance](CONTRIBUTING.md#dependencies-and-releases).
 
 ## M3 — Selected attachment downloads (unreleased)
 
