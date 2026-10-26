@@ -42,7 +42,7 @@ Development maintenance also updates ty to 0.0.92, corrects async context-manage
 annotations, and separates development-tool updates in Dependabot while retaining
 manual review and CI. See [contributor guidance](CONTRIBUTING.md#dependencies-and-releases).
 
-Dependency maintenance updates the HTTP stack and platformdirs, plus PyJWT 2.15.1
+Dependency maintenance updates MCP to 2.3.0, the HTTP stack and platformdirs, plus PyJWT 2.15.1
 and OpenTelemetry API 1.45.1 for the reported transitive dependency vulnerabilities.
 Updates receive manual compatibility review and offline/CI validation.
 
