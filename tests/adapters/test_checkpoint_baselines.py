@@ -25,6 +25,9 @@ def store(tmp_path):
 
 
 def test_thousands_of_fresh_baselines_preserve_only_latest_unused_root_and_quiet_chat(store):
+    # Exercise real quota transactions without benchmarking thousands of disk flushes.
+    # Restart and publication tests keep the production durability settings.
+    store._db().execute("PRAGMA synchronous = OFF")
     quiet = store.put(snapshot(cid="2"), "auth")
     for mid in range(1, 4201):
         current = store.put(snapshot(mid), "auth", pending=True)

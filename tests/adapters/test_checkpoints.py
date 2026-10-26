@@ -176,6 +176,9 @@ def test_busy_sources_cannot_evict_a_quiet_source_after_4096_polls(tmp_path):
     clock = FakeClock()
     store = CheckpointStore(tmp_path / "session", clock, root=tmp_path / "state")
     try:
+        # Exercise real quota transactions without benchmarking thousands of disk flushes.
+        # Restart and publication tests keep the production durability settings.
+        store._db().execute("PRAGMA synchronous = OFF")
         quiet = store.put(state().model_copy(update={"chat_id": "99"}), "auth")
         heads = {
             str(cid): store.put(state().model_copy(update={"chat_id": str(cid)}), "auth")
