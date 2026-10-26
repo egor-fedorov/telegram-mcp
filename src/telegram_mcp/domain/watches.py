@@ -1,11 +1,12 @@
 """Durable named consumers and their one outstanding delivery."""
 
+import json
 from typing import Annotated, Literal, Self
 
 from pydantic import AwareDatetime, Field, model_validator
 
 from telegram_mcp.domain.changes import Change, CheckpointState
-from telegram_mcp.domain.models import Issue, Model
+from telegram_mcp.domain.models import Issue, Model, SavedFile
 
 WatchName = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")]
 
@@ -27,6 +28,7 @@ class WatchChangesResult(Model):
     progress: WatchProgress = Field(default_factory=WatchProgress)
     issues: list[Issue] = Field(default_factory=list, max_length=20)
     issue_count: int = Field(default=0, ge=0)
+    saved_file: SavedFile | None = None
 
 
 class PeerRevision(Model):
@@ -65,10 +67,18 @@ class WatchPosition(Model):
         return self
 
 
+class BatchArchive(Model):
+    """A reserved permanent-copy location; the receipt exists only after publication."""
+
+    key: str = Field(pattern=r"^[A-Za-z0-9_-]{43}$")
+    saved_file: SavedFile | None = None
+
+
 class PendingDelivery(Model):
     result: WatchChangesResult
     position: WatchPosition
     source_ids: list[str]
+    archive: BatchArchive | None = None
 
     @model_validator(mode="after")
     def consistent_sources(self) -> Self:
@@ -108,6 +118,7 @@ class WatchState(Model):
         if self.pending and (
             self.pending.result.name != self.name
             or not self.pending.result.batch_id
+            or self.pending.result.saved_file is not None
             or not set(self.pending.source_ids) <= self.pending.position.sources.keys()
         ):
             raise ValueError("Inconsistent pending delivery")
@@ -154,3 +165,36 @@ def watch_info(state: WatchState) -> WatchInfo:
         pending_change_count=state.pending.result.returned_count if state.pending else 0,
         issue_count=len(position.errors),
     )
+
+
+def batch_jsonl(name: str, pending: PendingDelivery) -> bytes:
+    """Deterministic versioned JSONL of one pending delivery, excluding any archive receipt."""
+    result = pending.result
+    header = {
+        "type": "watch_batch",
+        "schema_version": 1,
+        "watch": name,
+        "batch_id": result.batch_id,
+        "source_ids": pending.source_ids,
+        "cycle_started_at": pending.position.cycle_started_at.isoformat()
+        if pending.position.cycle_started_at
+        else None,
+        "returned_count": result.returned_count,
+        "omitted_count": result.omitted_count,
+        "complete": result.complete,
+        "issue_count": result.issue_count,
+        "progress": result.progress.model_dump(mode="json"),
+    }
+    records: list[dict[str, object]] = [header]
+    records.extend(
+        {"type": "change", **change.model_dump(mode="json", exclude_none=True)}
+        for change in result.changes
+    )
+    records.extend(
+        {"type": "issue", **issue.model_dump(mode="json", exclude_none=True)}
+        for issue in result.issues
+    )
+    return "".join(
+        json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
+        for record in records
+    ).encode("utf-8")

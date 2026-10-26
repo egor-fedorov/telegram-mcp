@@ -1,6 +1,7 @@
 """On-demand named consumers with durable, explicitly acknowledged delivery."""
 
 import asyncio
+import hashlib
 import re
 import secrets
 from collections.abc import AsyncGenerator
@@ -15,12 +16,14 @@ from telegram_mcp.application.change_reader import advance_changes
 from telegram_mcp.application.incremental import BudgetExhausted, IncrementalContext
 from telegram_mcp.application.watch_ports import WatchStorePort
 from telegram_mcp.application.watch_probe import WatchProbe
+from telegram_mcp.domain.archiving import ArchiveSource
 from telegram_mcp.domain.changes import Change, CheckpointState
 from telegram_mcp.domain.folders import select_chats
 from telegram_mcp.domain.models import Issue, ToolError
 from telegram_mcp.domain.references import chat_target
 from telegram_mcp.domain.text import clip
 from telegram_mcp.domain.watches import (
+    BatchArchive,
     PendingDelivery,
     WatchAcknowledgement,
     WatchChangesResult,
@@ -29,6 +32,7 @@ from telegram_mcp.domain.watches import (
     WatchList,
     WatchProgress,
     WatchState,
+    batch_jsonl,
     watch_info,
 )
 
@@ -190,32 +194,31 @@ class WatchService:
             access.require_access(chat_id)
 
     async def changes(
-        self, name: str, limit: int = 30, ack_batch_id: str | None = None
+        self, name: str, limit: int = 30, ack_batch_id: str | None = None, save: bool = False
     ) -> WatchChangesResult:
         if type(limit) is not int or not 1 <= limit <= 100:
             raise ToolError("INVALID_ARGUMENT", "Use limit 1..100.")
         if ack_batch_id is not None:
             self._validate_batch(ack_batch_id)
+        if save:
+            # Saving is a precondition of the whole call, before any acknowledgement.
+            self.context.archive.require_enabled()
         async with self._request(name):
             ctx = self.context
             binding = await ctx.backend.checkpoint_binding()
             state = self._get(name, binding)
             access = await ctx.access.load(explicit=not state.folder_ids)
             if ack_batch_id is not None:
-                self._acknowledge(state, binding, ack_batch_id)
+                pending = state.pending
+                if save and pending is not None and pending.result.batch_id == ack_batch_id:
+                    await self._check_pending(state, access)
+                    await self._ensure_archive(state, binding)
+                await self._acknowledge(state, binding, ack_batch_id)
             if state.pending is not None:
-                replay_budget = ctx.budget()
-                try:
-                    for cid in state.pending.source_ids:
-                        await self._authorize(state, access, cid)
-                        await replay_budget.call(
-                            partial(ctx.backend.check_export_source, cid), page=False
-                        )
-                except BudgetExhausted:
-                    raise ToolError(
-                        "CONNECTION_ERROR", "Pending batch checks timed out; retry this watch."
-                    ) from None
-                return state.pending.result
+                await self._check_pending(state, access)
+                if save:
+                    await self._ensure_archive(state, binding)
+                return self._delivered(state.pending)
             if not state.position.remaining:
                 self._start_cycle(state, access)
             candidate = state.position.model_copy(deep=True)
@@ -318,12 +321,83 @@ class WatchService:
             if result.returned_count:
                 result.batch_id = secrets.token_urlsafe(32)
                 state.pending = PendingDelivery(
-                    result=result, position=candidate, source_ids=sorted(delivered)
+                    result=result,
+                    position=candidate,
+                    source_ids=sorted(delivered),
+                    archive=BatchArchive(key=secrets.token_urlsafe(32)) if save else None,
                 )
-            else:
-                state.position = candidate
+                # Persist the batch and its reserved copy before writing the file, so a
+                # failed or interrupted save leaves a replayable, unacknowledged batch.
+                self.store.save(state, binding)
+                if save:
+                    await self._ensure_archive(state, binding)
+                return self._delivered(state.pending)
+            state.position = candidate
             self.store.save(state, binding)
             return result
+
+    async def _check_pending(self, state: WatchState, access: AccessContext) -> None:
+        """Recheck access and saving restrictions before replaying or saving a batch."""
+        assert state.pending is not None
+        budget = self.context.budget()
+        try:
+            for cid in state.pending.source_ids:
+                await self._authorize(state, access, cid)
+                await budget.call(
+                    partial(self.context.backend.check_export_source, cid), page=False
+                )
+        except BudgetExhausted:
+            raise ToolError(
+                "CONNECTION_ERROR", "Pending batch checks timed out; retry this watch."
+            ) from None
+
+    @staticmethod
+    def _delivered(pending: PendingDelivery) -> WatchChangesResult:
+        saved = pending.archive.saved_file if pending.archive is not None else None
+        return pending.result.model_copy(update={"saved_file": saved})
+
+    async def _ensure_archive(self, state: WatchState, binding: str) -> None:
+        """Publish one permanent copy of the pending batch and record its receipt."""
+        pending, archive = state.pending, self.context.archive
+        assert pending is not None
+        if pending.archive is not None and pending.archive.saved_file is not None:
+            if await archive.verify(pending.archive.saved_file):
+                return
+            pending.archive = None  # Rebuild a missing or damaged copy from the batch.
+        if pending.archive is None:
+            pending.archive = BatchArchive(key=secrets.token_urlsafe(32))
+            self.store.save(state, binding)
+        data = batch_jsonl(state.name, pending)
+        digest = hashlib.sha256(data).hexdigest()
+        source = ArchiveSource(
+            tool="get_watch_changes",
+            watch_name=state.name,
+            batch_id=pending.result.batch_id,
+            source_ids=pending.source_ids,
+            format="jsonl",
+        )
+
+        async def publish(key: str):
+            return await archive.save(
+                data,
+                f"{state.name}.jsonl",
+                digest,
+                mime_type="application/x-ndjson",
+                source=source,
+                key=key,
+            )
+
+        try:
+            saved = await publish(pending.archive.key)
+        except ToolError as exc:
+            if exc.code != "ARCHIVE_COPY_INVALID":
+                raise
+            # Never reuse a reserved location that holds different data.
+            pending.archive = BatchArchive(key=secrets.token_urlsafe(32))
+            self.store.save(state, binding)
+            saved = await publish(pending.archive.key)
+        pending.archive.saved_file = saved
+        self.store.save(state, binding)
 
     async def acknowledge(self, name: str, batch_id: str) -> WatchAcknowledgement:
         self._validate_batch(batch_id)
@@ -331,14 +405,16 @@ class WatchService:
             await self.context.chats.check_authorization()
             binding = await self.context.backend.checkpoint_binding()
             state = self._get(name, binding)
-            return self._acknowledge(state, binding, batch_id)
+            return await self._acknowledge(state, binding, batch_id)
 
     @staticmethod
     def _validate_batch(batch_id: str) -> None:
         if not re.fullmatch(r"[A-Za-z0-9_-]{43}", batch_id):
             raise ToolError("INVALID_ARGUMENT", "Use the batch_id returned by get_watch_changes.")
 
-    def _acknowledge(self, state: WatchState, binding: str, batch_id: str) -> WatchAcknowledgement:
+    async def _acknowledge(
+        self, state: WatchState, binding: str, batch_id: str
+    ) -> WatchAcknowledgement:
         if state.last_acknowledged == batch_id:
             return WatchAcknowledgement(name=state.name, batch_id=batch_id)
         if state.pending is None or state.pending.result.batch_id != batch_id:
@@ -346,6 +422,20 @@ class WatchService:
                 "WATCH_BATCH_MISMATCH",
                 "This batch is not awaiting acknowledgement; no position changed.",
             )
+        archive = state.pending.archive
+        if archive is not None and archive.saved_file is None:
+            raise ToolError(
+                "WATCH_ARCHIVE_PENDING",
+                "This batch requested a permanent copy that is not saved yet. Repeat "
+                "get_watch_changes with save=true before acknowledging; no position changed.",
+            )
+        if archive is not None and archive.saved_file is not None:
+            if not await self.context.archive.verify(archive.saved_file):
+                raise ToolError(
+                    "ARCHIVE_COPY_INVALID",
+                    "The batch's permanent copy is missing or damaged. Repeat "
+                    "get_watch_changes with save=true to rebuild it; no position changed.",
+                )
         state.position = state.pending.position
         state.pending = None
         state.last_acknowledged = batch_id

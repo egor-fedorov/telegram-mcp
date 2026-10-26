@@ -208,6 +208,7 @@ def create_server(
         name: str,
         limit: Limit = 30,
         ack_batch_id: str | None = None,
+        save: bool = False,
     ) -> Annotated[CallToolResult, wire.WatchChangesResult]:
         """Poll a named subscription without managing per-chat tokens.
 
@@ -216,11 +217,13 @@ def create_server(
         or use ack_watch_changes. Retrying that acknowledgement cannot confirm a newer batch.
         Until then the same saved batch is replayed, including after restart; limit
         applies only to new batches. Empty progress needs no acknowledgement.
+        save=true (requires archive_directory) writes each batch to a permanent JSONL copy
+        before it can be acknowledged and returns saved_file; retries reuse that copy.
         Continue incomplete passes by name; source order is fair, not globally sorted.
         Check issues/omissions and retry delays. Only the last 100 known message IDs
         per source are checked for revisions; this is not a historical event log.
         """
-        return wire.encode(await service.get_watch_changes(name, limit, ack_batch_id))
+        return wire.encode(await service.get_watch_changes(name, limit, ack_batch_id, save))
 
     @server.tool(annotations=persistent_read)
     @expose

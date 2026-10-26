@@ -3,6 +3,7 @@ import json
 import pytest
 from mcp.client import Client
 
+from telegram_mcp.adapters.config import Settings
 from telegram_mcp.adapters.mcp import create_server
 from tests.support.fakes import BASE
 from tests.support.incremental import incremental_fixture
@@ -73,3 +74,31 @@ async def test_server_validates_results_even_when_schemas_are_not_advertised(
             result = await client.call_tool("get_status", {})
             assert result.is_error
             assert result.structured_content is None
+
+
+@pytest.mark.parametrize("schema_mode", ["compact", "full"])
+@pytest.mark.parametrize("mode", ["auto", "legacy"])
+async def test_saved_batch_receipt_is_typed_and_required_before_ack(tmp_path, mode, schema_mode):
+    settings = Settings(allowed_chat_ids=["1"], archive_directory=tmp_path / "archive")
+    async with incremental_fixture(tmp_path, settings=settings) as env:
+        server = create_server(env.service, owns_service=False, schema_mode=schema_mode)
+        async with Client(server, mode=mode) as client:
+            await client.call_tool(
+                "create_watch", {"name": "jobs", "chat_refs": ["1"], "date_from": BASE.isoformat()}
+            )
+            page = await client.call_tool("get_watch_changes", {"name": "jobs", "save": True})
+            payload = page.structured_content
+            assert not page.is_error and payload is not None
+            assert set(payload["saved_file"]) == {
+                "local_path",
+                "metadata_path",
+                "size",
+                "sha256",
+                "saved_at",
+            }
+            assert page.content[0].type == "text"
+            assert json.loads(page.content[0].text) == payload
+            ack = await client.call_tool(
+                "ack_watch_changes", {"name": "jobs", "batch_id": payload["batch_id"]}
+            )
+            assert not ack.is_error

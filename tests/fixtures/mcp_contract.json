@@ -2843,6 +2843,11 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "save": {
+            "default": false,
+            "title": "Save",
+            "type": "boolean"
           }
         },
         "required": [
@@ -2905,6 +2910,9 @@
           "returned_count": {
             "minimum": 0,
             "type": "integer"
+          },
+          "saved_file": {
+            "$ref": "#/$defs/SavedFile"
           }
         },
         "required": [

@@ -527,6 +527,7 @@ class WatchChangesResult(TypedDict):
     progress: WatchProgress
     issues: Annotated[list[Issue], Field(max_length=20)]
     issue_count: Count
+    saved_file: NotRequired[SavedFile]
 
 
 @with_config(_CONFIG)

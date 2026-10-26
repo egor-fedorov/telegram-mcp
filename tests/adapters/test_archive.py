@@ -213,3 +213,45 @@ async def test_archive_fsync_keeps_event_loop_responsive_and_cancel_removes_bund
     with pytest.raises(asyncio.CancelledError):
         await task
     assert list(archive_store.root.iterdir()) == []
+
+
+async def test_keyed_save_reuses_identical_copy_and_rejects_different_data(tmp_path, archive_store):
+    key = "k" * 43
+    data = b'{"type":"watch_batch"}\n'
+    digest = hashlib.sha256(data).hexdigest()
+    root = tmp_path / "archive"
+    root.mkdir(mode=0o700)
+    # An interrupted, never-published attempt for this key is removed, not reused.
+    (root / f".{key}.part").mkdir()
+    save = archive_store.save
+    first = await save(
+        data, "jobs.jsonl", digest, mime_type="application/x-ndjson", source=SOURCE, key=key
+    )
+    again = await save(
+        data, "jobs.jsonl", digest, mime_type="application/x-ndjson", source=SOURCE, key=key
+    )
+    assert again == first and Path(first.local_path).parent.name == key
+    assert not (root / f".{key}.part").exists()
+    other = b"different"
+    with pytest.raises(ToolError, match="ARCHIVE_COPY_INVALID"):
+        await save(
+            other,
+            "jobs.jsonl",
+            hashlib.sha256(other).hexdigest(),
+            mime_type="application/x-ndjson",
+            source=SOURCE,
+            key=key,
+        )
+    with pytest.raises(ToolError, match="ARCHIVE_STORAGE_ERROR"):
+        await save(
+            data, "jobs.jsonl", digest, mime_type="application/x-ndjson", source=SOURCE, key="../x"
+        )
+
+
+async def test_verify_detects_missing_or_changed_copies(archive_store):
+    saved = await save_file(archive_store, b"selected bytes")
+    assert await archive_store.verify(saved)
+    await asyncio.to_thread(Path(saved.local_path).write_bytes, b"changed bytes!")
+    assert not await archive_store.verify(saved)
+    await asyncio.to_thread(Path(saved.local_path).unlink)
+    assert not await archive_store.verify(saved)
