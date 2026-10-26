@@ -43,13 +43,16 @@ async def test_cold_catalog_progress_is_retained_and_never_published_partially()
         return dialog_page(list(range(high, max(0, high - 100), -1)), sliced=high > 100)
 
     chats, client, _ = gateway(respond)
+    loading = asyncio.create_task(chats.catalog())
+    await asyncio.wait_for(entered.wait(), 5)
     chats.dialog_catalog.wait_seconds = 0.01
     with pytest.raises(ToolError, match="CATALOG_LOADING") as caught:
         await chats.catalog()
     assert entered.is_set() and caught.value.retry_after == 1
     assert "300 dialogs" in caught.value.detail and chats.cache == {}
     release.set()
-    rows, _ = await chats.catalog()
+    rows, _ = await loading
+    assert (await chats.catalog())[0] == rows
     assert len(rows) == len({row.id for row in rows}) == 601
     assert (
         sum(
