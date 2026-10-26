@@ -22,9 +22,17 @@ A version entry describes its target artifact. Verify publication on
   the shared runtime, entity cache, pagination behavior and MCP contracts.
 - Organized tests by layer with explicit shared helpers; refreshed the architecture
   guide, shortened the roadmap and added navigation to the usage guide.
-- Updated the development type checker to ty 0.0.92 with current async context-manager
-  annotations. Dependabot now separates development tools from other library updates;
+- Updated development checks to ty 0.0.92 and Ruff 0.17.2, with current async
+  context-manager annotations. Dependabot separates development tools from other library updates;
   updates continue to require manual review and passing CI.
+- Updated the locked MCP packages to 2.3.0, HTTP libraries and platformdirs after
+  compatibility review, preserving the versioned tool contracts and all transports.
+
+### Security
+
+- Updated locked PyJWT to 2.15.1 and OpenTelemetry API to 1.45.1 to address the
+  reported vulnerabilities in MCP's transitive dependencies. The local HTTP server
+  continues to authenticate with its configured bearer token.
 
 ## [0.3.0] - 2026-10-22
 
