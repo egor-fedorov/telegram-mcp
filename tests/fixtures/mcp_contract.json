@@ -928,6 +928,76 @@
     }
   },
   "tools": {
+    "download_attachment": {
+      "input": {
+        "type": "object",
+        "properties": {
+          "attachment_id": {
+            "minLength": 1,
+            "title": "Attachment Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "attachment_id"
+        ],
+        "title": "download_attachmentArguments"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "attachment_id": {
+            "type": "string"
+          },
+          "message_ref": {
+            "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "mime_type": {
+            "type": "string"
+          },
+          "size": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "local_path": {
+            "type": "string"
+          },
+          "resource_uri": {
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "attachment_id",
+          "message_ref",
+          "name",
+          "mime_type",
+          "size",
+          "sha256",
+          "local_path",
+          "resource_uri",
+          "expires_at"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "title": null,
+        "read_only_hint": false,
+        "destructive_hint": false,
+        "idempotent_hint": false,
+        "open_world_hint": true
+      }
+    },
     "get_status": {
       "input": {
         "type": "object",
@@ -966,6 +1036,25 @@
           "allow_public_channel_discovery": {
             "type": "boolean"
           },
+          "allow_attachment_downloads": {
+            "type": "boolean"
+          },
+          "attachment_max_bytes": {
+            "exclusiveMinimum": 0,
+            "type": "integer"
+          },
+          "download_ttl_seconds": {
+            "exclusiveMinimum": 0,
+            "type": "integer"
+          },
+          "download_max_bytes": {
+            "exclusiveMinimum": 0,
+            "type": "integer"
+          },
+          "download_max_files": {
+            "exclusiveMinimum": 0,
+            "type": "integer"
+          },
           "allowed_chat_ids": {
             "items": {
               "pattern": "^-?[1-9]\\d*$",
@@ -991,6 +1080,11 @@
           "allow_all_chats",
           "allow_public_channel_reads",
           "allow_public_channel_discovery",
+          "allow_attachment_downloads",
+          "attachment_max_bytes",
+          "download_ttl_seconds",
+          "download_max_bytes",
+          "download_max_files",
           "allowed_chat_ids",
           "allowed_folder_ids",
           "cursor_ttl_seconds"

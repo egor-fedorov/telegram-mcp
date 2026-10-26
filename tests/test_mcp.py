@@ -28,6 +28,7 @@ EXPECTED_TOOLS = {
     "get_album",
     "get_context",
     "get_thread",
+    "download_attachment",
 }
 
 
@@ -42,7 +43,10 @@ async def test_mcp_tool_schemas_and_real_dispatch(mode: str) -> None:
     async with Client(server, mode=mode) as client:
         listing = await client.list_tools()
         assert {t.name for t in listing.tools} == EXPECTED_TOOLS
-        assert all(t.annotations and t.annotations.read_only_hint for t in listing.tools)
+        assert all(
+            t.annotations and t.annotations.read_only_hint == (t.name != "download_attachment")
+            for t in listing.tools
+        )
         history_schema = next(t.input_schema for t in listing.tools if t.name == "get_history")
         assert {"chat_id", "chat_ref"} <= history_schema["properties"].keys()
         assert "chat_id" not in history_schema.get("required", [])

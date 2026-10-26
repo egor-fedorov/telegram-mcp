@@ -14,6 +14,9 @@ allow_public_channel_reads = false
 # Independently opt in to public-channel search and similar-channel metadata.
 # Discovery never grants permission to read posts or changes the allowlist.
 allow_public_channel_discovery = false
+# Independently allow one selected attachment up to 20 MiB from a permitted source.
+# Downloads expire after 15 minutes; message reads never download attachment bytes.
+allow_attachment_downloads = false
 rpc_timeout_seconds = 20
 max_dialogs = 10000
 # Reuse a completed catalog for up to 30 seconds; 0 disables snapshot reuse.

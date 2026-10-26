@@ -4,6 +4,14 @@ from datetime import datetime
 from typing import Literal
 
 from telegram_mcp.application.access import AccessFactory
+from telegram_mcp.application.attachment_ports import (
+    DOWNLOAD_TTL_SECONDS,
+    MAX_ATTACHMENT_BYTES,
+    MAX_DOWNLOAD_BYTES,
+    MAX_DOWNLOAD_FILES,
+    DownloadStorePort,
+)
+from telegram_mcp.application.attachments import AttachmentService
 from telegram_mcp.application.catalog import CatalogService
 from telegram_mcp.application.discovery import DiscoveryService
 from telegram_mcp.application.global_search import GlobalSearchPager
@@ -26,6 +34,7 @@ from telegram_mcp.domain.models import (
     ContentType,
     ContextResult,
     DiscoveryResult,
+    DownloadResult,
     Folder,
     MessageRef,
     MessageResult,
@@ -42,11 +51,13 @@ class Service:
         limits: ExecutionLimits,
         cursors: CursorPort,
         clock: Clock,
+        downloads: DownloadStorePort,
     ):
         self._runtime: RuntimePort = backend
         self._policies = policy_provider
         self._limits = limits
         access = AccessFactory(backend, policy_provider)
+        self._attachments = AttachmentService(backend, access, policy_provider, downloads, clock)
         self._catalog = CatalogService(backend, access, cursors, clock)
         self._discovery = DiscoveryService(backend, policy_provider)
         preparation = QueryPreparation(backend, backend, access, cursors, clock)
@@ -61,7 +72,16 @@ class Service:
         self._messages = MessageReader(backend, backend, access, self._queries, limits)
 
     async def close(self) -> None:
-        await self._runtime.close()
+        try:
+            await self._attachments.close()
+        finally:
+            await self._runtime.close()
+
+    async def download_attachment(self, attachment_id: str) -> DownloadResult:
+        return await self._attachments.download(attachment_id)
+
+    async def read_download_resource(self, uri: str) -> tuple[bytes, str]:
+        return await self._attachments.read_resource(uri)
 
     async def get_status(self) -> dict[str, object]:
         status = await self._runtime.status()
@@ -72,6 +92,11 @@ class Service:
             "allow_all_chats": policy.allow_all_chats,
             "allow_public_channel_reads": policy.allow_public_channel_reads,
             "allow_public_channel_discovery": policy.allow_public_channel_discovery,
+            "allow_attachment_downloads": policy.allow_attachment_downloads,
+            "attachment_max_bytes": MAX_ATTACHMENT_BYTES,
+            "download_ttl_seconds": DOWNLOAD_TTL_SECONDS,
+            "download_max_bytes": MAX_DOWNLOAD_BYTES,
+            "download_max_files": MAX_DOWNLOAD_FILES,
             "allowed_chat_ids": list(policy.allowed_chat_ids),
             "allowed_folder_ids": list(policy.allowed_folder_ids),
             "cursor_ttl_seconds": self._limits.cursor_ttl_seconds,

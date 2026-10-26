@@ -181,6 +181,18 @@ class Attachment(Model):
     size: int | None = None
 
 
+class DownloadResult(Model):
+    attachment_id: str
+    message_ref: MessageRef
+    name: str
+    mime_type: str
+    size: int = Field(ge=0)
+    sha256: str
+    local_path: str
+    resource_uri: str
+    expires_at: AwareDatetime
+
+
 class ForwardOrigin(Model):
     sender_id: str | None = None
     name: str | None = None

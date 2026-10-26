@@ -8,6 +8,14 @@ A version entry describes its target artifact. Verify publication on
 
 ## [Unreleased]
 
+### Added
+
+- Opt-in `download_attachment` for one selected file up to 20 MiB, with a private
+  temporary local path, SHA-256, and an MCP resource available through STDIO, HTTP,
+  and `connect`. Resource reads recheck access, source protection and media identity.
+- Bounded storage (100 MiB / 32 files), 15-minute expiry, cleanup, controlled Telegram
+  file-reference recovery, and FloodWait cooldowns. Published 0.3.0 is unchanged.
+
 ## [0.3.0] - 2026-10-22
 
 ### Added

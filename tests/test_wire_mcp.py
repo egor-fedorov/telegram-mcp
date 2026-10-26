@@ -93,7 +93,7 @@ async def test_all_fourteen_tools_have_typed_self_contained_mirrored_responses(m
     }
     async with Client(server, mode=mode) as client:
         tools = (await client.list_tools()).tools
-        assert len(tools) == len(calls) == 14
+        assert len(tools) == len(calls) + 1 == 15
         for tool in tools:
             schema = tool.output_schema
             assert schema is not None
@@ -114,6 +114,8 @@ async def test_all_fourteen_tools_have_typed_self_contained_mirrored_responses(m
                         check_refs(child)
 
             check_refs(schema)
+            if tool.name == "download_attachment":
+                continue  # Success/resource parity is covered in test_attachments_mcp.
             payload = assert_mirrored(await client.call_tool(tool.name, calls[tool.name]))
             if tool.name == "list_folders":
                 assert payload == {"folders": []}

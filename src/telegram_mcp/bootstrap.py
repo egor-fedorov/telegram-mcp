@@ -3,7 +3,9 @@
 from telegram_mcp.adapters.clock import SystemClock
 from telegram_mcp.adapters.config import ConfiguredPolicyProvider, Settings
 from telegram_mcp.adapters.cursors import CursorStore
+from telegram_mcp.adapters.downloads import DownloadStore
 from telegram_mcp.adapters.telegram import TelegramBackend
+from telegram_mcp.application.attachment_ports import DownloadStorePort
 from telegram_mcp.application.ports import Backend, Clock, CursorPort, ExecutionLimits
 from telegram_mcp.application.service import Service
 
@@ -14,6 +16,7 @@ def build_service(
     *,
     clock: Clock | None = None,
     cursors: CursorPort | None = None,
+    downloads: DownloadStorePort | None = None,
 ) -> Service:
     clock = clock if clock is not None else SystemClock()
     limits = ExecutionLimits(
@@ -32,6 +35,9 @@ def build_service(
         limits=limits,
         cursors=cursors,
         clock=clock,
+        downloads=downloads
+        if downloads is not None
+        else DownloadStore(settings.session_path, clock),
     )
 
 

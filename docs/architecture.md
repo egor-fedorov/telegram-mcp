@@ -155,3 +155,17 @@ Raw payload normalization uses response-local entity maps rather than Telethon's
 message initializer. Link previews remain separate from actual media attachments.
 Autonomous tests cover these contracts; a bounded user-selected live probe is a separate
 release gate and does not run in CI.
+
+## M3: Selected attachment downloads
+
+`AttachmentService` owns explicit access checks, a bounded operation deadline,
+serialization and FloodWait cooldown through `AttachmentPort` and `DownloadStorePort`.
+The Telegram gateway refreshes current protection/media metadata and uses public
+Telethon downloads with one identity-checked file-reference recovery. The independent
+store adapter owns quota, private generated files, expiry, cleanup and a process lease.
+It starts only after an authorized request; ordinary retrieval creates no download files.
+
+MCP adds one tool and opaque temporary resources, using public SDK resource hooks.
+The bridge forwards resource requests. Resource reads reauthorize the source and verify
+media identity and stored bytes. The existing 14 retrieval tools keep their contracts;
+no general HTTP file endpoint or persistent storage layer is introduced.

@@ -3,12 +3,22 @@
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from functools import wraps
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from mcp.server import MCPServer
+from mcp.server.lowlevel.helper_types import ReadResourceContents
+from mcp.server.mcpserver.context import Context
+from mcp.server.mcpserver.exceptions import ResourceError
 from mcp.server.mcpserver.exceptions import ToolError as MCPToolError
-from mcp_types import CallToolResult, ToolAnnotations
-from pydantic import AwareDatetime, Field, StringConstraints
+from mcp.shared.exceptions import MCPError
+from mcp_types import (
+    INTERNAL_ERROR,
+    INVALID_PARAMS,
+    CallToolResult,
+    ResourceTemplate,
+    ToolAnnotations,
+)
+from pydantic import AnyUrl, AwareDatetime, Field, StringConstraints
 
 from telegram_mcp.adapters import wire
 from telegram_mcp.adapters.tool_gate import ToolCallGate
@@ -21,6 +31,49 @@ ChatID = Annotated[str, Field(pattern=r"^-?[1-9]\d*$")]
 TopicID = Annotated[int, Field(gt=0, le=2147483647, strict=True)]
 FolderIDs = Annotated[list[int], Field(min_length=1, max_length=100)]
 ChatIDs = Annotated[list[ChatID], Field(min_length=1, max_length=1000)]
+
+
+class AttachmentServer(MCPServer[None]):
+    """Read transient resources through public SDK hooks, preserving their actual MIME."""
+
+    def __init__(self, service: Service, gate: ToolCallGate | None, **kwargs: Any) -> None:
+        self.service = service
+        self.gate = gate
+        super().__init__(**kwargs)
+
+    async def list_resource_templates(self) -> list[ResourceTemplate]:
+        return [
+            ResourceTemplate(
+                uri_template="telegram-attachment://downloads/{token}",
+                name="downloaded_attachment",
+                description=(
+                    "Read a selected attachment returned by download_attachment before expires_at. "
+                    "Access and source availability are checked again. No resource enumeration."
+                ),
+            )
+        ]
+
+    async def read_resource(
+        self, uri: AnyUrl | str, context: Context[None, Any] | None = None
+    ) -> list[ReadResourceContents]:
+        async def read() -> tuple[bytes, str]:
+            return await self.service.read_download_resource(str(uri))
+
+        try:
+            content, mime_type = (
+                await self.gate.run(read) if self.gate is not None else await read()
+            )
+        except ToolError as exc:
+            issue = exc.issue().model_dump(mode="json", exclude_none=True)
+            code = INVALID_PARAMS if issue["code"] == "DOWNLOAD_UNAVAILABLE" else INTERNAL_ERROR
+            raise MCPError(
+                code, exc.issue().model_dump_json(exclude_none=True), data=issue
+            ) from None
+        except MCPError:
+            raise
+        except Exception:
+            raise ResourceError("Cannot read the downloaded attachment.") from None
+        return [ReadResourceContents(content=content, mime_type=mime_type)]
 
 
 def expose_tool_errors[**P, R](
@@ -54,8 +107,10 @@ def create_server(
             if owns_service:
                 await service.close()
 
-    server: MCPServer[None] = MCPServer(
-        "Telegram Context",
+    server: MCPServer[None] = AttachmentServer(
+        service,
+        gate,
+        name="Telegram Context",
         version=get_version(),
         lifespan=lifespan,
         log_level="WARNING",
@@ -92,10 +147,39 @@ def create_server(
             "Retry temporary discovery failures after any reported wait. "
             "Discovery permission does not grant permission to read candidate posts. "
             "Folder names are not unique; resolve their IDs. "
-            "Folder access is enforced by the server."
+            "Folder access is enforced by the server. "
+            "Download a selected attachments[].id with download_attachment when permitted. "
+            "Each call creates a temporary local file up to 20 MiB, available for 15 minutes; "
+            "the local_path is on the server computer. Read the returned resource_uri explicitly "
+            "for binary content. Access is checked again when reading the resource. "
+            "Downloaded copies cannot be revoked after delivery."
         ),
     )
     readonly = ToolAnnotations(read_only_hint=True, open_world_hint=True)
+
+    @server.tool(
+        annotations=ToolAnnotations(
+            read_only_hint=False,
+            destructive_hint=False,
+            idempotent_hint=False,
+            open_world_hint=True,
+        )
+    )
+    @expose
+    async def download_attachment(
+        attachment_id: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)],
+    ) -> Annotated[CallToolResult, wire.DownloadResult]:
+        """Download one explicitly selected attachments[].id, up to 20 MiB.
+
+        Requires allow_attachment_downloads and ordinary source-read permission. Use
+        get_messages or get_album to select an attachment first. The ID selects the current
+        attachment at that message, not an archived version. Protected and expiring media
+        cannot be downloaded. Returns a local path and a ResourceLink, without inline bytes;
+        use resources/read before expires_at to retrieve binary content. Files expire after
+        15 minutes or server shutdown. The local path is on the server computer. Temporary
+        failures require retrying this call; respect retry_after_seconds. No partial resume.
+        """
+        return wire.encode(await service.download_attachment(attachment_id))
 
     @server.tool(annotations=readonly)
     @expose

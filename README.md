@@ -9,7 +9,8 @@ and polls. Connect several local clients to one session-owning process, or run s
 
 Supports Windows, macOS, and Linux with Python 3.12–3.15. The server uses Telethon and
 preserves original text, dates, links, entities, and available metadata. It does not send
-messages, join channels, mark messages read, or download attachment bytes.
+messages, join channels, or mark messages read. Source builds additionally support
+opt-in selected attachment downloads; this feature is not in published 0.3.0.
 
 ## Install and log in
 
@@ -88,6 +89,7 @@ do not paste it into client configuration. This is a local, single-user integrat
 | `get_album` | Members of a selected album within a bounded neighborhood of one message |
 | `get_context` | Messages before/after an anchor and a chain of parent replies |
 | `get_thread` | Comments on a channel post or replies in a group thread |
+| `download_attachment` | One selected attachment up to 20 MiB as a temporary local file and MCP resource (unreleased) |
 
 
 ## First tasks
@@ -154,6 +156,7 @@ reports payload-size measurements and the scope of selected-source live checks.
 
 The code is [MIT licensed](https://github.com/egor-fedorov/telegram-mcp/blob/main/LICENSE).
 This does not grant rights to Telegram content. Secret chats are unsupported; attachment
-downloads, sending, administration, and persistent archives are separate future work.
+downloads require a separate opt-in; sending, administration, and persistent archives
+remain future work.
 Use source material you are entitled to share with your chosen model and follow
 [Telegram's content terms](https://telegram.org/tos/content-licensing).

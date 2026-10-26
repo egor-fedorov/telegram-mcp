@@ -3,6 +3,11 @@ from urllib.parse import urlparse
 
 from pydantic import ValidationError
 
+from telegram_mcp.application.attachment_ports import (
+    AttachmentKind,
+    AttachmentSource,
+    AttachmentWriter,
+)
 from telegram_mcp.application.ports import (
     Batch,
     DiscoveryBatch,
@@ -108,6 +113,14 @@ class FakeBackend:
     async def status(self) -> dict[str, object]:
         self.backend_calls.append("status")
         return {"authorized": True, "connected": True}
+
+    async def prepare_attachment(self, ref: MessageRef, kind: AttachmentKind) -> AttachmentSource:
+        self.backend_calls.append("prepare_attachment")
+        raise ToolError("ATTACHMENT_UNAVAILABLE", "No attachment fixture is available.")
+
+    async def download_attachment(self, source: AttachmentSource, writer: AttachmentWriter) -> None:
+        self.backend_calls.append("download_attachment")
+        raise ToolError("ATTACHMENT_UNAVAILABLE", "No attachment fixture is available.")
 
     async def close(self) -> None:
         self.backend_calls.append("close")

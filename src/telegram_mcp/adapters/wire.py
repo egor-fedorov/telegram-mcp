@@ -8,7 +8,7 @@ import json
 from datetime import datetime
 from typing import Annotated, Any, Literal, NotRequired
 
-from mcp_types import CallToolResult, TextContent
+from mcp_types import CallToolResult, ResourceLink, TextContent
 from pydantic import AwareDatetime, ConfigDict, Field, with_config
 from pydantic_core import to_json
 from typing_extensions import TypedDict
@@ -84,6 +84,11 @@ class Status(TypedDict):
     allow_all_chats: bool
     allow_public_channel_reads: bool
     allow_public_channel_discovery: bool
+    allow_attachment_downloads: bool
+    attachment_max_bytes: Annotated[int, Field(gt=0)]
+    download_ttl_seconds: Annotated[int, Field(gt=0)]
+    download_max_bytes: Annotated[int, Field(gt=0)]
+    download_max_files: Annotated[int, Field(gt=0)]
     allowed_chat_ids: list[ChatID]
     allowed_folder_ids: list[int]
     cursor_ttl_seconds: Annotated[int, Field(gt=0)]
@@ -284,6 +289,19 @@ class Attachment(TypedDict):
 
 
 @with_config(_CONFIG)
+class DownloadResult(TypedDict):
+    attachment_id: str
+    message_ref: MessageKey
+    name: str
+    mime_type: str
+    size: Count
+    sha256: str
+    local_path: str
+    resource_uri: str
+    expires_at: AwareDatetime
+
+
+@with_config(_CONFIG)
 class ForwardOrigin(TypedDict):
     sender_id: NotRequired[str]
     name: NotRequired[str]
@@ -454,7 +472,19 @@ def encode(value: models.Model | dict[str, object] | list[models.Folder]) -> Cal
     # Domain values can contain datetime objects. Pydantic's public JSON encoder
     # preserves the established UTC spelling and Unicode without a second model.
     text = to_json(payload).decode("utf-8")
-    return CallToolResult(
+    result = CallToolResult(
         content=[TextContent(type="text", text=text)],
         structured_content=json.loads(text),
     )
+    if isinstance(value, models.DownloadResult):
+        result.content.append(
+            ResourceLink(
+                type="resource_link",
+                uri=value.resource_uri,
+                name=value.name,
+                mime_type=value.mime_type,
+                size=value.size,
+                description="Temporary attachment; read before expires_at from the tool result.",
+            )
+        )
+    return result

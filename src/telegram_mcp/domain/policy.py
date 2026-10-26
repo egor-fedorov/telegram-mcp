@@ -10,3 +10,4 @@ class ReadPolicy:
     allow_all_chats: bool = False
     allow_public_channel_reads: bool = False
     allow_public_channel_discovery: bool = False
+    allow_attachment_downloads: bool = False

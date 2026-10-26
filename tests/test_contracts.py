@@ -1,4 +1,4 @@
-"""Compare the self-contained public schemas against the compact 0.3 MCP contract."""
+"""Compare the self-contained public schemas against the versioned MCP contract."""
 
 import json
 from pathlib import Path

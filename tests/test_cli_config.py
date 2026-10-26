@@ -124,7 +124,7 @@ async def test_configure_all_chats_is_explicit_and_preserves_input_object(
 ) -> None:
     settings = Settings(allow_all_chats=initial, allowed_chat_ids=["1"])
     backend = FakeBackend()
-    replies = iter(["", "", "", "", answer])
+    replies = iter(["", "", "", "", answer, ""])
     monkeypatch.setattr("telegram_mcp.adapters.cli.sys.stdin.isatty", lambda: True)
     monkeypatch.setattr("builtins.input", lambda _: next(replies))
     path = tmp_path / "config.toml"
@@ -245,3 +245,23 @@ def test_cli_configuration_failure_is_stderr_only(
     output = capsys.readouterr()
     assert output.out == "" and "api_id" in output.err
     assert "sensitive-value" not in output.err
+
+
+@pytest.mark.parametrize(
+    ("initial", "answer", "expected"),
+    [(False, "", False), (True, "", True), (False, "y", True), (True, "n", False)],
+)
+async def test_configure_download_permission_is_independent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, initial: bool, answer: str, expected: bool
+) -> None:
+    settings = Settings(allow_attachment_downloads=initial, allowed_chat_ids=["1"])
+    replies = iter(["", "", "", "", "", answer])
+    monkeypatch.setattr("telegram_mcp.adapters.cli.sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _: next(replies))
+    path = tmp_path / "config.toml"
+    await configure(settings, path, lambda _: FakeBackend())
+    loaded = load_settings(path)
+    assert loaded.allow_attachment_downloads is expected
+    assert not loaded.allow_all_chats and not loaded.allow_public_channel_reads
+    assert loaded.allowed_chat_ids == ["1"]
+    assert settings.allow_attachment_downloads is initial

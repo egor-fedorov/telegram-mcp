@@ -26,6 +26,7 @@ class Settings(Model):
     allow_all_chats: bool = False
     allow_public_channel_reads: bool = False
     allow_public_channel_discovery: bool = False
+    allow_attachment_downloads: bool = False
     rpc_timeout_seconds: float = Field(default=20, gt=0, le=60)
     max_dialogs: int = Field(default=10000, ge=1, le=100000)
     catalog_cache_ttl_seconds: float = Field(default=30, ge=0, le=30)
@@ -167,4 +168,5 @@ class ConfiguredPolicyProvider:
             allow_all_chats=self.settings.allow_all_chats,
             allow_public_channel_reads=self.settings.allow_public_channel_reads,
             allow_public_channel_discovery=self.settings.allow_public_channel_discovery,
+            allow_attachment_downloads=self.settings.allow_attachment_downloads,
         )

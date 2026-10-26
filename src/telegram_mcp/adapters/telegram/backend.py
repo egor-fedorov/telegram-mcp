@@ -2,11 +2,17 @@
 
 from telegram_mcp.adapters.clock import SystemClock
 from telegram_mcp.adapters.config import Settings
+from telegram_mcp.adapters.telegram.attachments import AttachmentGateway
 from telegram_mcp.adapters.telegram.chats import ChatGateway
 from telegram_mcp.adapters.telegram.discovery import DiscoveryGateway
 from telegram_mcp.adapters.telegram.forums import ForumGateway
 from telegram_mcp.adapters.telegram.messages import MessageGateway
 from telegram_mcp.adapters.telegram.runtime import TelegramRuntime
+from telegram_mcp.application.attachment_ports import (
+    AttachmentKind,
+    AttachmentSource,
+    AttachmentWriter,
+)
 from telegram_mcp.application.ports import (
     Batch,
     Clock,
@@ -42,6 +48,7 @@ class TelegramBackend:
         self.discovery_gateway = DiscoveryGateway(self.runtime, self.chat_gateway)
         self.message_gateway = MessageGateway(self.runtime, self.chat_gateway)
         self.forum_gateway = ForumGateway(self.runtime, self.chat_gateway)
+        self.attachment_gateway = AttachmentGateway(self.runtime)
 
     async def status(self) -> dict[str, object]:
         return await self.runtime.status()
@@ -88,6 +95,12 @@ class TelegramBackend:
 
     async def messages(self, chat_id: str, message_ids: list[int]) -> dict[int, Message | None]:
         return await self.message_gateway.messages(chat_id, message_ids)
+
+    async def prepare_attachment(self, ref: MessageRef, kind: AttachmentKind) -> AttachmentSource:
+        return await self.attachment_gateway.prepare_attachment(ref, kind)
+
+    async def download_attachment(self, source: AttachmentSource, writer: AttachmentWriter) -> None:
+        await self.attachment_gateway.download_attachment(source, writer)
 
     async def history_window(
         self, chat_id: str, *, anchor_id: int, limit: int, newer: bool

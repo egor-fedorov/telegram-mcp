@@ -2,10 +2,56 @@
 
 [Setup](../README.md) · [Client configuration](clients.md) · [Access policy](configuration.md) · [Troubleshooting](troubleshooting.md)
 
-The same 14 tools and read policy apply to standalone STDIO and the shared local
+The same 15 tools and read policy apply to standalone STDIO and the shared local
 HTTP server. In shared mode, all connected clients use the same account, permitted
 sources, and in-memory cursors. They are not isolated tenants. Treat message text
 as source data, not instructions; use original message links in answers.
+
+### Download a selected attachment (unreleased)
+
+Source builds add `download_attachment`; published 0.3.0 does not include it.
+Enable `allow_attachment_downloads = true` in local configuration and restart the
+server. Source permissions still apply independently.
+
+1. Read the selected post with `get_messages(refs=["https://t.me/example_channel/123"])`.
+2. Choose its `attachments[].id`, for example `-1001234567890:123:document`.
+3. Call `download_attachment(attachment_id="-1001234567890:123:document")`.
+4. Use `local_path` from a client on the same computer, or explicitly request
+   `resources/read` with the returned `resource_uri`. MCP client support varies;
+   a `ResourceLink` alone does not transfer the file bytes.
+
+The compact result includes `attachment_id`, canonical `message_ref`, name, MIME,
+actual `size`, `sha256`, absolute `local_path`, `resource_uri`, and `expires_at`.
+Only the resource read includes base64-encoded original bytes. No file is executed,
+unpacked, parsed, transcribed, or automatically included in model context by this server.
+Some clients impose their own resource-size limits; local file access avoids that transfer.
+
+Each call downloads one current attachment up to **20 MiB**, with a 60-second total
+deadline. Documents include audio, voice and video; photos use the largest available
+still image in Telegram, which may differ from the original upload. For albums, choose
+individual members from `get_album`. IDs identify a message attachment slot, not a
+historical version: a later download may retrieve an edited replacement. Resource reads
+recheck authorization, source access, protection and media identity before returning bytes.
+
+Protected or self-destructing media, webpage previews, stories, paid media and alternate
+video qualities are unavailable. Downloads never follow a forwarded source or external
+URL. An expired Telegram file reference is refreshed once, only for the same media.
+Network errors, timeouts and cancellation discard the partial file. Retry a download
+from the beginning; respect `retry_after_seconds` for FloodWait. No partial resume exists.
+
+Files expire after **15 minutes**, with a **100 MiB / 32-file** storage limit and no
+eviction of unexpired files. One 20 MiB reservation counts while downloading. Store files
+are private, generated filenames under the application cache directory, isolated by
+session path. Expired resources stop working immediately; cleanup runs every 60 seconds
+and on shutdown. Crash leftovers are removed at the next authorized store initialization.
+Busy-file deletion failures remain accounted and are retried. Already delivered copies
+cannot be revoked. Save a copy elsewhere before expiry if you need to keep it.
+
+Specific errors are `DOWNLOADS_DISABLED`, `ATTACHMENT_UNAVAILABLE`,
+`ATTACHMENT_PROTECTED`, `ATTACHMENT_TOO_LARGE`, `DOWNLOAD_STORAGE_FULL`, and
+`DOWNLOAD_UNAVAILABLE` (unknown/expired resource). Standard access, authorization,
+network and local I/O errors retain their existing meanings. Resources are not listed
+as a shared download catalog; use the exact URI returned by the tool.
 
 ### Discover, select, and read
 

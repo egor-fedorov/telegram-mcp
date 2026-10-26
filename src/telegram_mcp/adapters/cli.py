@@ -144,6 +144,10 @@ async def configure(
             "Allow reading all account chats instead of limiting reads to selected sources?",
             settings.allow_all_chats,
         )
+        updated.allow_attachment_downloads = await prompt_boolean(
+            "Allow selected attachment downloads from permitted sources (up to 20 MiB each)?",
+            settings.allow_attachment_downloads,
+        )
         save_settings(validate_settings(updated, "Configuration input"), path)
         print(f"Scope saved to {path}. Restart the MCP server to apply configuration changes.")
     finally:

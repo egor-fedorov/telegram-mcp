@@ -40,7 +40,7 @@ dependencies succeed. No Telegram credentials or publishing secrets are needed.
 When changing transport behavior, cover standalone STDIO, authenticated local HTTP,
 and the STDIO proxy without a real Telegram account. Shared-client tests should
 exercise lifecycle and cursor behavior, including a client disconnecting while the
-session-owning server remains available. Preserve the recorded schemas of all 14 tools
+session-owning server remains available. Preserve the recorded schemas of all existing tools
 within a contract version. Intentional versioned changes require updated fixtures,
 migration guidance, and transport parity tests. See the [0.3 migration](docs/migration-0.3.md)
 and [bounded live validation](docs/live-validation.md).

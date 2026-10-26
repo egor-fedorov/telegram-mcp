@@ -1,6 +1,6 @@
 """Expose the shared loopback server to clients that launch STDIO subprocesses."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
 import httpx2
@@ -9,7 +9,14 @@ from mcp.client.streamable_http import streamable_http_client
 from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
 from mcp.shared.exceptions import MCPError
-from mcp_types import CallToolRequestParams, CallToolResult, PaginatedRequestParams, TextContent
+from mcp_types import (
+    INTERNAL_ERROR,
+    CallToolRequestParams,
+    CallToolResult,
+    PaginatedRequestParams,
+    ReadResourceRequestParams,
+    TextContent,
+)
 
 from telegram_mcp.adapters.config import Settings
 from telegram_mcp.adapters.http_token import load_token
@@ -27,8 +34,38 @@ def unavailable() -> ToolError:
 
 
 def create_bridge(upstream: Client) -> Server:
+    async def forward[R](call: Callable[[], Awaitable[R]]) -> R:
+        try:
+            return await call()
+        except MCPError:
+            raise
+        except Exception:
+            issue = unavailable().issue()
+            raise MCPError(
+                INTERNAL_ERROR,
+                issue.model_dump_json(exclude_none=True),
+                data=issue.model_dump(mode="json", exclude_none=True),
+            ) from None
+
     async def list_tools(_context, params: PaginatedRequestParams | None):
-        return await upstream.list_tools(cursor=params.cursor if params is not None else None)
+        return await forward(
+            lambda: upstream.list_tools(cursor=params.cursor if params is not None else None)
+        )
+
+    async def list_resources(_context, params: PaginatedRequestParams | None):
+        return await forward(
+            lambda: upstream.list_resources(cursor=params.cursor if params is not None else None)
+        )
+
+    async def list_resource_templates(_context, params: PaginatedRequestParams | None):
+        return await forward(
+            lambda: upstream.list_resource_templates(
+                cursor=params.cursor if params is not None else None
+            )
+        )
+
+    async def read_resource(_context, params: ReadResourceRequestParams):
+        return await forward(lambda: upstream.read_resource(params.uri))
 
     async def call_tool(_context, params: CallToolRequestParams) -> CallToolResult:
         try:
@@ -48,6 +85,9 @@ def create_bridge(upstream: Client) -> Server:
         instructions=upstream.instructions,
         on_list_tools=list_tools,
         on_call_tool=call_tool,
+        on_list_resources=list_resources,
+        on_list_resource_templates=list_resource_templates,
+        on_read_resource=read_resource,
     )
 
 

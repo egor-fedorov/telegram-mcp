@@ -49,6 +49,7 @@ allowed_chat_ids = ["-1001234567890"]
 allow_all_chats = false
 allow_public_channel_reads = false
 allow_public_channel_discovery = false
+allow_attachment_downloads = false
 ```
 
 Folder IDs are integers; chat IDs are strings containing Telethon marked peer IDs.
@@ -62,8 +63,9 @@ folder/chat metadata. The local catalog does not output message text.
 | `allow_all_chats` | Permits all account chats instead of restricting reads to the allowlist |
 | `allow_public_channel_reads` | Additionally permits an explicitly selected public broadcast channel |
 | `allow_public_channel_discovery` | Enables public-channel search and recommendations; grants no post-reading permission |
+| `allow_attachment_downloads` | Enables selected downloads from already permitted sources; default `false` (unreleased) |
 
-All three flags default to `false`; both allowlists default to empty. `configure`
+All four flags default to `false`; both allowlists default to empty. `configure`
 prompts separately for each flag, including `allow_all_chats`. Enter keeps the existing
 value. Enter also preserves existing folder/chat lists; to clear a list, set it to
 `[]` in the TOML file. Choose `n` explicitly to turn off an enabled flag.
@@ -161,3 +163,12 @@ Explicit source reads skip the catalog when no configured folder grant or reques
 folder selector is involved. An unknown numeric entity requires a username/link;
 it does not silently start a complete dialog scan. Connection loss invalidates the
 completed snapshot; authorization loss also clears unfinished catalog state.
+
+## Selected download limits (unreleased)
+
+`allow_attachment_downloads` is the only additional setting; `configure` preserves
+its current value on Enter. Fixed limits are 20 MiB per attachment, 60 seconds per
+operation, 100 MiB / 32 temporary files, and a 15-minute lifetime. `get_status` exposes
+`attachment_max_bytes`, `download_max_bytes`, `download_max_files`, and
+`download_ttl_seconds`. See [download usage](usage.md#download-a-selected-attachment-unreleased)
+for selection, storage cleanup and resource delivery. Proxy settings do not grant downloads.

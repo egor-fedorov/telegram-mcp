@@ -20,7 +20,7 @@ need a detailed contract before implementation; no delivery dates are assigned.
 | R1 | Done | Domain/application/adapter layers and explicit dependencies, preserving all 14 tools |
 | R2 | Done | Installable 0.2.0 package, Windows support, shared local HTTP process, client guides, and release automation |
 | R3 | Done | Recoverable connections, bounded catalogs/search, and compact typed 0.3 responses |
-| M3 | Planned after R3 | Selected attachment downloads with size limits and delivery to the calling client |
+| M3 | Implemented, unreleased | Selected attachment downloads with size limits and delivery to the calling client |
 | M4 | Planned after M3 | New messages and available changes, persistent checkpoints, and source-linked export |
 
 The [historical completion records](docs/specs/README.md#historical-completion-records)
@@ -64,13 +64,27 @@ Release validation also identified two exact-backoff MCP tests that depended on
 system-clock rounding. They now use injected test clocks; production retry logic
 and the requirement to avoid premature requests are unchanged.
 
-## Next: M3 — Selected attachment downloads
+## M3 — Selected attachment downloads (unreleased)
 
-Use message references and existing attachment/album metadata to select files.
-Before implementation, define size and content limits, temporary-file lifetime,
-resource delivery for both transports, expired Telegram file-reference recovery,
-and behavior for protected or unavailable media. Downloads must enforce current
-source permissions and must not silently fetch whole conversations or archives.
+Adds opt-in `download_attachment` for one selected attachment up to 20 MiB, with a
+temporary local file and MCP resource delivered over STDIO, HTTP, or `connect`.
+Downloads expire after 15 minutes; storage is bounded to 100 MiB / 32 files. Access,
+protection and media identity are rechecked before resource output. Temporary files
+are cleaned up, and stale Telegram references receive one controlled refresh.
+See the [M3 contract](docs/specs/m3-attachment-downloads.md) and
+[usage](docs/usage.md#download-a-selected-attachment-unreleased).
+
+Local `make check` passed with 1,036 tests and two Windows-only skips on Linux,
+including full 20 MiB resource transfers over all three connection paths.
+
+Live attachment validation on explicitly selected photo/document sources is separate
+and remains required before publishing this capability. No version tag or package
+publication is included in the implementation PR; published 0.3.0 is unchanged.
+
+## Next: M4 — Changes and export
+
+Define persistent checkpoints, retrieval of new messages and available changes, and
+export with original source links. Its detailed contract remains to be planned.
 
 ## Later decisions
 

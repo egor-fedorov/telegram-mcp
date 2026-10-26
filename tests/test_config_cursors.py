@@ -86,7 +86,7 @@ async def test_configure_public_channel_opt_in(
     monkeypatch.setattr("telegram_mcp.adapters.cli.sys.stdin.isatty", lambda: True)
     reading = setting == "allow_public_channel_reads"
     prompt_answers = [*answers, ""] if reading else ["", *answers]
-    replies = iter(["", "", *prompt_answers, ""])
+    replies = iter(["", "", *prompt_answers, "", ""])
     monkeypatch.setattr("builtins.input", lambda _: next(replies))
     settings = Settings(
         allowed_chat_ids=["1"],

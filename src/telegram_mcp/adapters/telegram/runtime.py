@@ -42,9 +42,12 @@ class TelegramRuntime:
         self._retry_error: ToolError | None = None
         self._closed = False
 
-    async def call(self, request: Awaitable[T]) -> T:
+    async def call(self, request: Awaitable[T], *, timeout_seconds: float | None = None) -> T:
         try:
-            return await asyncio.wait_for(request, self.settings.rpc_timeout_seconds)
+            return await asyncio.wait_for(
+                request,
+                self.settings.rpc_timeout_seconds if timeout_seconds is None else timeout_seconds,
+            )
         except (
             errors.FloodWaitError,
             errors.FloodPremiumWaitError,
