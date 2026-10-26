@@ -25,7 +25,8 @@ A version entry describes its target artifact. Verify publication on
 - Updated the development type checker to ty 0.0.92 with current async context-manager
   annotations. Dependabot now separates development tools from other library updates;
   updates continue to require manual review and passing CI.
-- Updated the locked HTTP libraries and platformdirs after compatibility review.
+- Updated the locked MCP packages to 2.3.0, HTTP libraries and platformdirs after
+  compatibility review, preserving the versioned tool contracts and all transports.
 
 ### Security
 
