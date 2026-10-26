@@ -14,9 +14,12 @@ updates:
     groups:
       mcp:
         patterns: [mcp, mcp-types]
-      other-dependencies:
+      development-tools:
+        patterns: [pytest, pytest-asyncio, ruff, ty]
+        update-types: [minor, patch]
+      runtime-dependencies:
         patterns: ["*"]
-        exclude-patterns: [telethon, mcp, mcp-types]
+        exclude-patterns: [telethon, mcp, mcp-types, pytest, pytest-asyncio, ruff, ty]
         update-types: [minor, patch]
   - package-ecosystem: github-actions
     directory: /

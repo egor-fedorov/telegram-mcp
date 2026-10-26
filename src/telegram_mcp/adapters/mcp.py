@@ -1,6 +1,6 @@
 """The public MCP tool surface. Authentication is deliberately a separate CLI."""
 
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from functools import wraps
 from typing import Annotated, Any, Literal
@@ -100,7 +100,7 @@ def create_server(
         return expose_tool_errors(fn, gate=gate)
 
     @asynccontextmanager
-    async def lifespan(_: MCPServer[None]) -> AsyncIterator[None]:
+    async def lifespan(_: MCPServer[None]) -> AsyncGenerator[None]:
         try:
             yield None
         finally:

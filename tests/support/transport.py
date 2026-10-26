@@ -1,6 +1,6 @@
 import asyncio
 import socket
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -17,7 +17,7 @@ from tests.support.resources import (
 
 
 @asynccontextmanager
-async def running_server(tmp_path: Path) -> AsyncIterator[tuple[Settings, FakeBackend]]:
+async def running_server(tmp_path: Path) -> AsyncGenerator[tuple[Settings, FakeBackend]]:
     backend = FakeBackend([msg("1", 1), msg("1", 2)])
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
         listener.bind(("127.0.0.1", 0))
@@ -50,7 +50,7 @@ async def running_server(tmp_path: Path) -> AsyncIterator[tuple[Settings, FakeBa
 @asynccontextmanager
 async def running_resource_server(
     directory: Path, size: int
-) -> AsyncIterator[tuple[Settings, ResourceService]]:
+) -> AsyncGenerator[tuple[Settings, ResourceService]]:
     service = ResourceService(directory, size)
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
         listener.bind(("127.0.0.1", 0))
