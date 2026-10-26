@@ -30,7 +30,7 @@ from telegram_mcp.application.ports import (
     PolicyProvider,
     RuntimePort,
 )
-from telegram_mcp.application.progressive_search import ProgressiveSearchPager
+from telegram_mcp.application.progressive_search import ProgressivePager
 from telegram_mcp.application.queries import QueryService
 from telegram_mcp.application.query_preparation import QueryPreparation
 from telegram_mcp.application.topics import TopicPager, TopicService
@@ -99,7 +99,7 @@ class Service:
             preparation,
             MessagePager(backend, cursors, clock, limits),
             GlobalSearchPager(backend, cursors, clock, limits),
-            ProgressiveSearchPager(backend, cursors, clock, limits),
+            ProgressivePager(backend, cursors, clock, limits),
         )
         self._topics = TopicService(
             backend, access, cursors, clock, TopicPager(backend, cursors, clock)
@@ -230,6 +230,11 @@ class Service:
         cursor: str | None = None,
         chat_ref: str | None = None,
         topic_id: int | None = None,
+        chat_ids: list[str] | None = None,
+        folder_ids: list[int] | None = None,
+        ordering: Literal["page", "global"] | None = None,
+        max_sources: int | None = None,
+        max_messages: int | None = None,
     ) -> Page:
         return await self._queries.get_history(
             chat_id=chat_id,
@@ -240,6 +245,11 @@ class Service:
             cursor=cursor,
             chat_ref=chat_ref,
             topic_id=topic_id,
+            chat_ids=chat_ids,
+            folder_ids=folder_ids,
+            ordering=ordering,
+            max_sources=max_sources,
+            max_messages=max_messages,
         )
 
     async def get_pinned_messages(

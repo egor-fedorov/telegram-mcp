@@ -14,7 +14,15 @@ from telegram_mcp.application.ports import (
 )
 from telegram_mcp.application.requests import MessageRead, SearchRead
 from telegram_mcp.application.retry import RetryState
-from telegram_mcp.domain.models import Issue, Message, Page, Scope, SearchProgress, ToolError
+from telegram_mcp.domain.models import (
+    Issue,
+    Message,
+    Page,
+    Scope,
+    SearchProgress,
+    ToolError,
+    TraversalBudget,
+)
 from telegram_mcp.domain.text import clip
 
 
@@ -36,6 +44,14 @@ class QueryState:
     explicit_chat_ids: list[str] = field(default_factory=list)
     issues: list[Issue] = field(default_factory=list)
     next_source_index: int = 0
+    budget: TraversalBudget | None = None
+
+
+def allowance(state: QueryState, limit: int) -> int:
+    """Messages this call may emit under the page limit and any cumulative budget."""
+    if state.budget is None:
+        return limit
+    return max(0, min(limit, state.budget.max_messages - state.budget.emitted_messages))
 
 
 class MessagePager:
@@ -64,7 +80,8 @@ class MessagePager:
         oldest = request.filters.oldest_first
         request = replace(request, filters=replace(request.filters, date_to=state.date_to))
         failed_this_call: set[str] = set()
-        while len(output) < limit:
+        allowed = allowance(state, limit)
+        while len(output) < allowed:
             # Prime every stream before choosing the next globally ordered message.
             while remaining > 0 and self.clock.monotonic() < deadline:
                 stream = None
@@ -162,6 +179,13 @@ def finish_page(
     topic_id: int | None = None,
 ) -> Page:
     pending = [stream.chat_id for stream in state.streams if stream.buffer or not stream.exhausted]
+    budget = None
+    if state.budget is not None:
+        state.budget.emitted_messages += len(output)
+        state.budget.exhausted = bool(pending) and (
+            state.budget.emitted_messages >= state.budget.max_messages
+        )
+        budget = state.budget.model_copy()
     issues = list(state.issues)
     for stream in state.streams:
         issue = stream.retry.current_issue(clock)
@@ -189,6 +213,7 @@ def finish_page(
             sources_exhausted=sum(s.exhausted and not s.buffer for s in state.streams),
             rpc_pages_this_call=rpc_pages,
         )
-        if isinstance(request, SearchRead)
+        if isinstance(request, SearchRead) or state.budget is not None
         else None,
+        budget=budget,
     )

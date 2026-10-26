@@ -34,6 +34,7 @@ ChatID = Annotated[str, Field(pattern=r"^-?[1-9]\d*$")]
 TopicID = Annotated[int, Field(gt=0, le=2147483647, strict=True)]
 FolderIDs = Annotated[list[int], Field(min_length=1, max_length=100)]
 ChatIDs = Annotated[list[ChatID], Field(min_length=1, max_length=1000)]
+Budget = Annotated[int, Field(ge=1, le=1000, strict=True)]
 
 
 class ResourceServer(MCPServer[None]):
@@ -512,18 +513,27 @@ def create_server(
         cursor: str | None = None,
         chat_ref: str | None = None,
         topic_id: TopicID | None = None,
+        chat_ids: ChatIDs | None = None,
+        folder_ids: FolderIDs | None = None,
+        ordering: Literal["page", "global"] | None = None,
+        max_sources: Budget | None = None,
+        max_messages: Budget | None = None,
     ) -> Annotated[CallToolResult, wire.Page]:
-        """Read a chat's history over [date_from, date_to), or recent messages if dates are omitted.
+        """Read history over [date_from, date_to), or a chat's recent messages if dates are omitted.
 
-        Supply exactly one of chat_id or chat_ref (numeric ID, @username, or t.me[/s]/username).
-        Omit topic_id for chat-wide history, or supply a positive forum topic ID (General is 1).
-        Topics require ordinary access to a supported forum supergroup; public-channel
-        permission does not authorize forum groups. General does not require a message root.
-        Use oldest_first for chronological reading. Follow next_cursor for a complete period,
-        repeating the original source, topic, dates and order; the cursor remains bound to
-        the resolved chat ID.
-        Public channels outside the allowlist require allow_public_channel_reads.
-        Temporary failures retain next_cursor; respect retry_after_seconds before continuing.
+        Supply exactly one of chat_id, chat_ref (numeric ID, @username, or t.me[/s]/username),
+        chat_ids or folder_ids. chat_ids/folder_ids read several permitted sources in one
+        traversal and require both dates. They default to ordering=page (early results,
+        sorted within each page), max_sources=20 and max_messages=100; a larger selection
+        returns SOURCE_LIMIT_EXCEEDED before reading. budget reports emitted messages;
+        exhausted=true keeps next_cursor, and only an explicitly larger max_messages
+        continues it. ordering=global waits for every source to keep strict order.
+        Omit topic_id for chat-wide history, or supply a positive forum topic ID (General is 1)
+        with a single chat. Topics require ordinary access to a supported forum supergroup.
+        Follow next_cursor for a complete period, repeating the original arguments.
+        Public channels outside the allowlist require allow_public_channel_reads and an
+        explicit chat selector. Temporary failures retain next_cursor; respect
+        retry_after_seconds before continuing.
         """
         return wire.encode(
             await service.get_history(
@@ -535,6 +545,11 @@ def create_server(
                 cursor=cursor,
                 chat_ref=chat_ref,
                 topic_id=topic_id,
+                chat_ids=chat_ids,
+                folder_ids=folder_ids,
+                ordering=ordering,
+                max_sources=max_sources,
+                max_messages=max_messages,
             )
         )
 

@@ -8,6 +8,9 @@ from telegram_mcp.application.global_search import GlobalQueryState
 from telegram_mcp.application.message_pager import QueryState, Stream
 from telegram_mcp.application.ports import ChatPort, Clock, CursorPort, ForumPort
 from telegram_mcp.application.requests import (
+    DEFAULT_MAX_MESSAGES,
+    BudgetRequest,
+    HistoryRead,
     MessageRead,
     PinnedRead,
     SearchRead,
@@ -15,7 +18,7 @@ from telegram_mcp.application.requests import (
     TopicRead,
 )
 from telegram_mcp.domain.folders import select_chats
-from telegram_mcp.domain.models import Scope, ToolError
+from telegram_mcp.domain.models import Scope, ToolError, TraversalBudget
 
 
 @dataclass(frozen=True)
@@ -29,6 +32,7 @@ class SourceSelection:
 class QuerySpec:
     read: MessageRead
     selection: SourceSelection = field(default_factory=SourceSelection)
+    budget: BudgetRequest | None = None
 
     @property
     def kind(self) -> str:
@@ -51,7 +55,7 @@ class QuerySpec:
         return fingerprint(
             [
                 read.query if isinstance(read, SearchRead) else None,
-                read.ordering if isinstance(read, SearchRead) else None,
+                read.ordering if isinstance(read, (SearchRead, HistoryRead)) else None,
                 chat_ids,
                 self.selection.folder_ids,
                 read.filters.date_from,
@@ -65,6 +69,8 @@ class QuerySpec:
                 self.allow_public,
                 isinstance(read, PinnedRead) or isinstance(read, TopicRead) and read.pinned_only,
                 read.topic_id if isinstance(read, TopicRead) else None,
+                # max_messages may grow on a cursor; every other budget input is fixed.
+                self.budget.max_sources if self.budget is not None else None,
             ]
         )
 
@@ -94,6 +100,13 @@ class QueryPreparation:
         if filters.date_from and filters.date_to and filters.date_from >= filters.date_to:
             raise ToolError("INVALID_ARGUMENT", "date_from must be earlier than date_to.")
         selection = spec.selection
+        if (
+            not cursor
+            and spec.budget is not None
+            and selection.chat_ids is not None
+            and len(set(selection.chat_ids)) > spec.budget.max_sources
+        ):
+            raise source_limit(len(set(selection.chat_ids)), spec.budget.max_sources)
         access = await self.access.load(
             explicit=(
                 selection.folder_ids is None
@@ -121,6 +134,7 @@ class QueryPreparation:
                 return state, fp
             if not isinstance(state, QueryState):
                 raise ToolError("INVALID_CURSOR", "Wrong cursor type.")
+            apply_budget_increase(state, spec.budget)
             explicit_ids = state.explicit_chat_ids
         else:
             explicit_ids = list(dict.fromkeys(chat_ids or [])) if spec.allow_public else []
@@ -170,12 +184,45 @@ class QueryPreparation:
                 and not filters.oldest_first
             ):
                 return GlobalQueryState(scope, date_to, exhausted=not selected), fp
+            budget = None
+            if spec.budget is not None:
+                if len(selected) > spec.budget.max_sources:
+                    raise source_limit(len(selected), spec.budget.max_sources)
+                budget = TraversalBudget(
+                    max_sources=spec.budget.max_sources,
+                    max_messages=spec.budget.max_messages or DEFAULT_MAX_MESSAGES,
+                )
             state = QueryState(
                 [Stream(chat.id) for chat in selected],
                 scope,
                 date_to,
                 explicit_chat_ids=explicit_ids,
+                budget=budget,
             )
         for stream in state.streams:
             access.require_selected(stream.chat_id)
         return state, fp
+
+
+def apply_budget_increase(state: QueryState, request: BudgetRequest | None) -> None:
+    """Allow only an explicit larger message budget on an existing cursor."""
+    if (state.budget is None) != (request is None):
+        raise ToolError(
+            "CURSOR_MISMATCH", "Repeat the original budget parameters with this cursor."
+        )
+    if state.budget is None or request is None or request.max_messages is None:
+        return
+    if request.max_messages < state.budget.max_messages:
+        raise ToolError(
+            "INVALID_ARGUMENT",
+            "max_messages cannot decrease on a cursor; omit it to keep the current budget.",
+        )
+    state.budget.max_messages = request.max_messages
+
+
+def source_limit(count: int, maximum: int) -> ToolError:
+    return ToolError(
+        "SOURCE_LIMIT_EXCEEDED",
+        f"The permitted selection has {count} sources; max_sources is {maximum}. "
+        "Narrow the selection or explicitly raise max_sources (up to 1000).",
+    )

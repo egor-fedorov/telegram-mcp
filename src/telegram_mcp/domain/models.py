@@ -280,6 +280,15 @@ class SearchProgress(Model):
     rpc_pages_this_call: int = Field(ge=0)
 
 
+class TraversalBudget(Model):
+    """Cumulative limits of one bounded traversal, carried by its cursor."""
+
+    max_sources: int = Field(ge=1, le=1000)
+    max_messages: int = Field(ge=1, le=1000)
+    emitted_messages: int = Field(default=0, ge=0)
+    exhausted: bool = False
+
+
 class Page(Model):
     messages: list[Message] = Field(default_factory=list)
     next_cursor: str | None = None
@@ -290,6 +299,7 @@ class Page(Model):
     thread_root: MessageRef | None = None
     topic_id: int | None = Field(default=None, gt=0, le=2**31 - 1)
     progress: SearchProgress | None = None
+    budget: TraversalBudget | None = None
 
 
 class TopicPage(Model):

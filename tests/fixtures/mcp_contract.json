@@ -1018,6 +1018,35 @@
       ],
       "type": "object"
     },
+    "TraversalBudget": {
+      "additionalProperties": false,
+      "properties": {
+        "emitted_messages": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exhausted": {
+          "type": "boolean"
+        },
+        "max_messages": {
+          "maximum": 1000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "max_sources": {
+          "maximum": 1000,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "max_sources",
+        "max_messages",
+        "emitted_messages",
+        "exhausted"
+      ],
+      "type": "object"
+    },
     "WatchInfo": {
       "additionalProperties": false,
       "properties": {
@@ -2037,6 +2066,24 @@
             "default": null,
             "title": "Chat Id"
           },
+          "chat_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "pattern": "^-?[1-9]\\d*$",
+                  "type": "string"
+                },
+                "maxItems": 1000,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Chat Ids"
+          },
           "chat_ref": {
             "anyOf": [
               {
@@ -2087,12 +2134,57 @@
             "default": null,
             "title": "Date To"
           },
+          "folder_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 100,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Folder Ids"
+          },
           "limit": {
             "default": 30,
             "maximum": 100,
             "minimum": 1,
             "title": "Limit",
             "type": "integer"
+          },
+          "max_messages": {
+            "anyOf": [
+              {
+                "maximum": 1000,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Messages"
+          },
+          "max_sources": {
+            "anyOf": [
+              {
+                "maximum": 1000,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Sources"
           },
           "order": {
             "default": "newest_first",
@@ -2102,6 +2194,22 @@
             ],
             "title": "Order",
             "type": "string"
+          },
+          "ordering": {
+            "anyOf": [
+              {
+                "enum": [
+                  "page",
+                  "global"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ordering"
           },
           "topic_id": {
             "anyOf": [
@@ -2124,6 +2232,9 @@
       "output": {
         "additionalProperties": false,
         "properties": {
+          "budget": {
+            "$ref": "#/$defs/TraversalBudget"
+          },
           "chats": {
             "patternProperties": {
               "^-?[1-9]\\d*$": {
@@ -2332,6 +2443,9 @@
       "output": {
         "additionalProperties": false,
         "properties": {
+          "budget": {
+            "$ref": "#/$defs/TraversalBudget"
+          },
           "chats": {
             "patternProperties": {
               "^-?[1-9]\\d*$": {
@@ -2622,6 +2736,9 @@
       "output": {
         "additionalProperties": false,
         "properties": {
+          "budget": {
+            "$ref": "#/$defs/TraversalBudget"
+          },
           "chats": {
             "patternProperties": {
               "^-?[1-9]\\d*$": {
@@ -3260,6 +3377,9 @@
       "output": {
         "additionalProperties": false,
         "properties": {
+          "budget": {
+            "$ref": "#/$defs/TraversalBudget"
+          },
           "chats": {
             "patternProperties": {
               "^-?[1-9]\\d*$": {

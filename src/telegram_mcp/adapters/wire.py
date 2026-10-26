@@ -381,6 +381,14 @@ class SearchProgress(TypedDict):
 
 
 @with_config(_CONFIG)
+class TraversalBudget(TypedDict):
+    max_sources: Annotated[int, Field(ge=1, le=1000)]
+    max_messages: Annotated[int, Field(ge=1, le=1000)]
+    emitted_messages: Count
+    exhausted: bool
+
+
+@with_config(_CONFIG)
 class MessageResult(TypedDict):
     chats: dict[ChatID, ChatSummary]
     messages: list[Message]
@@ -396,6 +404,7 @@ class Page(MessageResult):
     thread_root: NotRequired[MessageKey]
     topic_id: NotRequired[TopicID]
     progress: NotRequired[SearchProgress]
+    budget: NotRequired[TraversalBudget]
 
 
 @with_config(_CONFIG)

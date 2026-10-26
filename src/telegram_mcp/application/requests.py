@@ -19,6 +19,7 @@ class ReadFilters:
 @dataclass(frozen=True)
 class HistoryRead:
     filters: ReadFilters = field(default_factory=ReadFilters)
+    ordering: Literal["page", "global"] = "global"
 
 
 @dataclass(frozen=True)
@@ -48,3 +49,15 @@ class TopicRead:
 
 
 type MessageRead = HistoryRead | SearchRead | PinnedRead | ThreadRead | TopicRead
+
+
+DEFAULT_MAX_SOURCES = 20
+DEFAULT_MAX_MESSAGES = 100
+
+
+@dataclass(frozen=True)
+class BudgetRequest:
+    """Traversal limits; max_messages=None keeps a cursor's value or uses the default."""
+
+    max_sources: int
+    max_messages: int | None = None

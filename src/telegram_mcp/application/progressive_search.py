@@ -3,21 +3,34 @@
 from dataclasses import replace
 
 from telegram_mcp.application.common import check_limit
-from telegram_mcp.application.message_pager import QueryState, finish_page, load_stream
+from telegram_mcp.application.message_pager import (
+    QueryState,
+    allowance,
+    finish_page,
+    load_stream,
+)
 from telegram_mcp.application.ports import Clock, CursorPort, ExecutionLimits, MessagePort
-from telegram_mcp.application.requests import SearchRead
+from telegram_mcp.application.requests import HistoryRead, SearchRead
 from telegram_mcp.domain.models import Message, Page
 from telegram_mcp.domain.text import clip
 
 
-class ProgressiveSearchPager:
+class ProgressivePager:
+    """Return available results early for searches and multi-source history."""
+
     def __init__(
         self, messages: MessagePort, cursors: CursorPort, clock: Clock, limits: ExecutionLimits
     ):
         self.messages, self.cursors, self.clock, self.limits = messages, cursors, clock, limits
 
     async def page(
-        self, state: QueryState, request: SearchRead, *, fingerprint: str, limit: int
+        self,
+        state: QueryState,
+        request: SearchRead | HistoryRead,
+        *,
+        kind: str,
+        fingerprint: str,
+        limit: int,
     ) -> Page:
         check_limit(limit)
         request = replace(request, filters=replace(request.filters, date_to=state.date_to))
@@ -25,7 +38,8 @@ class ProgressiveSearchPager:
         calls = 0
         failed: set[str] = set()
         output: list[Message] = []
-        while len(output) < limit:
+        allowed = allowance(state, limit)
+        while len(output) < allowed:
             selected = None
             for _ in state.streams:
                 stream = state.streams[state.next_source_index]
@@ -48,12 +62,12 @@ class ProgressiveSearchPager:
                     state,
                     selected,
                     request,
-                    min(self.limits.page_size, limit - len(output)),
+                    min(self.limits.page_size, allowed - len(output)),
                     self.clock,
                 ):
                     failed.add(selected.chat_id)
                     continue
-            count = min(len(selected.buffer), limit - len(output))
+            count = min(len(selected.buffer), allowed - len(output))
             output.extend(
                 clip(message, min(self.limits.text_limit, self.limits.text_budget // limit))
                 for message in selected.buffer[:count]
@@ -68,7 +82,7 @@ class ProgressiveSearchPager:
             output,
             self.cursors,
             self.clock,
-            kind="search",
+            kind=kind,
             fingerprint=fingerprint,
             request=request,
             rpc_pages=calls,

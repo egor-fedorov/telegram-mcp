@@ -6,9 +6,11 @@ from typing import Literal
 from telegram_mcp.application.common import check_limit, check_topic_id
 from telegram_mcp.application.global_search import GlobalQueryState, GlobalSearchPager
 from telegram_mcp.application.message_pager import MessagePager
-from telegram_mcp.application.progressive_search import ProgressiveSearchPager
+from telegram_mcp.application.progressive_search import ProgressivePager
 from telegram_mcp.application.query_preparation import QueryPreparation, QuerySpec, SourceSelection
 from telegram_mcp.application.requests import (
+    DEFAULT_MAX_SOURCES,
+    BudgetRequest,
     HistoryRead,
     MessageRead,
     PinnedRead,
@@ -26,7 +28,7 @@ class QueryService:
         preparation: QueryPreparation,
         pager: MessagePager,
         global_pager: GlobalSearchPager,
-        progressive_pager: ProgressiveSearchPager,
+        progressive_pager: ProgressivePager,
     ):
         self.preparation = preparation
         self.pager = pager
@@ -42,9 +44,9 @@ class QueryService:
             return await self.global_pager.page(
                 state, spec.read, fingerprint=fingerprint, limit=limit
             )
-        if isinstance(spec.read, SearchRead) and spec.read.ordering == "page":
+        if isinstance(spec.read, (SearchRead, HistoryRead)) and spec.read.ordering == "page":
             return await self.progressive_pager.page(
-                state, spec.read, fingerprint=fingerprint, limit=limit
+                state, spec.read, kind=spec.kind, fingerprint=fingerprint, limit=limit
             )
         return await self.pager.page(
             state,
@@ -65,23 +67,60 @@ class QueryService:
         cursor: str | None = None,
         chat_ref: str | None = None,
         topic_id: int | None = None,
+        chat_ids: list[str] | None = None,
+        folder_ids: list[int] | None = None,
+        ordering: Literal["page", "global"] | None = None,
+        max_sources: int | None = None,
+        max_messages: int | None = None,
     ) -> Page:
-        if (chat_id is None) == (chat_ref is None):
-            raise ToolError("INVALID_ARGUMENT", "Provide exactly one of chat_id or chat_ref.")
+        selectors = [chat_id, chat_ref, chat_ids, folder_ids]
+        if sum(selector is not None for selector in selectors) != 1:
+            raise ToolError(
+                "INVALID_ARGUMENT",
+                "Provide exactly one of chat_id, chat_ref, chat_ids or folder_ids.",
+            )
+        if chat_ids == [] or folder_ids == []:
+            raise ToolError("INVALID_ARGUMENT", "chat_ids and folder_ids must not be empty.")
         check_limit(limit)
         check_topic_id(topic_id)
+        if ordering not in (None, "page", "global"):
+            raise ToolError("INVALID_ARGUMENT", "Use ordering page or global.")
+        for value in (max_sources, max_messages):
+            if value is not None and (type(value) is not int or not 1 <= value <= 1000):
+                raise ToolError("INVALID_ARGUMENT", "max_sources and max_messages must be 1..1000.")
+        plural = chat_ids is not None or folder_ids is not None
+        if plural:
+            if topic_id is not None:
+                raise ToolError(
+                    "INVALID_ARGUMENT", "topic_id requires a single chat_id or chat_ref."
+                )
+            if date_from is None or date_to is None:
+                raise ToolError(
+                    "INVALID_ARGUMENT",
+                    "chat_ids and folder_ids require explicit date_from and date_to.",
+                )
+        budget = (
+            BudgetRequest(max_sources or DEFAULT_MAX_SOURCES, max_messages)
+            if plural or max_sources is not None or max_messages is not None
+            else None
+        )
         filters = ReadFilters(
             date_from=date_from, date_to=date_to, oldest_first=order == "oldest_first"
         )
         read: MessageRead = (
-            HistoryRead(filters) if topic_id is None else TopicRead(topic_id, filters)
+            HistoryRead(filters, ordering or ("page" if plural else "global"))
+            if topic_id is None
+            else TopicRead(topic_id, filters)
         )
         return await self.execute(
             QuerySpec(
                 read,
                 SourceSelection(
-                    chat_ids=[chat_id] if chat_id is not None else None, source_ref=chat_ref
+                    chat_ids=[chat_id] if chat_id is not None else chat_ids,
+                    folder_ids=folder_ids,
+                    source_ref=chat_ref,
                 ),
+                budget,
             ),
             limit,
             cursor,
