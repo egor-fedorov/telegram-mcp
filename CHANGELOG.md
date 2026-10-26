@@ -27,6 +27,7 @@ A version entry describes its target artifact. Verify publication on
   updates continue to require manual review and passing CI.
 - Updated the locked MCP packages to 2.3.0, HTTP libraries and platformdirs after
   compatibility review, preserving the versioned tool contracts and all transports.
+- Updated SHA-pinned setup-uv and artifact upload/download actions in CI and release workflows.
 
 ### Security
 

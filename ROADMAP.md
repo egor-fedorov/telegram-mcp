@@ -45,6 +45,8 @@ manual review and CI. See [contributor guidance](CONTRIBUTING.md#dependencies-an
 Dependency maintenance updates MCP to 2.3.0, the HTTP stack and platformdirs, plus PyJWT 2.15.1
 and OpenTelemetry API 1.45.1 for the reported transitive dependency vulnerabilities.
 Updates receive manual compatibility review and offline/CI validation.
+CI and release workflows also use reviewed patch updates of the SHA-pinned setup
+and artifact actions.
 
 ## M3 — Selected attachment downloads (unreleased)
 
