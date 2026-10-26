@@ -38,7 +38,7 @@ windows have focused readers sharing the existing runtime and entity cache. Exis
 MCP contracts and retrieval behavior are preserved. The architecture and contributor
 guides describe the current structure, and the usage guide has a navigation index.
 
-Development maintenance also updates ty to 0.0.92, corrects async context-manager
+Development maintenance also updates ty to 0.0.92 and Ruff to 0.17.2, corrects async context-manager
 annotations, and separates development-tool updates in Dependabot while retaining
 manual review and CI. See [contributor guidance](CONTRIBUTING.md#dependencies-and-releases).
 
