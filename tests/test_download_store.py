@@ -247,9 +247,14 @@ async def test_start_cleans_only_managed_crash_leftovers(store: DownloadStore) -
         path.write_bytes(b"stale")
     unrelated = store.root / "unrelated.txt"
     unrelated.write_bytes(b"preserve")
+    existing_directory = store.root / "existing-directory"
+    existing_directory.mkdir()
+    nested = existing_directory / "unrelated.txt"
+    nested.write_bytes(b"preserve nested file")
     writer = await store.reserve(source())
     assert not any(path.exists() for path in paths)
     assert unrelated.read_bytes() == b"preserve"
+    assert nested.read_bytes() == b"preserve nested file"
     await store.discard(writer)
 
 
@@ -385,7 +390,7 @@ async def test_windows_private_acl_is_applied_before_writing(store: DownloadStor
     from .test_shared_transport import assert_windows_token_acl
 
     writer = await store.reserve(source())
-    assert_windows_token_acl(store.root)
+    assert_windows_token_acl(store.root, directory=True)
     for path in store.root.iterdir():
         assert_windows_token_acl(path)
         assert path.stat().st_size == 0
@@ -473,7 +478,7 @@ async def test_default_root_uses_cache_and_canonical_session_path(
 
 
 def test_windows_permission_error_is_redacted(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    def denied(_path: Path) -> None:
+    def denied(_path: Path, *, directory: bool = False) -> None:
         raise RuntimeError("synthetic private path")
 
     path = tmp_path / "file"

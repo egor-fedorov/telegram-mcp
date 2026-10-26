@@ -9,14 +9,14 @@ def protect_private_path(path: Path, *, directory: bool = False) -> None:
         raise OSError("Private storage cannot use a symbolic link or junction")
     if sys.platform == "win32":
         try:
-            protect_windows_path(path)
+            protect_windows_path(path, directory=directory)
         except Exception:
             raise OSError("Cannot restrict private storage to the current user") from None
     else:
         path.chmod(0o700 if directory else 0o600)
 
 
-def protect_windows_path(path: Path) -> None:
+def protect_windows_path(path: Path, *, directory: bool = False) -> None:
     if sys.platform == "win32":
         import ntsecuritycon
         import win32api
@@ -31,7 +31,17 @@ def protect_windows_path(path: Path) -> None:
         finally:
             process_token.Close()
         dacl = win32security.ACL()
-        dacl.AddAccessAllowedAce(win32security.ACL_REVISION, ntsecuritycon.FILE_ALL_ACCESS, sid)
+        if directory:
+            # Preserve current-user access for existing and future children when
+            # Windows replaces their inherited ACEs after this directory changes.
+            dacl.AddAccessAllowedAceEx(
+                win32security.ACL_REVISION_DS,
+                win32security.OBJECT_INHERIT_ACE | win32security.CONTAINER_INHERIT_ACE,
+                ntsecuritycon.FILE_ALL_ACCESS,
+                sid,
+            )
+        else:
+            dacl.AddAccessAllowedAce(win32security.ACL_REVISION, ntsecuritycon.FILE_ALL_ACCESS, sid)
         win32security.SetNamedSecurityInfo(
             str(path),
             win32security.SE_FILE_OBJECT,

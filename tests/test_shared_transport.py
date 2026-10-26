@@ -75,7 +75,7 @@ def test_http_token_persists_and_has_private_permissions(tmp_path: Path) -> None
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
-def assert_windows_token_acl(path: Path) -> None:
+def assert_windows_token_acl(path: Path, *, directory: bool = False) -> None:
     if sys.platform == "win32":
         import ntsecuritycon
         import win32api
@@ -96,7 +96,12 @@ def assert_windows_token_acl(path: Path) -> None:
         dacl = descriptor.GetSecurityDescriptorDacl()
         assert dacl is not None and dacl.GetAceCount() == 1
         ace = dacl.GetAce(0)
-        assert ace[0] == (win32security.ACCESS_ALLOWED_ACE_TYPE, 0)
+        flags = (
+            win32security.OBJECT_INHERIT_ACE | win32security.CONTAINER_INHERIT_ACE
+            if directory
+            else 0
+        )
+        assert ace[0] == (win32security.ACCESS_ALLOWED_ACE_TYPE, flags)
         assert ace[1] == ntsecuritycon.FILE_ALL_ACCESS
         assert ace[2] == expected_sid
         assert descriptor.GetSecurityDescriptorControl()[0] & win32security.SE_DACL_PROTECTED
