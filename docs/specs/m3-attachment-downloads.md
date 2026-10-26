@@ -2,6 +2,8 @@
 
 Status: implemented in source, unreleased. Live attachment validation remains separate.
 User-facing behavior and errors are documented in [usage](../usage.md#download-a-selected-attachment-unreleased).
+This is the original milestone contract. Later permanent-copy behavior is documented
+in the [current guide](../usage.md#keep-selected-files-unreleased).
 
 ## Capability and contract
 

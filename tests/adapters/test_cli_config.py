@@ -30,6 +30,8 @@ def clear_telegram_environment(monkeypatch: pytest.MonkeyPatch) -> None:
         ('unknown_setting = "sensitive-value"', "unknown_setting"),
         ("http_port = 65536", "http_port"),
         ("http_port = true", "http_port"),
+        ('mcp_schema_mode = "sensitive-value"', "mcp_schema_mode"),
+        ("archive_directory = 123", "archive_directory"),
     ],
 )
 def test_validation_names_source_and_key_without_values(
@@ -254,7 +256,12 @@ def test_cli_configuration_failure_is_stderr_only(
 async def test_configure_download_permission_is_independent(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, initial: bool, answer: str, expected: bool
 ) -> None:
-    settings = Settings(allow_attachment_downloads=initial, allowed_chat_ids=["1"])
+    settings = Settings(
+        allow_attachment_downloads=initial,
+        allowed_chat_ids=["1"],
+        archive_directory=tmp_path / "archive",
+        mcp_schema_mode="full",
+    )
     replies = iter(["", "", "", "", "", answer])
     monkeypatch.setattr("telegram_mcp.adapters.cli.sys.stdin.isatty", lambda: True)
     monkeypatch.setattr("builtins.input", lambda _: next(replies))
@@ -265,6 +272,8 @@ async def test_configure_download_permission_is_independent(
     assert not loaded.allow_all_chats and not loaded.allow_public_channel_reads
     assert loaded.allowed_chat_ids == ["1"]
     assert settings.allow_attachment_downloads is initial
+    assert loaded.archive_directory == settings.archive_directory
+    assert loaded.mcp_schema_mode == "full"
 
 
 @pytest.mark.parametrize(

@@ -77,3 +77,15 @@ def test_catalog_age_settings_roundtrip(tmp_path: Path, ttl: int, stale: int) ->
 def test_catalog_stale_age_is_bounded(value: int) -> None:
     with pytest.raises(ValidationError, match="catalog_cache_stale_seconds"):
         Settings(catalog_cache_stale_seconds=value)
+
+
+def test_archive_and_schema_settings_defaults_and_roundtrip(tmp_path: Path) -> None:
+    assert Settings().archive_directory is None
+    assert Settings().mcp_schema_mode == "compact"
+    path = tmp_path / "config.toml"
+    save_settings(
+        Settings(archive_directory=Path("~/telegram-archive"), mcp_schema_mode="full"), path
+    )
+    loaded = load_settings(path)
+    assert loaded.archive_directory == Path("~/telegram-archive").expanduser().resolve()
+    assert loaded.mcp_schema_mode == "full"

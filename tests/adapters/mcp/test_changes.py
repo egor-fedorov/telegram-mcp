@@ -14,7 +14,9 @@ from tests.support.incremental import incremental_fixture
 async def test_checkpoint_tools_have_compact_typed_results_and_text_resources(tmp_path, mode):
     async with incremental_fixture(tmp_path) as env:
         async with Client(
-            create_server(env.service, owns_service=False), mode=mode, cache=None
+            create_server(env.service, owns_service=False, schema_mode="full"),
+            mode=mode,
+            cache=None,
         ) as client:
             tools = {tool.name: tool for tool in (await client.list_tools()).tools}
             added_size = sum(
@@ -76,7 +78,9 @@ async def test_checkpoint_tools_have_compact_typed_results_and_text_resources(tm
 async def test_checkpoint_errors_use_existing_mcp_error_contract(tmp_path, mode):
     async with incremental_fixture(tmp_path) as env:
         async with Client(
-            create_server(env.service, owns_service=False), mode=mode, cache=None
+            create_server(env.service, owns_service=False, schema_mode="full"),
+            mode=mode,
+            cache=None,
         ) as client:
             for name, args, code in (
                 ("get_changes", {}, "INVALID_ARGUMENT"),

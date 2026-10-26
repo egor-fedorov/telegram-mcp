@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from typing import Literal
 
 from telegram_mcp.application.access import AccessFactory
+from telegram_mcp.application.archive_ports import ArchivePort
 from telegram_mcp.application.change_ports import (
     CheckpointStorePort,
     ExportStorePort,
@@ -24,16 +25,21 @@ class BudgetExhausted(Exception):
 
 
 class ReadBudget:
-    def __init__(self, clock: Clock, limits: ExecutionLimits):
+    def __init__(
+        self, clock: Clock, limits: ExecutionLimits, before_call: Callable[[], None] = lambda: None
+    ):
         self.clock, self.limits = clock, limits
         self.deadline = clock.monotonic() + limits.page_deadline_seconds
         self.calls = 0
+        self.before_call = before_call
 
-    async def call[T](self, request: Callable[[], Awaitable[T]]) -> T:
+    async def call[T](self, request: Callable[[], Awaitable[T]], *, page: bool = True) -> T:
         remaining = self.deadline - self.clock.monotonic()
         if self.calls >= self.limits.rpc_pages_per_call or remaining <= 0:
             raise BudgetExhausted
-        self.calls += 1
+        self.before_call()
+        if page:
+            self.calls += 1
         try:
             return await asyncio.wait_for(request(), timeout=remaining)
         except TimeoutError:
@@ -59,11 +65,15 @@ class IncrementalContext:
         exports: ExportStorePort,
         clock: Clock,
         limits: ExecutionLimits,
+        archive: ArchivePort,
     ):
         self.backend, self.chats, self.access = backend, chats, access
         self.checkpoints, self.exports = checkpoints, exports
         self.clock, self.limits = clock, limits
-        self._lock = asyncio.Lock()
+        self.archive = archive
+        self._active = 0
+        self._drained = asyncio.Event()
+        self._drained.set()
         self._closed = False
 
     def check_cooldown(self) -> None:
@@ -81,12 +91,8 @@ class IncrementalContext:
     async def request(self) -> AsyncGenerator[None]:
         if self._closed:
             raise ToolError("SERVER_CLOSED", "The server has been closed.")
-        try:
-            await asyncio.wait_for(self._lock.acquire(), 5)
-        except TimeoutError:
-            raise ToolError(
-                "SERVER_BUSY", "Another incremental read is running; retry shortly.", 1
-            ) from None
+        self._active += 1
+        self._drained.clear()
         try:
             if self._closed:
                 raise ToolError("SERVER_CLOSED", "The server has been closed.")
@@ -100,7 +106,12 @@ class IncrementalContext:
                     )
                 raise
         finally:
-            self._lock.release()
+            self._active -= 1
+            if self._active == 0:
+                self._drained.set()
+
+    def budget(self) -> ReadBudget:
+        return ReadBudget(self.clock, self.limits, self.check_cooldown)
 
     async def prepare(
         self,
@@ -167,9 +178,9 @@ class IncrementalContext:
             return data.decode("utf-8"), stored.result.mime_type
 
     async def close(self) -> None:
-        async with self._lock:
-            self._closed = True
-            try:
-                await self.exports.close()
-            finally:
-                self.checkpoints.close()
+        self._closed = True
+        await self._drained.wait()
+        try:
+            await self.exports.close()
+        finally:
+            self.checkpoints.close()

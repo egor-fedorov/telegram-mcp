@@ -13,7 +13,7 @@ from pydantic import AwareDatetime, ConfigDict, Field, with_config
 from pydantic_core import to_json
 from typing_extensions import TypedDict
 
-from telegram_mcp.domain import changes, models
+from telegram_mcp.domain import changes, models, watches
 
 
 def _remove_titles(schema: dict[str, Any]) -> None:
@@ -85,6 +85,7 @@ class Status(TypedDict):
     allow_public_channel_reads: bool
     allow_public_channel_discovery: bool
     allow_attachment_downloads: bool
+    archive_enabled: bool
     attachment_max_bytes: Annotated[int, Field(gt=0)]
     download_ttl_seconds: Annotated[int, Field(gt=0)]
     download_max_bytes: Annotated[int, Field(gt=0)]
@@ -293,6 +294,14 @@ class Attachment(TypedDict):
 
 
 @with_config(_CONFIG)
+class SavedFile(TypedDict):
+    local_path: str
+    size: Count
+    sha256: str
+    saved_at: AwareDatetime
+
+
+@with_config(_CONFIG)
 class DownloadResult(TypedDict):
     attachment_id: str
     message_ref: MessageKey
@@ -303,6 +312,7 @@ class DownloadResult(TypedDict):
     local_path: str
     resource_uri: str
     expires_at: AwareDatetime
+    saved_file: NotRequired[SavedFile]
 
 
 @with_config(_CONFIG)
@@ -423,6 +433,7 @@ class ExportFile(TypedDict):
     local_path: str
     resource_uri: str
     expires_at: AwareDatetime
+    saved_file: NotRequired[SavedFile]
 
 
 @with_config(_CONFIG)
@@ -438,6 +449,7 @@ class Change(TypedDict):
 class ChangesResult(TypedDict):
     chats: dict[ChatID, ChatSummary]
     chat_id: ChatID
+    baseline_created: bool
     changes: list[Change]
     returned_count: Count
     omitted_count: Count
@@ -467,6 +479,59 @@ class ExportHistoryResult(TypedDict):
     export: NotRequired[ExportFile]
 
 
+@with_config(_CONFIG)
+class WatchInfo(TypedDict):
+    name: str
+    selector: Literal["chats", "folders"]
+    started_at: AwareDatetime
+    source_count: Count
+    folder_ids: list[int]
+    completed_at: NotRequired[AwareDatetime]
+    pending_batch_id: NotRequired[str]
+    pending_change_count: Count
+    issue_count: Count
+
+
+@with_config(_CONFIG)
+class WatchList(TypedDict):
+    watches: list[WatchInfo]
+
+
+@with_config(_CONFIG)
+class WatchProgress(TypedDict):
+    source_count: Count
+    pending_source_count: Count
+    sources_this_call: Count
+    rpc_pages_this_call: Count
+
+
+@with_config(_CONFIG)
+class WatchChangesResult(TypedDict):
+    chats: dict[ChatID, ChatSummary]
+    name: str
+    batch_id: str | None
+    changes: list[Change]
+    returned_count: Count
+    omitted_count: Count
+    complete: bool
+    progress: WatchProgress
+    issues: Annotated[list[Issue], Field(max_length=20)]
+    issue_count: Count
+
+
+@with_config(_CONFIG)
+class WatchAcknowledgement(TypedDict):
+    name: str
+    batch_id: str
+    acknowledged: Literal[True]
+
+
+@with_config(_CONFIG)
+class WatchDeletion(TypedDict):
+    name: str
+    deleted: bool
+
+
 # These are protocol controls, not unknown optional metadata. Their null values
 # distinguish exhaustion, unavailable anchors and unverified authorization.
 _NULL_CONTROLS = {
@@ -477,6 +542,7 @@ _NULL_CONTROLS = {
     "anchor",
     "before_exhausted",
     "after_exhausted",
+    "batch_id",
 }
 _EMPTY_METADATA = {"entities", "attachments"}
 
@@ -544,6 +610,7 @@ def encode(value: models.Model | dict[str, object] | list[models.Folder]) -> Cal
             models.AlbumResult,
             models.ContextResult,
             changes.ChangesResult,
+            watches.WatchChangesResult,
         ),
     ):
         payload = {"chats": chats, **payload}

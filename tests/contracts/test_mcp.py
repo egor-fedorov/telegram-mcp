@@ -14,7 +14,9 @@ from tests.support.paths import FIXTURES_DIR
 
 @pytest.mark.parametrize("mode", ["auto", "legacy"])
 async def test_mcp_contract_matches_versioned_fixture(mode: str) -> None:
-    async with Client(create_server(Service(FakeBackend(), Settings())), mode=mode) as client:
+    async with Client(
+        create_server(Service(FakeBackend(), Settings()), schema_mode="full"), mode=mode
+    ) as client:
         listing = await client.list_tools()
         definitions = {}
         tools = {}

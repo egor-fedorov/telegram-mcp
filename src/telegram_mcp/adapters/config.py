@@ -7,6 +7,7 @@ import tempfile
 import tomllib
 from contextlib import suppress
 from pathlib import Path
+from typing import Literal
 
 from platformdirs import user_config_path, user_data_path
 from pydantic import Field, SecretStr, ValidationError
@@ -27,6 +28,8 @@ class Settings(Model):
     allow_public_channel_reads: bool = False
     allow_public_channel_discovery: bool = False
     allow_attachment_downloads: bool = False
+    archive_directory: Path | None = None
+    mcp_schema_mode: Literal["compact", "full"] = "compact"
     rpc_timeout_seconds: float = Field(default=20, gt=0, le=60)
     max_dialogs: int = Field(default=10000, ge=1, le=100000)
     catalog_cache_ttl_seconds: float = Field(default=300, ge=0, le=300)
@@ -121,7 +124,9 @@ def load_settings(path: Path | None = None) -> Settings:
         settings = Settings.model_validate(data)
     except ValidationError as exc:
         raise validation_error(exc, str(path), overrides) from None
-    for key in ("session_path", "http_token_path"):
+    for key in ("session_path", "http_token_path", "archive_directory"):
+        if getattr(settings, key) is None:
+            continue
         try:
             setattr(settings, key, getattr(settings, key).expanduser().absolute())
         except (OSError, RuntimeError, ValueError):

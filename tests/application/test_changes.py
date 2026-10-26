@@ -261,12 +261,12 @@ async def test_recheck_network_timeout_and_cancellation_leave_original_position(
         with pytest.raises(asyncio.CancelledError):
             await task
 
-        def short_budget(clock, limits):
-            budget = ReadBudget(clock, ExecutionLimits())
+        def short_budget(clock, limits, before_call):
+            budget = ReadBudget(clock, ExecutionLimits(), before_call)
             budget.deadline = clock.monotonic() + 0.01
             return budget
 
-        monkeypatch.setattr("telegram_mcp.application.changes.ReadBudget", short_budget)
+        monkeypatch.setattr("telegram_mcp.application.incremental.ReadBudget", short_budget)
         failed = await env.service.get_changes(checkpoint=start.next_checkpoint)
         assert (
             not failed.complete

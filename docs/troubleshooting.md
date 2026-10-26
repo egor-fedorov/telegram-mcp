@@ -149,6 +149,39 @@ response-format switch. Source version 0.4 also limits scope ID previews and cha
 the default search ordering; see its [migration guide](migration-0.4.md). Refresh client
 tool schemas after restarting the server.
 
+## Checkpoints or subscription storage
+
+`CHECKPOINT_EXPIRED` does not create a baseline. Recover the missing date range with
+`get_history` or `export_history` first; a new `get_changes(chat_ref=...)` starts at the
+current head and reports `baseline_created=true`. Current heads are protected for 30
+days, while superseded tokens can be evicted sooner. Preserve the latest returned token,
+or use a named subscription so a later agent session can find it with `list_watches`.
+
+`CHECKPOINT_STORAGE_FULL` and `WATCH_STORAGE_FULL` preserve the input position.
+Subscription storage never evicts names or unacknowledged batches. Acknowledge processed
+batches and explicitly delete unwanted subscriptions to free space. Deleting a watch
+also discards its unread pending batch; recreating it is a new selection.
+
+Repeated `get_watch_changes` responses with the same `batch_id` are intentional until
+`ack_watch_changes` confirms processing. A stale or unrelated acknowledgement returns
+`WATCH_BATCH_MISMATCH` and cannot advance a newer batch. `WATCH_CONFLICT` means creation
+arguments differ from the existing name; use that existing subscription or another name.
+Source failures preserve positions and appear in issues. If permissions are revoked,
+the entire pending response is withheld; it stays available if access is restored.
+
+## File resources and permanent copies
+
+A `resource_link` does not itself transfer bytes. The client must read the exact returned
+URI; this server does not enumerate private files in `resources/list`. Check the
+[client capability table](clients.md#reading-files-and-resources-unreleased).
+
+Temporary resources expire after 15 minutes or server shutdown. Use `save=true` when
+creating a selected download/export to keep a permanent local copy. `ARCHIVE_DISABLED`
+means `archive_directory` is unset; configure it and restart the server. For
+`ARCHIVE_STORAGE_ERROR`, check directory permissions and disk space. Failed saving does
+not consume the input checkpoint. The permanent path is on the server's machine;
+clients in a different container or filesystem cannot open it automatically.
+
 ## Text appears incomplete
 
 Check `text_total_length` and `next_text_offset`. Call `get_messages` for the same

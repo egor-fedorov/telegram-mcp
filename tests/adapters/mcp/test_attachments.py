@@ -29,7 +29,9 @@ from tests.support.transport import running_resource_server
 @pytest.mark.parametrize("mode", ["auto", "legacy"])
 async def test_download_tool_and_resource_contract(tmp_path: Path, mode: str) -> None:
     service = ResourceService(tmp_path)
-    async with Client(create_server(service.service()), mode=mode, cache=None) as client:
+    async with Client(
+        create_server(service.service(), schema_mode="full"), mode=mode, cache=None
+    ) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
         tool = tools["download_attachment"]
         assert tool.annotations is not None
@@ -77,7 +79,9 @@ async def test_resource_errors_are_safe_protocol_errors(
 ) -> None:
     service = ResourceService(tmp_path)
     service.failure = failure
-    async with Client(create_server(service.service()), mode=mode, cache=None) as client:
+    async with Client(
+        create_server(service.service(), schema_mode="full"), mode=mode, cache=None
+    ) as client:
         with pytest.raises(MCPError) as caught:
             await client.read_resource(URI)
         assert caught.value.code == code
@@ -98,7 +102,7 @@ async def test_resource_uses_the_same_gate_as_tools(tmp_path: Path) -> None:
         entered.set()
         await release.wait()
 
-    async with Client(create_server(service.service(), gate=gate)) as client:
+    async with Client(create_server(service.service(), gate=gate, schema_mode="full")) as client:
         active = asyncio.create_task(gate.run(hold_gate))
         try:
             await entered.wait()

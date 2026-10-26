@@ -47,12 +47,13 @@ def test_expiry_eviction_and_wrong_context_are_explicit(tmp_path):
     clock = FakeClock()
     store = CheckpointStore(tmp_path / "session", clock, root=tmp_path / "state", maximum=2)
     try:
-        first, second = store.put(state(), "auth"), store.put(state(4), "auth")
+        first = store.put(state(), "auth")
+        second = store.put(state(4), "auth", retain=first.token)
         with pytest.raises(ToolError, match="CHECKPOINT_MISMATCH"):
             store.get(second.token, "another", "changes")
         with pytest.raises(ToolError, match="CHECKPOINT_MISMATCH"):
             store.get(second.token, "auth", "history")
-        third = store.put(state(5), "auth")
+        third = store.put(state(5), "auth", retain=second.token)
         with pytest.raises(ToolError, match="CHECKPOINT_EXPIRED"):
             store.get(first.token, "auth", "changes")
         assert store.get(second.token, "auth", "changes").position == 4
@@ -69,10 +70,11 @@ def test_payload_byte_budget_and_invalid_tokens(tmp_path):
     store = CheckpointStore(tmp_path / "session", clock, root=tmp_path / "state", max_bytes=size)
     try:
         first = store.put(state(), "auth")
-        second = store.put(state(), "auth")
+        second = store.put(state(), "auth", retain=first.token)
         assert store.get(second.token, "auth", "changes") == state()
-        with pytest.raises(ToolError, match="CHECKPOINT_EXPIRED"):
-            store.get(first.token, "auth", "changes")
+        assert second.token == first.token
+        with pytest.raises(ToolError, match="CHECKPOINT_STORAGE_FULL"):
+            store.put(state(4), "auth")
         for token in ("../path", "", "a" * 2000):
             with pytest.raises(ToolError, match="INVALID_CHECKPOINT"):
                 store.get(token, "auth", "changes")
@@ -94,7 +96,7 @@ def test_corrupt_or_future_storage_is_not_silently_reset(tmp_path, damage):
     else:
         with sqlite3.connect(store.path) as db:
             if damage == "database_version":
-                db.execute("PRAGMA user_version = 2")
+                db.execute("PRAGMA user_version = 99")
             elif damage == "state_version":
                 db.execute(
                     "UPDATE checkpoints SET payload = ?",
@@ -163,8 +165,127 @@ def test_failed_capacity_reservation_keeps_the_retained_input(tmp_path):
     store = CheckpointStore(tmp_path / "session", FakeClock(), root=tmp_path / "state", maximum=1)
     try:
         saved = store.put(state(), "auth")
-        with pytest.raises(ToolError, match="CHECKPOINT_STORAGE_ERROR"):
+        with pytest.raises(ToolError, match="CHECKPOINT_STORAGE_FULL"):
             store.put(state(4), "auth", retain=saved.token)
         assert store.get(saved.token, "auth", "changes").position == 3
+    finally:
+        store.close()
+
+
+def test_busy_sources_cannot_evict_a_quiet_source_after_4096_polls(tmp_path):
+    clock = FakeClock()
+    store = CheckpointStore(tmp_path / "session", clock, root=tmp_path / "state")
+    try:
+        quiet = store.put(state().model_copy(update={"chat_id": "99"}), "auth")
+        heads = {
+            str(cid): store.put(state().model_copy(update={"chat_id": str(cid)}), "auth")
+            for cid in range(1, 21)
+        }
+        for generation in range(210):
+            clock.now += timedelta(minutes=10)
+            for cid, head in list(heads.items()):
+                heads[cid] = store.put(
+                    state(generation + 4).model_copy(update={"chat_id": cid}),
+                    "auth",
+                    retain=head.token,
+                )
+        assert store.get(quiet.token, "auth", "changes").position == 3
+        assert all(
+            store.get(head.token, "auth", "changes").position == 213 for head in heads.values()
+        )
+        assert len(store._db().execute("SELECT token FROM checkpoints").fetchall()) == 4096
+    finally:
+        store.close()
+
+
+def test_replay_forks_do_not_retire_another_consumers_head(tmp_path):
+    store = CheckpointStore(tmp_path / "session", FakeClock(), root=tmp_path / "state", maximum=4)
+    try:
+        start = store.put(state(), "auth")
+        independent = store.put(state(4), "auth", retain=start.token)
+        branch = store.put(state(5), "auth", retain=start.token)
+        for mid in range(6, 20):
+            branch = store.put(state(mid), "auth", retain=branch.token)
+        assert store.get(independent.token, "auth", "changes").position == 4
+        assert store.get(branch.token, "auth", "changes").position == 19
+    finally:
+        store.close()
+
+
+def test_unchanged_head_is_reused_and_renewed(tmp_path):
+    clock = FakeClock()
+    store = CheckpointStore(tmp_path / "session", clock, root=tmp_path / "state", maximum=1)
+    try:
+        first = store.put(state(), "auth")
+        clock.now += timedelta(days=29)
+        current = store.put(
+            state().model_copy(update={"date_to": clock.now}), "auth", retain=first.token
+        )
+        assert current.token == first.token and current.expires_at > first.expires_at
+        clock.now = first.expires_at
+        assert store.get(current.token, "auth", "changes").position == 3
+    finally:
+        store.close()
+
+
+def test_unpublished_file_receipt_keeps_parent_until_confirm_and_cleans_up_after_crash(tmp_path):
+    store = CheckpointStore(tmp_path / "session", FakeClock(), root=tmp_path / "state", maximum=2)
+    first = store.put(state(), "auth")
+    unpublished = store.put(state(4), "auth", retain=first.token, pending=True)
+    with pytest.raises(ToolError, match="CHECKPOINT_STORAGE_FULL"):
+        store.put(state(5), "auth")
+    store.close()
+    reopened = CheckpointStore(
+        tmp_path / "session", FakeClock(), root=tmp_path / "state", maximum=2
+    )
+    try:
+        assert reopened.get(first.token, "auth", "changes").position == 3
+        with pytest.raises(ToolError, match="CHECKPOINT_EXPIRED"):
+            reopened.get(unpublished.token, "auth", "changes")
+        next_receipt = reopened.put(state(4), "auth", retain=first.token, pending=True)
+        reopened.confirm(next_receipt.token)
+        latest = reopened.put(state(5), "auth", retain=next_receipt.token)
+        assert reopened.get(latest.token, "auth", "changes").position == 5
+    finally:
+        reopened.close()
+
+
+def test_v1_migration_preserves_tokens_and_protects_latest_per_source(tmp_path):
+    root = tmp_path / "state"
+    root.mkdir()
+    clock = FakeClock()
+    with sqlite3.connect(root / "checkpoints.sqlite3") as db:
+        db.execute(
+            "CREATE TABLE checkpoints (token TEXT PRIMARY KEY, binding TEXT NOT NULL, "
+            "kind TEXT NOT NULL, expires REAL NOT NULL, payload TEXT NOT NULL, "
+            "size INTEGER NOT NULL)"
+        )
+        db.execute("CREATE TABLE cooldowns (binding TEXT PRIMARY KEY, until REAL NOT NULL)")
+        for token, snapshot in (
+            ("a" * 43, state()),
+            ("b" * 43, state(4)),
+            ("c" * 43, state().model_copy(update={"chat_id": "2"})),
+        ):
+            payload = snapshot.model_dump_json()
+            db.execute(
+                "INSERT INTO checkpoints VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    token,
+                    "auth",
+                    "changes",
+                    (clock.now + timedelta(days=30)).timestamp(),
+                    payload,
+                    len(payload),
+                ),
+            )
+        db.execute("PRAGMA user_version = 1")
+    store = CheckpointStore(tmp_path / "session", clock, root=root, maximum=3)
+    try:
+        assert store.get("a" * 43, "auth", "changes").position == 3
+        new = store.put(state(5), "auth", retain="b" * 43)
+        assert store.get("c" * 43, "auth", "changes").chat_id == "2"
+        assert store.get(new.token, "auth", "changes").position == 5
+        with pytest.raises(ToolError, match="CHECKPOINT_EXPIRED"):
+            store.get("a" * 43, "auth", "changes")
     finally:
         store.close()

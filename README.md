@@ -10,8 +10,9 @@ and polls. Connect several local clients to one session-owning process, or run s
 Supports Windows, macOS, and Linux with Python 3.12–3.15. The server uses Telethon and
 preserves original text, dates, links, entities, and available metadata. It does not send
 messages, join channels, or mark messages read. Source builds additionally support
-opt-in selected attachment downloads, durable change checkpoints, and JSONL/Markdown
-exports; these features are not in published 0.3.0.
+opt-in selected attachment downloads, durable change checkpoints, named subscriptions,
+and JSONL/Markdown exports with optional permanent copies; these features are not in
+published 0.3.0. Subscriptions poll only when requested and retain a batch until acknowledged.
 The source tree targets `0.4.0.dev0`, with bounded scope previews, earlier restricted
 search results, longer dialog reuse and concurrent calls. See the
 [0.4 migration guide](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/migration-0.4.md)
@@ -96,6 +97,9 @@ do not paste it into client configuration. This is a local, single-user integrat
 | `get_thread` | Comments on a channel post or replies in a group thread |
 | `download_attachment` | One selected attachment up to 20 MiB as a temporary local file and MCP resource (unreleased) |
 | `get_changes` | New messages and recent observed revisions in one chat, with restartable checkpoints (unreleased) |
+| `create_watch` / `list_watches` | Save and discover named chat/folder subscriptions (unreleased) |
+| `get_watch_changes` / `ack_watch_changes` | Poll and acknowledge a durable batch without per-chat tokens (unreleased) |
+| `delete_watch` | Explicitly discard a subscription and its pending batch (unreleased) |
 | `export_history` | Source-linked JSONL or Markdown history in bounded, restartable parts (unreleased) |
 
 
@@ -130,7 +134,7 @@ pass the same file to the shared server and each proxy.
 On POSIX, private files use restrictive permissions. On Windows, protect them with
 user-profile filesystem ACLs; Unix `0600` is not an ACL guarantee. A Telegram session
 contains account access credentials, and the underlying account can do more than the
-server's read-only tools allow.
+server's Telegram read permissions allow.
 
 - [Configuration and permissions](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/configuration.md)
 - [Troubleshooting](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/troubleshooting.md)

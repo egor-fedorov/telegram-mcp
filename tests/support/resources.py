@@ -41,7 +41,7 @@ class ResourceService:
     def service(self) -> Service:
         return cast(Service, self)
 
-    async def download_attachment(self, attachment_id: str) -> DownloadResult:
+    async def download_attachment(self, attachment_id: str, save: bool = False) -> DownloadResult:
         self.download_calls.append(attachment_id)
         if self.failure is not None:
             raise self.failure

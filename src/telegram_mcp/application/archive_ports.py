@@ -1,0 +1,13 @@
+"""Explicit permanent copies, independent of temporary resource storage."""
+
+from typing import Protocol
+
+from telegram_mcp.domain.models import SavedFile
+
+
+class ArchivePort(Protocol):
+    @property
+    def enabled(self) -> bool: ...
+    def require_enabled(self) -> None: ...
+    async def save(self, data: bytes, name: str, sha256: str) -> SavedFile: ...
+    async def discard(self, saved: SavedFile) -> None: ...

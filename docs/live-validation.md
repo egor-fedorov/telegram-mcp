@@ -37,7 +37,11 @@ linked discussion.
 `--config PATH` chooses an existing local configuration. `--query TEXT` changes
 the short keyword used for keyword and media searches; its default is `link` and
 its maximum length is 64 characters. `--topics` additionally checks selected
-forum supergroups. There is no global-search option.
+forum supergroups. `--attachment-id ID` explicitly selects one attachment from one
+of those chats; use its actual `attachments[].id` from `get_messages`.
+The selected attachment also requires `allow_attachment_downloads=true` in configuration.
+`--m4` opts into checkpoint and export checks for the selected chats.
+There is no global-search option.
 
 The script clones settings in memory, replaces the allowlist with the selected
 canonical IDs, and disables folder grants, unrestricted access, public-channel
@@ -57,6 +61,9 @@ allowlist. Normal session and lease files are still used by the Telegram client.
 | Context | Anchor, two messages before and two after each available reference; no reply-chain traversal |
 | Album | Only when an explicit message has an album ID; five history slots in each direction, at most eleven members including the anchor |
 | Optional forums | Three topics per selected forum, then five messages from its first returned topic |
+| Optional attachment | One explicit attachment, at most 20 MiB; resource read and permanent-copy size/SHA-256 checks |
+| Optional M4 changes | One baseline of at most 100 recent messages, checkpoint-store reopen, then at most two continuation calls with `limit=5`; a recheck can observe at most 100 known IDs |
+| Optional M4 export | One-day range, at most two JSONL parts and five fetched records; resource/copy size/SHA-256 and manifest/summary checks |
 | Reconnect | Disconnect the probe's own client, then check status and five history messages in the same process |
 
 Each paged application call has a one-page backend budget. Empty pages may carry
@@ -78,25 +85,33 @@ client is disconnected. The next status call reconnects, and the subsequent
 history read checks that this process can continue. It does not revoke
 authorization or disconnect any other client.
 
-No check sends messages, joins chats, marks messages read, downloads attachments,
-or changes Telegram data. Message text and metadata are held only long enough to
-exercise the normal service and count its results; no report or temporary file
-is written.
+No check sends messages, joins chats, marks messages read, or changes Telegram data.
+Attachment checks download only the explicit `--attachment-id`. M3/M4 checks use a
+private temporary root for checkpoints, subscriptions, resource caches and archive
+copies; it is removed on success, failure and interruption. Normal session/lease
+files remain owned by the Telegram runtime. The probe does not change the user's
+archive setting or keep source content in its report.
 
 ## Read the report
 
 Standard output contains one JSON object per check:
 
 ```json
-{"check":"history_0_0","count":5,"issue_codes":[]}
+{"check":"history_0_0","count":5,"issue_codes":[],"status":"passed"}
 ```
 
 Check names use numeric selector positions. Reports contain only the check name,
-result count, and known issue codes. They omit message text, chat titles, source
+result count, known issue codes, and `passed`, `failed` or `skipped` status. They omit message text, chat titles, source
 references, cursor tokens, credentials, and raw exception details. Third-party
 logging is disabled in this dedicated script process. Exit status is `0` when
 all executed checks have no issues, `1` when a check or setup reports an issue,
 and `130` after interruption.
+
+Absent `--attachment-id` and `--m4` produce explicit skipped entries. A zero exit code
+alone does not validate M3/M4 for release. Before publication, run the relevant flags
+on approved photo/document and history sources and record which paths passed, were
+empty, or remained skipped. Named-subscription restart/ack behavior remains covered
+offline; the live M4 check exercises its shared per-source reader.
 
 An empty result can be valid: the chosen query or content type may have no
 matches. Successful execution verifies the exercised paths, not exhaustive

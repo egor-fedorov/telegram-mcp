@@ -43,10 +43,12 @@ def topic_history_backend() -> FakeBackend:
 @pytest.mark.parametrize("mode", ["auto", "legacy"])
 async def test_topic_history_mcp_schema_and_unchanged_chat_wide_defaults(mode: str) -> None:
     backend = topic_history_backend()
-    server = create_server(Service(backend, Settings(allowed_chat_ids=["-1001"])))
+    server = create_server(
+        Service(backend, Settings(allowed_chat_ids=["-1001"])), schema_mode="full"
+    )
     async with Client(server, mode=mode) as client:
         listing = await client.list_tools()
-        assert len(listing.tools) == 17
+        assert len(listing.tools) == 22
         tools = {tool.name: tool for tool in listing.tools}
         for name in ("get_history", "get_pinned_messages"):
             tool = tools[name]
@@ -79,7 +81,9 @@ async def test_topic_history_mcp_schema_and_unchanged_chat_wide_defaults(mode: s
 @pytest.mark.parametrize("mode", ["auto", "legacy"])
 async def test_topic_history_mcp_general_and_named_topics_dispatch(mode: str) -> None:
     backend = topic_history_backend()
-    server = create_server(Service(backend, Settings(allowed_chat_ids=["-1001"])))
+    server = create_server(
+        Service(backend, Settings(allowed_chat_ids=["-1001"])), schema_mode="full"
+    )
     async with Client(server, mode=mode) as client:
         for selector, topic_id, expected in (
             ({"chat_id": "-1001"}, 10, [10, 12]),
@@ -122,7 +126,9 @@ async def test_topic_history_mcp_general_and_named_topics_dispatch(mode: str) ->
 @pytest.mark.parametrize("mode", ["auto", "legacy"])
 async def test_topic_history_mcp_rejects_invalid_topic_ids_before_backend_calls(mode: str) -> None:
     backend = topic_history_backend()
-    server = create_server(Service(backend, Settings(allowed_chat_ids=["-1001"])))
+    server = create_server(
+        Service(backend, Settings(allowed_chat_ids=["-1001"])), schema_mode="full"
+    )
     async with Client(server, mode=mode) as client:
         for name in ("get_history", "get_pinned_messages"):
             for topic_id in (0, -1, 2147483648, True, "1", 1.5, 1.0):
@@ -140,7 +146,8 @@ async def test_topic_history_mcp_public_flags_do_not_authorize_forums(mode: str)
         Service(
             backend,
             Settings(allow_public_channel_reads=True, allow_public_channel_discovery=True),
-        )
+        ),
+        schema_mode="full",
     )
     async with Client(server, mode=mode) as client:
         for name in ("get_history", "get_pinned_messages"):
@@ -155,7 +162,9 @@ async def test_topic_history_mcp_public_flags_do_not_authorize_forums(mode: str)
 @pytest.mark.parametrize("mode", ["auto", "legacy"])
 async def test_topic_history_mcp_exposes_unavailable_topic_and_forum_errors(mode: str) -> None:
     backend = topic_history_backend()
-    server = create_server(Service(backend, Settings(allowed_chat_ids=["-1001"])))
+    server = create_server(
+        Service(backend, Settings(allowed_chat_ids=["-1001"])), schema_mode="full"
+    )
     async with Client(server, mode=mode) as client:
         for name in ("get_history", "get_pinned_messages"):
             missing = await client.call_tool(name, {"chat_ref": "@project_forum", "topic_id": 999})
@@ -176,7 +185,9 @@ async def test_topic_history_mcp_exposes_unavailable_topic_and_forum_errors(mode
 @pytest.mark.parametrize("mode", ["auto", "legacy"])
 async def test_topic_history_mcp_cursor_remains_bound_to_original_topic(mode: str) -> None:
     backend = topic_history_backend()
-    server = create_server(Service(backend, Settings(allowed_chat_ids=["-1001"])))
+    server = create_server(
+        Service(backend, Settings(allowed_chat_ids=["-1001"])), schema_mode="full"
+    )
     async with Client(server, mode=mode) as client:
         first = await client.call_tool(
             "get_history", {"chat_ref": "@project_forum", "topic_id": 1, "limit": 1}
@@ -206,7 +217,9 @@ async def test_topic_history_mcp_cursor_remains_bound_to_original_topic(mode: st
 @pytest.mark.parametrize("mode", ["auto", "legacy"])
 async def test_topic_history_mcp_lookup_failure_preserves_original_cursor(mode: str) -> None:
     backend = topic_history_backend()
-    server = create_server(Service(backend, Settings(allowed_chat_ids=["-1001"])))
+    server = create_server(
+        Service(backend, Settings(allowed_chat_ids=["-1001"])), schema_mode="full"
+    )
     async with Client(server, mode=mode) as client:
         arguments = {"chat_ref": "@project_forum", "topic_id": 1, "limit": 1}
         first = await client.call_tool("get_history", arguments)
@@ -237,7 +250,8 @@ async def test_topic_history_mcp_temporary_fetch_failure_retains_topic_and_backo
     backend = topic_history_backend()
     backend.faults["-1001"] = ToolError("RATE_LIMITED", "Wait before retrying.", 37)
     server = create_server(
-        Service(backend, Settings(allowed_chat_ids=["-1001"]), clock=FakeClock())
+        Service(backend, Settings(allowed_chat_ids=["-1001"]), clock=FakeClock()),
+        schema_mode="full",
     )
     async with Client(server, mode=mode) as client:
         arguments = {"chat_ref": "@project_forum", "topic_id": 1}

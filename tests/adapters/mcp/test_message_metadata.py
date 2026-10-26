@@ -31,14 +31,23 @@ def rich_backend(messages: list[Message]) -> FakeBackend:
 async def test_metadata_mcp_schemas_preserve_read_only_surface_without_actor_lists(
     mode: str,
 ) -> None:
-    server = create_server(Service(FakeBackend(), Settings()))
+    server = create_server(Service(FakeBackend(), Settings()), schema_mode="full")
     async with Client(server, mode=mode) as client:
         listing = await client.list_tools()
-        assert len(listing.tools) == 17
+        assert len(listing.tools) == 22
         for tool in listing.tools:
             assert tool.annotations is not None
             assert tool.annotations.read_only_hint == (
-                tool.name not in {"download_attachment", "get_changes", "export_history"}
+                tool.name
+                not in {
+                    "download_attachment",
+                    "get_changes",
+                    "export_history",
+                    "create_watch",
+                    "get_watch_changes",
+                    "ack_watch_changes",
+                    "delete_watch",
+                }
             )
             if tool.name not in {
                 "search_messages",
@@ -77,7 +86,9 @@ async def test_metadata_mcp_get_messages_keeps_duplicates_and_unicode_continuati
     message = rich_message()
     original = message.model_dump(mode="json")
     backend = rich_backend([message])
-    server = create_server(Service(backend, Settings(allowed_chat_ids=["-1001"])))
+    server = create_server(
+        Service(backend, Settings(allowed_chat_ids=["-1001"])), schema_mode="full"
+    )
     async with Client(server, mode=mode) as client:
         refs = [message.message_ref.key, message.message_ref.key]
         first = await client.call_tool("get_messages", {"refs": refs, "text_limit": 2})
@@ -117,7 +128,9 @@ async def test_metadata_mcp_pagination_and_text_budget_preserve_nested_fields(
 ) -> None:
     messages = [rich_message(mid, "A😀B" + "x" * 12000) for mid in (20, 21)]
     backend = rich_backend(messages)
-    server = create_server(Service(backend, Settings(allowed_chat_ids=["-1001"])))
+    server = create_server(
+        Service(backend, Settings(allowed_chat_ids=["-1001"])), schema_mode="full"
+    )
     async with Client(server, mode=mode) as client:
         first = await client.call_tool(tool, {**arguments, "limit": 1})
         assert not first.is_error and first.structured_content is not None
@@ -143,7 +156,9 @@ async def test_metadata_mcp_context_preserves_neighbors_and_parent_fields(mode: 
     messages = [rich_message(mid) for mid in (19, 20, 21)]
     messages[1].reply_to = messages[0].message_ref
     backend = rich_backend(messages)
-    server = create_server(Service(backend, Settings(allowed_chat_ids=["-1001"])))
+    server = create_server(
+        Service(backend, Settings(allowed_chat_ids=["-1001"])), schema_mode="full"
+    )
     async with Client(server, mode=mode) as client:
         result = await client.call_tool(
             "get_context", {"ref": "-1001:20", "before": 1, "after": 1, "reply_depth": 1}
@@ -171,7 +186,9 @@ async def test_metadata_mcp_preserves_unknown_zero_and_empty_result_distinctions
     assert partial.poll is not None
     partial.poll.results = PollResults(is_min=True)
     backend = rich_backend([unknown, zero, partial])
-    server = create_server(Service(backend, Settings(allowed_chat_ids=["-1001"])))
+    server = create_server(
+        Service(backend, Settings(allowed_chat_ids=["-1001"])), schema_mode="full"
+    )
     async with Client(server, mode=mode) as client:
         result = await client.call_tool("get_messages", {"refs": ["-1001:1", "-1001:2", "-1001:3"]})
         assert not result.is_error and result.structured_content is not None

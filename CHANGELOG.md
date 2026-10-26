@@ -10,6 +10,17 @@ A version entry describes its target artifact. Verify publication on
 
 ### Added
 
+- Named subscriptions via `create_watch`, `list_watches`, `get_watch_changes`,
+  `ack_watch_changes`, and `delete_watch`. Chat/folder consumers retain positions and
+  one unacknowledged batch across agent/server restarts, require explicit acknowledgement,
+  and never expire or evict pending data under their 64-name / 64 MiB quota. Polling
+  remains on demand, with early bounded results and per-source failure isolation.
+- Optional `archive_directory` and `save=true` for selected downloads and file exports.
+  Private permanent copies have generated paths and checksums, survive cache cleanup,
+  and are managed explicitly by the user. `get_status` reports archive availability.
+- Opt-in M3/M4 live-probe checks for one selected attachment, resource/copy integrity,
+  checkpoint reopen/continuation and bounded history export. Missing flags report
+  skipped coverage; disposable files are cleaned up and reports contain no source content.
 - `get_changes` for one explicitly selected chat: current-head baselines, new messages,
   bounded recent revision checks, explicit unavailability and durable immutable checkpoints.
   Checkpoints retain positions/fingerprints without message bodies, survive restart,
@@ -30,6 +41,16 @@ A version entry describes its target artifact. Verify publication on
 
 ### Changed
 
+- Current checkpoint heads are protected from capacity eviction for 30 days. Unchanged
+  heads reuse their token and renew expiry; independent branches keep separate heads.
+  A full protected store fails without discarding a position. Database migration keeps
+  existing tokens, and `baseline_created` makes deliberate current-head starts explicit.
+- Compact MCP tool discovery is now the default: optional output schemas are omitted,
+  with typed server-side validation and identical output JSON retained. Set
+  `mcp_schema_mode="full"` to advertise them. The 22-tool fixture is about 25 KiB versus
+  108 KiB in full mode; instructions stay below 1 KiB and describe local write effects.
+- Independent checkpoint/export calls can overlap; subscription operations serialize
+  only by name. The shared transport gate and durable M4 FloodWait cooldown remain.
 - **Breaking 0.4 contract:** scope ID arrays are previews of at most 20 entries, with
   exact selected/pending counts and explicit truncation flags. Internal authorization
   and continuation retain the full scope. See [migration guidance](docs/migration-0.4.md).

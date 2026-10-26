@@ -105,7 +105,8 @@ one facade, runtime, policy, cursor store, checkpoint store and temporary file s
 shared by its clients.
 All MCP transports share the same admission gate: four active calls, 16 FIFO waiters,
 and a 120-second queue timeout. Tool and resource operations use this gate; runtime,
-download and incremental operations retain their narrower locks. Cancellation releases
+and download operations retain their narrower locks; watches lock only the same name.
+Independent incremental reads can overlap. Cancellation releases
 slots without running queued work. Disconnecting a client does not close the application;
 server shutdown closes the gate before the facade and cancels outstanding calls.
 
@@ -124,14 +125,15 @@ files, quota reservations, expiry, cleanup and a process lease. The Telegram att
 gateway refreshes protection/media metadata and allows one identity-checked recovery
 of a stale file reference. Resource reads reauthorize the source and verify current
 media identity and stored bytes. The MCP adapter exposes opaque resource URIs without
-a general HTTP file endpoint or persistent message database.
+a general HTTP file endpoint.
 
 ## Durable reads and exports
 
 `ChangesService` observes new IDs and rechecks a rolling set of 100 known IDs.
 `HistoryExportService` traverses a frozen single-chat date/ID range in bounded parts.
-They use `IncrementalContext` for source authorization, session-wide persistent M4
-FloodWait deadlines, serialization and ownership of the two stores. `ReadBudget`
+They share `advance_changes` with `WatchService` for per-source progress and use
+`IncrementalContext` for source authorization, session-wide persistent M4 FloodWait
+deadlines, active-request draining and store ownership. `ReadBudget`
 counts head/recheck/history operations and bounds the page work. Access failures never
 release saved output or consume the caller's checkpoint.
 
@@ -144,8 +146,19 @@ records with reserved summary space; clipping applies only to inline change resp
 `CheckpointStorePort` holds versioned, immutable position snapshots and cooldown deadlines.
 The SQLite adapter stores no message bodies and never unpickles data. Snapshots are bound
 to the canonical session path and a digest of its authorization, with atomic writes,
-30-day expiry and oldest-first eviction under the state budget. A partial pass persists
+30-day expiry and protected current heads. Only superseded snapshots can be evicted
+under capacity pressure; branches keep independent heads and unchanged heads reuse
+their token. A staged receipt retires its parent only after file publication succeeds.
+Database version 2 migrates legacy tokens in place. A partial pass persists
 its phase and offset without saving message buffers; continuation rereads current data.
+
+`WatchService` owns named on-demand consumers. A separate private `WatchStorePort`
+persists positions and one immutable pending batch including message text. Explicit
+acknowledgement installs the candidate position; replay rechecks access and source
+protection. There is no background poller, TTL or eviction. Per-name locks protect the
+read/ack sequence; independent consumers share budgets and the durable M4 cooldown.
+Folder membership refreshes between sweeps. New members start from the previous
+completed sweep boundary; returning members keep their saved position.
 
 `ExportStorePort` owns a separate bounded cache of generated JSONL/Markdown files.
 It reuses private-path protection, has a process lease, atomic publication, hashes,
@@ -153,6 +166,11 @@ expiry and cleanup. Resource reads reauthorize the source before reading the sto
 snapshot. Existing attachment resource checks retain their stronger media-identity
 verification. The MCP resource dispatcher returns text exports and binary attachments
 over all transports without adding a file-serving HTTP route.
+
+`ArchivePort` creates selected permanent copies beneath the configured private root,
+with generated paths, size/checksum checks and atomic publication. It never accepts
+a destination from a tool or automatically deletes successful copies. Failed publication
+rolls back only files and unpublished receipts created by that call.
 
 ## Invariants and validation
 
@@ -167,9 +185,10 @@ over all transports without adding a file-serving HTTP route.
 - RPC budgets include date-anchor requests. Album scans do not refill pages, and topic
   scans do not infer exhaustion from sparse data. Text clipping and cursor advancement
   precede MCP projection; projection does not drop messages to fit a budget.
-- MCP emits the same compact JSON in text and structured content with self-contained
-  schemas. Ordinary cursors and resources are process-local; server restarts invalidate
-  them. M4 checkpoints are distinct durable tokens, subject to retention and eviction.
+- MCP emits the same compact JSON in text and structured content. `mcp_schema_mode`
+  controls advertisement of optional output schemas, not typed validation or payloads.
+  Ordinary cursors and resources are process-local; server restarts invalidate them.
+  Checkpoints and named subscriptions have the distinct retention rules above.
 
 [Architecture tests](../tests/contracts/test_architecture.py) check imports and cycles.
 [Contract tests](../tests/contracts/test_mcp.py) compare both MCP modes with the versioned

@@ -3,6 +3,9 @@
 Status: implemented, unreleased. No version tag or PyPI publication is part of this
 milestone. Published 0.3.0 and its existing retrieval interfaces remain unchanged.
 Current examples and operational limits are in [usage](../usage.md#changes-and-exports-unreleased).
+This is the original milestone contract. The current guide supersedes its FIFO
+retention rule and single-chat-only monitoring scope with protected checkpoint heads
+and named subscriptions.
 
 ## Accepted boundary
 

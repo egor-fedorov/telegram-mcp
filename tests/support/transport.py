@@ -3,6 +3,7 @@ import socket
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
 
 import uvicorn
 
@@ -12,6 +13,7 @@ from telegram_mcp.adapters.config import Settings
 from telegram_mcp.adapters.exports import ExportStore
 from telegram_mcp.adapters.http_token import load_token
 from telegram_mcp.adapters.transport import create_http_app
+from telegram_mcp.adapters.watches import WatchStore
 from telegram_mcp.bootstrap import build_service
 from tests.support.fakes import FakeBackend, msg
 from tests.support.resources import (
@@ -21,7 +23,11 @@ from tests.support.resources import (
 
 @asynccontextmanager
 async def running_server(
-    tmp_path: Path, backend: FakeBackend | None = None
+    tmp_path: Path,
+    backend: FakeBackend | None = None,
+    *,
+    schema_mode: Literal["compact", "full"] = "compact",
+    archive: bool = False,
 ) -> AsyncGenerator[tuple[Settings, FakeBackend]]:
     backend = backend if backend is not None else FakeBackend([msg("1", 1), msg("1", 2)])
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
@@ -31,6 +37,8 @@ async def running_server(
             session_path=tmp_path / "account.session",
             http_port=listener.getsockname()[1],
             http_token_path=tmp_path / "mcp.token",
+            mcp_schema_mode=schema_mode,
+            archive_directory=tmp_path / "archive" if archive else None,
         )
         app = create_http_app(
             build_service(
@@ -42,9 +50,11 @@ async def running_server(
                 exports=ExportStore(
                     settings.session_path, SystemClock(), root=tmp_path / "exports"
                 ),
+                watches=WatchStore(settings.session_path, root=tmp_path / "watches"),
             ),
             load_token(settings.http_token_path, create=True),
             settings.http_port,
+            schema_mode=schema_mode,
         )
         server = uvicorn.Server(
             uvicorn.Config(app, log_level="critical", access_log=False, lifespan="on")

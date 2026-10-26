@@ -33,9 +33,11 @@ def album_message(mid: int, text: str = "A😀B album caption") -> Message:
 @pytest.mark.parametrize("mode", ["auto", "legacy"])
 async def test_album_mcp_schema_exposes_bounded_read_only_result(mode: str) -> None:
     backend = FakeBackend()
-    async with Client(create_server(Service(backend, Settings())), mode=mode) as client:
+    async with Client(
+        create_server(Service(backend, Settings()), schema_mode="full"), mode=mode
+    ) as client:
         tools = (await client.list_tools()).tools
-        assert len(tools) == 17
+        assert len(tools) == 22
         tool = next(tool for tool in tools if tool.name == "get_album")
         assert tool.annotations is not None and tool.annotations.read_only_hint
         assert tool.input_schema["required"] == ["ref"]
@@ -79,7 +81,9 @@ async def test_album_mcp_reference_dispatch_preserves_members_and_metadata(
     for member in members:
         member.chat = chat
     backend = FakeBackend([*members, msg("-1001", 19), msg("-1001", 21)], chats=[chat])
-    server = create_server(Service(backend, Settings(allowed_chat_ids=[chat.id])))
+    server = create_server(
+        Service(backend, Settings(allowed_chat_ids=[chat.id])), schema_mode="full"
+    )
     async with Client(server, mode=mode) as client:
         result = await client.call_tool("get_album", {"ref": reference})
         assert not result.is_error and result.structured_content is not None
@@ -113,7 +117,9 @@ async def test_album_mcp_text_budget_keeps_metadata_and_unicode_continuation(mod
     members = [album_message(mid, "A😀B" * 6000) for mid in range(1, 12)]
     original = [member.model_dump(mode="json") for member in members]
     backend = FakeBackend(members)
-    server = create_server(Service(backend, Settings(allowed_chat_ids=["-1001"])))
+    server = create_server(
+        Service(backend, Settings(allowed_chat_ids=["-1001"])), schema_mode="full"
+    )
     async with Client(server, mode=mode) as client:
         result = await client.call_tool("get_album", {"ref": "-1001:6", "scan_limit": 5})
         assert not result.is_error and result.structured_content is not None
@@ -149,7 +155,9 @@ async def test_album_mcp_temporary_neighbor_failure_returns_partial_result(
     backend.faults["-1001"] = ToolError(
         code, "Neighbor retrieval failed.", 37 if code == "RATE_LIMITED" else None
     )
-    server = create_server(Service(backend, Settings(allowed_chat_ids=["-1001"])))
+    server = create_server(
+        Service(backend, Settings(allowed_chat_ids=["-1001"])), schema_mode="full"
+    )
     async with Client(server, mode=mode) as client:
         result = await client.call_tool("get_album", {"ref": "-1001:20"})
         assert not result.is_error and result.structured_content is not None
@@ -171,7 +179,9 @@ async def test_album_mcp_temporary_neighbor_failure_returns_partial_result(
 async def test_album_mcp_retries_whole_call_after_network_failure(mode: str) -> None:
     backend = FakeBackend([album_message(mid) for mid in (19, 20, 21)])
     backend.faults["-1001"] = ToolError("CONNECTION_ERROR", "Connection failed.")
-    server = create_server(Service(backend, Settings(allowed_chat_ids=["-1001"])))
+    server = create_server(
+        Service(backend, Settings(allowed_chat_ids=["-1001"])), schema_mode="full"
+    )
     async with Client(server, mode=mode) as client:
         first = await client.call_tool("get_album", {"ref": "-1001:20"})
         assert first.structured_content is not None and first.structured_content["issues"]
@@ -205,7 +215,9 @@ async def test_album_mcp_initial_failures_are_errors_without_neighbor_scans(mode
             backend.authorization_fault = ToolError(failure, "Authorization is required.")
         if failure == "CONNECTION_ERROR":
             backend.message_faults["-1001"] = ToolError(failure, "Anchor retrieval failed.")
-        async with Client(create_server(Service(backend, settings)), mode=mode) as client:
+        async with Client(
+            create_server(Service(backend, settings), schema_mode="full"), mode=mode
+        ) as client:
             result = await client.call_tool("get_album", {"ref": reference})
             assert result.is_error, failure
             text = "".join(block.text for block in result.content if block.type == "text")
@@ -226,7 +238,9 @@ async def test_album_mcp_public_channel_access_is_explicit_and_independent_of_di
         settings = Settings(
             allow_public_channel_reads=allow_reads, allow_public_channel_discovery=True
         )
-        async with Client(create_server(Service(backend, settings)), mode=mode) as client:
+        async with Client(
+            create_server(Service(backend, settings), schema_mode="full"), mode=mode
+        ) as client:
             result = await client.call_tool("get_album", {"ref": "https://t.me/example/20"})
             assert bool(result.is_error) is not allow_reads
             if allow_reads:

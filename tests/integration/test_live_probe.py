@@ -1,7 +1,10 @@
 """The live harness is tested offline; these tests never open a Telegram session."""
 
 import json
+import tempfile
 from dataclasses import asdict
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any, Self
 from unittest.mock import AsyncMock, PropertyMock, patch
 
@@ -14,6 +17,7 @@ from telegram_mcp.adapters.telegram import TelegramBackend
 from telegram_mcp.application.ports import Batch, MessageOffset, TopicBatch, TopicOffset
 from telegram_mcp.application.requests import HistoryRead, MessageRead, SearchRead
 from telegram_mcp.domain.models import Chat, ForumTopic, MessageRef, ToolError
+from tests.support.downloads import AttachmentBackend
 from tests.support.fakes import FakeBackend, msg
 
 SECRET = "private-secret-text"
@@ -44,7 +48,9 @@ class ProbeFake(FakeBackend):
         self.settings = settings
         return self
 
-    def select(self, chat_ids: set[str]) -> None:
+    def select(
+        self, chat_ids: set[str], *, attachment_id: str | None = None, m4: bool = False
+    ) -> None:
         self.selected = set(chat_ids)
 
     async def disconnect_owned(self) -> None:
@@ -70,6 +76,114 @@ class ProbeFake(FakeBackend):
         assert 1 <= limit <= 5
         self.requests.append((chat_id, request, offset, limit))
         return await super().read(chat_id, request, offset=offset, limit=limit)
+
+
+class ArtifactProbeFake(ProbeFake):
+    def __init__(self):
+        super().__init__()
+        self.attachment = AttachmentBackend()
+        for message in self.stored_messages:
+            message.sent_at = datetime.now(UTC) - timedelta(
+                minutes=20 - message.message_ref.message_id
+            )
+
+    async def prepare_attachment(self, ref, kind):
+        assert ref.chat_id in self.selected
+        return await self.attachment.prepare_attachment(ref, kind)
+
+    async def download_attachment(self, source, writer):
+        assert source.message_ref.chat_id in self.selected
+        return await self.attachment.download_attachment(source, writer)
+
+    async def read_incremental(self, chat_id, **kwargs):
+        assert chat_id in self.selected
+        kwargs["limit"] = min(5, kwargs["limit"])
+        return await super().read_incremental(chat_id, **kwargs)
+
+
+async def test_artifact_probe_exercises_m3_m4_without_leaving_files_or_private_output(
+    tmp_path, monkeypatch
+):
+    roots = []
+
+    def directory(**kwargs):
+        temporary = tempfile.TemporaryDirectory(dir=tmp_path, **kwargs)
+        roots.append(Path(temporary.name))
+        return temporary
+
+    monkeypatch.setattr("scripts.probe_telegram.TemporaryDirectory", directory)
+    backend = ArtifactProbeFake()
+    checks = await probe(
+        Settings(allow_attachment_downloads=True),
+        chats=["1"],
+        message_refs=[],
+        attachment_id="1:10:document",
+        m4=True,
+        backend_factory=backend.factory,
+    )
+    assert not any(check.issue_codes for check in checks)
+    assert all(check.status == "passed" for check in checks)
+    names = {check.check for check in checks}
+    assert {
+        "attachment_resource_and_archive",
+        "changes_baseline_0",
+        "checkpoint_reopen_0",
+        "changes_continue_0_0",
+        "changes_continue_0_1",
+        "export_0_0",
+        "export_0_1",
+        "export_resource_0_0",
+        "export_resource_0_1",
+    } <= names
+    assert next(check.count for check in checks if check.check == "export_resource_0_1") == 5
+    assert backend.attachment.downloads == 1
+    assert all(not root.exists() for root in roots)
+    output = json.dumps([asdict(check) for check in checks])
+    assert SECRET not in output and "1:10" not in output and str(tmp_path) not in output
+
+
+async def test_unselected_attachment_fails_before_message_reads_and_cleans_probe_root(
+    tmp_path, monkeypatch
+):
+    roots = []
+
+    def directory(**kwargs):
+        temporary = tempfile.TemporaryDirectory(dir=tmp_path, **kwargs)
+        roots.append(Path(temporary.name))
+        return temporary
+
+    monkeypatch.setattr("scripts.probe_telegram.TemporaryDirectory", directory)
+    backend = ArtifactProbeFake()
+    checks = await probe(
+        Settings(allow_attachment_downloads=True),
+        chats=["1"],
+        message_refs=[],
+        attachment_id="99:10:document",
+        backend_factory=backend.factory,
+    )
+    assert checks[-1].issue_codes == ["VALIDATION_SCOPE_DENIED"]
+    assert backend.attachment.downloads == 0 and backend.requests == []
+    assert all(not root.exists() for root in roots)
+
+
+async def test_live_backend_bounds_new_ports_and_requires_explicit_opt_in():
+    backend = LiveBackend(Settings())
+    try:
+        backend.select({"1"})
+        with pytest.raises(ToolError, match="VALIDATION_SCOPE_DENIED"):
+            await backend.recent_observations("1", 100)
+        backend.select({"1"}, m4=True, attachment_id="1:10:document")
+        with pytest.raises(ToolError, match="VALIDATION_SCOPE_DENIED"):
+            await backend.observe_messages("1", list(range(1, 102)))
+        with pytest.raises(ToolError, match="VALIDATION_SCOPE_DENIED"):
+            await backend.check_export_source("99")
+        with pytest.raises(ToolError, match="VALIDATION_SCOPE_DENIED"):
+            await backend.prepare_attachment(MessageRef(chat_id="1", message_id=11), "document")
+        with patch.object(TelegramBackend, "read_incremental", new_callable=AsyncMock) as read:
+            await backend.read_incremental("1", after_id=1, through_id=200, limit=100)
+            read.assert_awaited_once_with("1", after_id=1, through_id=200, limit=5, date_from=None)
+    finally:
+        await backend.close()
 
 
 async def test_probe_scope_bounds_redaction_and_reconnect() -> None:
@@ -312,6 +426,7 @@ def test_cli_rejects_global_flag_and_redacts_invalid_arguments(
         "check": "setup",
         "count": 0,
         "issue_codes": ["INVALID_ARGUMENT"],
+        "status": "failed",
     }
     assert captured.err == ""
     assert SECRET not in captured.out
@@ -323,4 +438,5 @@ def test_output_contains_only_check_count_codes(capsys: pytest.CaptureFixture[st
         "check": "history_0_0",
         "count": 5,
         "issue_codes": ["SEARCH_INEXACT"],
+        "status": "failed",
     }

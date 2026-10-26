@@ -3,6 +3,7 @@
 import asyncio
 import secrets
 import socket
+from typing import Literal
 
 import uvicorn
 from mcp.server.transport_security import TransportSecuritySettings
@@ -47,9 +48,14 @@ class BearerAuthMiddleware:
 
 
 def create_http_app(
-    service: Service, token: str, port: int, *, owns_service: bool = True
+    service: Service,
+    token: str,
+    port: int,
+    *,
+    owns_service: bool = True,
+    schema_mode: Literal["compact", "full"] = "compact",
 ) -> Starlette:
-    server = create_server(service, owns_service=owns_service)
+    server = create_server(service, owns_service=owns_service, schema_mode=schema_mode)
     hosts = [f"{HOST}:{port}"]
     origins = [f"http://{HOST}:{port}"]
     if port == 80:
@@ -77,7 +83,9 @@ async def _serve_http(service: Service, settings: Settings) -> None:
 
 async def _run_http(service: Service, settings: Settings) -> None:
     token = load_token(settings.http_token_path, create=True)
-    app = create_http_app(service, token, settings.http_port, owns_service=False)
+    app = create_http_app(
+        service, token, settings.http_port, owns_service=False, schema_mode=settings.mcp_schema_mode
+    )
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
         if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
             listener.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)

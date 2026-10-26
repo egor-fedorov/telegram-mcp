@@ -1,7 +1,7 @@
 # Telegram MCP roadmap
 
 The project aims to provide general-purpose Telegram access for agents: discover sources,
-retrieve original messages and files, and later track changes. The calling agent
+retrieve original messages and files, and track changes. The calling agent
 performs content analysis. Reading, downloading, writing, and administration remain
 separate capabilities with separate permissions.
 
@@ -23,6 +23,7 @@ need a detailed contract before implementation; no delivery dates are assigned.
 | M3 | Implemented, unreleased | Selected attachment downloads with size limits and delivery to the calling client |
 | M4 | Implemented, unreleased | New messages, bounded recent revisions, persistent checkpoints, and source-linked JSONL/Markdown export |
 | R4 | Implemented, unreleased | Bounded scope previews, early restricted-search results, reusable dialog snapshots and concurrent transport calls |
+| R5 | Implemented, unreleased | Protected checkpoint heads, named subscriptions with acknowledged delivery, permanent selected files and compact tool discovery |
 
 The [historical completion records](docs/specs/README.md#historical-completion-records)
 include offline test results. They do not claim live Telegram validation.
@@ -98,6 +99,31 @@ and overlapping calls/cursor replay through STDIO, HTTP and the proxy. See the
 Local `make check` passes: formatting, lint, types, and 1164 tests (2 platform-specific skips).
 Dependency versions are unchanged. Live validation, tags and package publication are separate.
 
+## R5 — Reliable monitoring and retained files (unreleased)
+
+Current checkpoint heads now survive capacity pressure for 30 days. Unchanged heads
+reuse their token, independent branches remain protected, and a full store reports an
+explicit error instead of discarding a position. Existing databases migrate in place.
+Named chat/folder subscriptions persist one unacknowledged batch and positions across
+sessions, with explicit acknowledgement, fair bounded polling and no background scheduler.
+New folder members start at the previous completed sweep boundary; returning members resume.
+
+Selected downloads and exports support `save=true` under a configured archive directory.
+Permanent copies survive cache expiry and shutdown, with no automatic deletion. Client
+documentation distinguishes advertised resource capabilities from tested SDK delivery.
+Compact discovery reduces the 22-tool fixture from 110,210 to 25,330 bytes; full schemas
+remain optional and typed server-side output validation remains enabled. Instructions
+are 851 bytes and distinguish Telegram reads from local state/file writes.
+
+`make check` passes with 1218 tests and two platform-specific skips on Linux. Coverage
+includes 4200 polls under the 4096-snapshot quota, restart/replay/ack, source failures,
+access revocation, single-page budgets, Unicode, permanent-file cleanup boundaries and
+all transports in compact/full schema modes. The extended live-probe harness tests
+selected M3/M4 artifacts and checkpoint reopen with explicit skipped coverage reporting;
+its bounds, redaction and cleanup are verified offline. See [usage](docs/usage.md),
+[migration](docs/migration-0.4.md) and [live validation](docs/live-validation.md).
+Dependencies and source version remain unchanged; no live run, tag or publication is included.
+
 ## Next: validate and release
 
 Complete the selected-source live validation of M3/M4 and the 0.4 retrieval changes before publication.
@@ -107,7 +133,7 @@ Follow the release procedure separately; a merged implementation is not a publis
 
 Broader change journals and multi-source exports remain later decisions. Other directions
 remain proposals: saved searches and source collections, local text/semantic indexes,
-OCR or transcription, monitoring and notifications, optional writes or administration,
+OCR or transcription, scheduled monitoring and notifications, optional writes or administration,
 and remote access or separately isolated account profiles.
 
 Preserve originals and source links; summaries must not replace them. No basic

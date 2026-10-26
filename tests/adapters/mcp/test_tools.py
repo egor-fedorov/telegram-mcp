@@ -31,6 +31,11 @@ EXPECTED_TOOLS = {
     "download_attachment",
     "get_changes",
     "export_history",
+    "create_watch",
+    "list_watches",
+    "get_watch_changes",
+    "ack_watch_changes",
+    "delete_watch",
 }
 
 
@@ -40,7 +45,8 @@ async def test_mcp_tool_schemas_and_real_dispatch(mode: str) -> None:
         [msg("1", 1)], folders=[Folder(id=1, title="Work", position=0, included_chat_ids=["1"])]
     )
     server = create_server(
-        Service(backend, Settings(allowed_folder_ids=[1], allow_public_channel_reads=True))
+        Service(backend, Settings(allowed_folder_ids=[1], allow_public_channel_reads=True)),
+        schema_mode="full",
     )
     async with Client(server, mode=mode) as client:
         listing = await client.list_tools()
@@ -48,7 +54,18 @@ async def test_mcp_tool_schemas_and_real_dispatch(mode: str) -> None:
         assert all(
             t.annotations
             and t.annotations.read_only_hint
-            == (t.name not in {"download_attachment", "get_changes", "export_history"})
+            == (
+                t.name
+                not in {
+                    "download_attachment",
+                    "get_changes",
+                    "export_history",
+                    "create_watch",
+                    "get_watch_changes",
+                    "ack_watch_changes",
+                    "delete_watch",
+                }
+            )
             for t in listing.tools
         )
         history_schema = next(t.input_schema for t in listing.tools if t.name == "get_history")
@@ -92,7 +109,9 @@ async def test_mcp_discovery_schemas_dispatch_and_failures(mode: str) -> None:
     ]
     backend.discovery_search_batch = DiscoveryBatch([channels[0], channels[0], channels[1]])
     backend.discovery_similar_batch = DiscoveryBatch(channels, telegram_total_count=50)
-    server = create_server(Service(backend, Settings(allow_public_channel_discovery=True)))
+    server = create_server(
+        Service(backend, Settings(allow_public_channel_discovery=True)), schema_mode="full"
+    )
     async with Client(server, mode=mode) as client:
         listing = await client.list_tools()
         tools = {tool.name: tool for tool in listing.tools}
@@ -171,7 +190,8 @@ async def test_mcp_discovery_schemas_dispatch_and_failures(mode: str) -> None:
 async def test_mcp_disabled_discovery_never_contacts_backend(mode: str) -> None:
     backend = FakeBackend()
     server = create_server(
-        Service(backend, Settings(allow_all_chats=True, allow_public_channel_reads=True))
+        Service(backend, Settings(allow_all_chats=True, allow_public_channel_reads=True)),
+        schema_mode="full",
     )
     async with Client(server, mode=mode) as client:
         for name, arguments in (
@@ -190,7 +210,7 @@ async def test_mcp_exposes_expected_retrieval_errors_and_redacts_unexpected_fail
     mode: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     backend = FakeBackend([msg("1", 1)])
-    server = create_server(Service(backend, Settings()))
+    server = create_server(Service(backend, Settings()), schema_mode="full")
     async with Client(server, mode=mode) as client:
         denied = await client.call_tool("get_history", {"chat_id": "1"})
         assert denied.is_error

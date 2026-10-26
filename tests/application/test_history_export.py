@@ -195,7 +195,7 @@ async def test_invalid_export_arguments(tmp_path, arguments):
 async def test_disk_failure_does_not_consume_input_checkpoint(tmp_path, monkeypatch):
     async with incremental_fixture(tmp_path) as env:
         start = await env.service.get_changes(chat_ref="1")
-        env.checkpoints.maximum = 2
+        env.checkpoints.maximum = 3
         await env.service.get_changes(chat_ref="1")
         env.backend.stored_messages.append(msg("1", 4))
         save = env.exports.save

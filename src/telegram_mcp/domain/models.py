@@ -181,6 +181,13 @@ class Attachment(Model):
     size: int | None = None
 
 
+class SavedFile(Model):
+    local_path: str
+    size: int = Field(ge=0)
+    sha256: str
+    saved_at: AwareDatetime
+
+
 class DownloadResult(Model):
     attachment_id: str
     message_ref: MessageRef
@@ -191,6 +198,7 @@ class DownloadResult(Model):
     local_path: str
     resource_uri: str
     expires_at: AwareDatetime
+    saved_file: SavedFile | None = None
 
 
 class ForwardOrigin(Model):

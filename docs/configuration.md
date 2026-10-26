@@ -32,7 +32,7 @@ user configuration path. These environment variables override their TOML fields:
 | `TELEGRAM_API_HASH` | `api_hash` |
 | `TELEGRAM_SESSION_PATH` | `session_path` |
 
-`session_path` and `http_token_path` expand `~` and become absolute paths. A session
+`session_path`, `http_token_path` and `archive_directory` expand `~` and become absolute paths. A session
 path without the `.session` suffix receives it automatically. Use absolute paths
 when clients may start in different working directories. In TOML, Windows paths can
 use literal strings, for example `session_path = 'C:\Users\you\private\account.session'`.
@@ -92,10 +92,42 @@ Windows ACLs. No new TOML setting is required.
 Checkpoint state contains canonical IDs, positions, dates and fingerprints, not message
 bodies. The authorization binding prevents reusing positions with a replacement login.
 Keep the client token to resume; deleting its local database loses those positions.
-Checkpoints expire after at most 30 days and may be evicted earlier at 4096 snapshots
-or 64 MiB of serialized state. Export files expire after 15 minutes or shutdown and
-have their own 100 MiB / 32-file quota. Both facilities use the existing RPC budget;
-they never run background Telegram polling. See [usage](usage.md#changes-and-exports-unreleased).
+Current checkpoint heads are protected from capacity eviction for 30 days; continuing
+an unchanged head renews its expiry. Superseded tokens may be evicted under the 4096
+snapshot / 64 MiB limit. If only protected positions remain, writes fail with
+`CHECKPOINT_STORAGE_FULL` and preserve the input. Independent branches retain separate
+heads. Expiration never silently creates a new baseline.
+
+Named subscriptions use a separate `watches/<session-path-hash>/watches.sqlite3` in the
+user-data directory. They store positions and one unacknowledged response per name,
+including its message text. They have no TTL or automatic eviction; the shared limit
+is 64 subscriptions / 64 MiB. A full store fails without discarding state. Names and
+positions belong to the authorization, not a client; use different names for independent
+consumers. See [monitoring usage](usage.md#monitor-a-folder-or-selected-sources-unreleased).
+
+Temporary exports expire after 15 minutes or shutdown, with a separate 100 MiB / 32-file
+quota. These tools use the existing read budgets and never run background Telegram polling.
+
+## Permanent copies and tool schemas (unreleased)
+
+```toml
+# Disabled unless a directory is configured AND the tool receives save=true.
+archive_directory = "/absolute/private/telegram-archive"
+mcp_schema_mode = "compact"
+```
+
+`save=true` on `download_attachment`, `export_history`, or file-output `get_changes`
+creates a private, uniquely named copy under `archive_directory`. No caller-supplied
+destination is accepted. The result's `saved_file` identifies its path, size, SHA-256
+and save time. Copies survive expiry and shutdown and are never automatically removed.
+The ordinary 20 MiB per-file limit remains; there is no total archive quota. Manage disk
+space and delete unwanted copies yourself. Configuring the directory does not enable
+downloads or expand source access. `get_status.archive_enabled` reports its availability.
+
+`mcp_schema_mode="compact"` omits optional output schemas from `tools/list`; `"full"`
+advertises them. Both preserve input schemas, typed server-side output validation,
+and identical response JSON. Restart the server and refresh client tools after changing
+this setting. `configure` preserves these TOML fields; it does not prompt for them.
 
 ## Transports and the shared session
 
@@ -124,8 +156,9 @@ authorization boundary. Stopping a proxy does not stop the server; restarting th
 server invalidates all cursors. All transports admit up to four tool/resource calls at
 once, with a FIFO queue of 16 additional calls and a 120-second queue wait. Queue
 overflow or timeout returns `SERVER_BUSY` with a five-second retry delay. Queued work
-does not run after cancellation. Download and checkpoint operations retain their own
-locks; admitting a call does not bypass those limits.
+does not run after cancellation. Downloads remain serialized. Named subscriptions
+serialize calls only for the same name; independent watches, checkpoints and exports
+can overlap within the common admission limit.
 
 Only one process can hold the Telegram session lease. Stop the shared HTTP server or
 standalone STDIO process before local `login`, `configure`, `catalog`, or `status`.

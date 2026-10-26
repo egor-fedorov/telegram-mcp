@@ -6,7 +6,7 @@ from typing import Annotated, Literal, Self
 
 from pydantic import AwareDatetime, Field, model_validator
 
-from telegram_mcp.domain.models import Issue, Message, MessageRef, Model
+from telegram_mcp.domain.models import Issue, Message, MessageRef, Model, SavedFile
 
 ExportFormat = Literal["jsonl", "markdown"]
 ChangeOutput = Literal["inline", "jsonl", "markdown"]
@@ -105,10 +105,12 @@ class ExportFile(Model):
     local_path: str
     resource_uri: str
     expires_at: AwareDatetime
+    saved_file: SavedFile | None = None
 
 
 class ChangesResult(Model):
     chat_id: str
+    baseline_created: bool = False
     changes: list[Change] = Field(default_factory=list)
     returned_count: int = Field(default=0, ge=0)
     omitted_count: int = Field(default=0, ge=0)

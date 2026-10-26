@@ -21,6 +21,11 @@ Keep the proxy and shared server on the same package version. When upgrading fro
 0.2, restart the server and refresh the client's tool schemas: the
 [0.3 response contract](migration-0.3.md) changes output JSON.
 
+The 0.4 source build adds downloads, exports and named subscriptions. If you keep an
+explicit `enabled_tools` list, add `download_attachment`, `get_changes`, `export_history`,
+`create_watch`, `list_watches`, `get_watch_changes`, `ack_watch_changes`, and `delete_watch`
+to use them. See the [0.4 migration guide](migration-0.4.md) before upgrading.
+
 ## Codex
 
 Merge this table into your existing `~/.codex/config.toml`, preserving other settings:
@@ -163,7 +168,43 @@ uvx --python 3.12 --from telegram-context-mcp==0.3.0 telegram-mcp serve
 
 The client now starts and owns a standalone STDIO server. Do not start another
 standalone server, the shared server, or local login/configuration commands against
-the same Telegram session. The two modes expose the same 14 tools and read policy.
+the same Telegram session. Both modes expose the same tools and source permissions.
+
+## Reading files and resources (unreleased)
+
+`download_attachment` and export tools return an exact `resource_uri` plus a resource
+link. A link does not transfer the file: the client must issue `resources/read` for
+that URI. This server intentionally keeps `resources/list` empty rather than listing
+private files. A client that only browses the resource catalog may therefore not offer
+the returned file in its picker.
+
+Official client documentation checked on 2026-10-26 establishes the following general
+capabilities. It does **not** establish successful binary delivery from this project:
+
+| Client | Documented resource support | Project verification |
+| --- | --- | --- |
+| Codex | The [App Server API](https://learn.chatgpt.com/docs/app-server) has `mcpServer/resource/read` for an exact URI. Availability in a particular host UI is separate. | Client UI not tested |
+| Claude Code | [MCP resources](https://code.claude.com/docs/en/mcp) can be referenced with `@server:protocol://resource/path`; automatic handling of returned file links is not established here. | Client UI not tested |
+| Cursor | The [MCP capability table](https://cursor.com/docs/mcp) lists resource support; exact-URI file-link handling needs a client check. | Client UI not tested |
+| VS Code | [MCP Resources](https://code.visualstudio.com/docs/agent-customization/mcp-servers) can be attached via Add Context or browsed using `MCP: Browse Resources`. Catalog-only discovery is insufficient for this server. | Client UI not tested |
+| Claude Desktop | The [local-server setup guide](https://support.claude.com/en/articles/10949351-getting-started-with-local-mcp-servers-on-claude-desktop) does not establish this exact-URI/binary workflow. | Resource delivery unverified |
+
+Offline integration tests use the Python MCP SDK and verify text and binary resources
+over STDIO, HTTP and `connect`, including the 20 MiB limit. They do not verify the apps
+above, their MIME support, or their file-size limits. Do not assume every listed client
+can attach a 20 MiB resource to a conversation.
+
+If resource reading is unavailable, configure `archive_directory` and request
+`save=true`. Open or attach `saved_file.local_path` using the client's local-file
+capabilities. That path belongs to the server's computer; container/remote clients
+need access to that same filesystem. Permanent copies survive shutdown, while the
+ordinary `local_path` and resource expire after 15 minutes or server shutdown.
+See [permanent copies](usage.md#keep-selected-files-unreleased).
+
+The source build defaults to `mcp_schema_mode="compact"`: input schemas stay visible,
+optional output schemas are omitted, and typed server-side validation stays enabled.
+Set `"full"` in the server configuration if your client needs advertised output schemas.
+Refresh the client's tools after restarting the server. Both modes return identical JSON.
 
 ## Executable paths and custom configuration
 

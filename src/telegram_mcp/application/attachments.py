@@ -7,6 +7,7 @@ from collections.abc import Awaitable, Callable
 from typing import cast
 
 from telegram_mcp.application.access import AccessFactory
+from telegram_mcp.application.archive_ports import ArchivePort
 from telegram_mcp.application.attachment_ports import (
     DOWNLOAD_TIMEOUT_SECONDS,
     MAX_ATTACHMENT_BYTES,
@@ -39,12 +40,14 @@ class AttachmentService:
         policies: PolicyProvider,
         store: DownloadStorePort,
         clock: Clock,
+        archive: ArchivePort,
     ):
         self.backend = backend
         self.access = access
         self.policies = policies
         self.store = store
         self.clock = clock
+        self.archive = archive
         self.retry = RetryState()
         self._lock = asyncio.Lock()
         self._closed = False
@@ -93,7 +96,10 @@ class AttachmentService:
         await context.allow_explicit(ref.chat_id)
         self._enabled()
 
-    async def download(self, attachment_id: str) -> DownloadResult:
+    async def download(self, attachment_id: str, save: bool = False) -> DownloadResult:
+        if save:
+            self.archive.require_enabled()
+
         async def operation() -> DownloadResult:
             ref, kind = parse_attachment_id(attachment_id)
             await self._authorize(ref)
@@ -102,11 +108,22 @@ class AttachmentService:
                 raise ToolError("ATTACHMENT_TOO_LARGE", "Attachments are limited to 20 MiB.")
             writer = await self.store.reserve(source)
             committed = False
+            delivered = False
+            resource_token = None
             try:
                 await self.backend.download_attachment(source, writer)
                 self._enabled()
                 stored = await self.store.commit(writer, source)
                 committed = True
+                resource_token = stored.result.resource_uri.removeprefix(RESOURCE_PREFIX)
+                if save:
+                    data = await self.store.read(
+                        stored.result.resource_uri.removeprefix(RESOURCE_PREFIX)
+                    )
+                    stored.result.saved_file = await self.archive.save(
+                        data, stored.result.name, stored.result.sha256
+                    )
+                delivered = True
                 return stored.result
             finally:
                 if not committed:
@@ -114,6 +131,8 @@ class AttachmentService:
                         await self.store.discard(writer)
                     except ToolError:
                         logger.warning("Partial download cleanup failed; cleanup will retry.")
+                elif not delivered and resource_token is not None:
+                    await self.store.discard_resource(resource_token)
 
         return await self._run(operation)
 

@@ -15,7 +15,9 @@ from tests.support.navigation import navigation_backend
 @pytest.mark.parametrize("mode", ["auto", "legacy"])
 async def test_navigation_mcp_schemas_dispatch_and_message_references(mode: str) -> None:
     backend = navigation_backend()
-    server = create_server(Service(backend, Settings(allowed_chat_ids=["-1001"])))
+    server = create_server(
+        Service(backend, Settings(allowed_chat_ids=["-1001"])), schema_mode="full"
+    )
     async with Client(server, mode=mode) as client:
         listing = await client.list_tools()
         tools = {tool.name: tool for tool in listing.tools}
@@ -75,7 +77,9 @@ async def test_navigation_mcp_schemas_dispatch_and_message_references(mode: str)
 @pytest.mark.parametrize("mode", ["auto", "legacy"])
 async def test_navigation_mcp_rejects_invalid_arguments_before_backend_calls(mode: str) -> None:
     backend = navigation_backend()
-    server = create_server(Service(backend, Settings(allowed_chat_ids=["-1001"])))
+    server = create_server(
+        Service(backend, Settings(allowed_chat_ids=["-1001"])), schema_mode="full"
+    )
     async with Client(server, mode=mode) as client:
         for name in ("list_topics", "get_pinned_messages"):
             for arguments in (
@@ -99,7 +103,8 @@ async def test_navigation_mcp_public_flags_do_not_grant_forum_access(mode: str) 
         Service(
             backend,
             Settings(allow_public_channel_reads=True, allow_public_channel_discovery=True),
-        )
+        ),
+        schema_mode="full",
     )
     async with Client(server, mode=mode) as client:
         for name in ("list_topics", "get_pinned_messages"):
@@ -115,7 +120,9 @@ async def test_navigation_mcp_public_flags_do_not_grant_forum_access(mode: str) 
 async def test_navigation_mcp_reports_unsupported_forum_after_access_check(mode: str) -> None:
     backend = navigation_backend()
     backend.chats[0].is_forum = False
-    server = create_server(Service(backend, Settings(allowed_chat_ids=["-1001"])))
+    server = create_server(
+        Service(backend, Settings(allowed_chat_ids=["-1001"])), schema_mode="full"
+    )
     async with Client(server, mode=mode) as client:
         result = await client.call_tool("list_topics", {"chat_ref": "-1001"})
         assert result.is_error
@@ -134,7 +141,8 @@ async def test_navigation_mcp_transient_fetch_failures_keep_cursor_and_delay(
     faults = backend.topic_faults if name == "list_topics" else backend.faults
     faults["-1001"] = fault
     server = create_server(
-        Service(backend, Settings(allowed_chat_ids=["-1001"]), clock=FakeClock())
+        Service(backend, Settings(allowed_chat_ids=["-1001"]), clock=FakeClock()),
+        schema_mode="full",
     )
     async with Client(server, mode=mode) as client:
         result = await client.call_tool(name, {"chat_ref": "-1001"})
@@ -171,7 +179,9 @@ async def test_navigation_mcp_short_topic_page_can_continue(mode: str) -> None:
         order_by_create_date=True,
         telegram_total_count=2,
     )
-    server = create_server(Service(backend, Settings(allowed_chat_ids=["-1001"])))
+    server = create_server(
+        Service(backend, Settings(allowed_chat_ids=["-1001"])), schema_mode="full"
+    )
     async with Client(server, mode=mode) as client:
         first = await client.call_tool("list_topics", {"chat_ref": "-1001", "limit": 30})
         assert not first.is_error and first.structured_content is not None

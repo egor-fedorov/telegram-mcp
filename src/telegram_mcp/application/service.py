@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Literal
 
 from telegram_mcp.application.access import AccessFactory
+from telegram_mcp.application.archive_ports import ArchivePort
 from telegram_mcp.application.attachment_ports import (
     DOWNLOAD_TTL_SECONDS,
     MAX_ATTACHMENT_BYTES,
@@ -33,6 +34,8 @@ from telegram_mcp.application.progressive_search import ProgressiveSearchPager
 from telegram_mcp.application.queries import QueryService
 from telegram_mcp.application.query_preparation import QueryPreparation
 from telegram_mcp.application.topics import TopicPager, TopicService
+from telegram_mcp.application.watch_ports import WatchStorePort
+from telegram_mcp.application.watches import WatchService
 from telegram_mcp.domain.changes import (
     ChangeOutput,
     ChangesResult,
@@ -52,6 +55,13 @@ from telegram_mcp.domain.models import (
     Page,
     TopicPage,
 )
+from telegram_mcp.domain.watches import (
+    WatchAcknowledgement,
+    WatchChangesResult,
+    WatchDeletion,
+    WatchInfo,
+    WatchList,
+)
 
 
 class Service:
@@ -65,17 +75,23 @@ class Service:
         downloads: DownloadStorePort,
         checkpoints: CheckpointStorePort,
         exports: ExportStorePort,
+        watches: WatchStorePort,
+        archive: ArchivePort,
     ):
         self._runtime: RuntimePort = backend
         self._policies = policy_provider
         self._limits = limits
+        self._archive = archive
         access = AccessFactory(backend, policy_provider)
         self._incremental = IncrementalContext(
-            backend, backend, access, checkpoints, exports, clock, limits
+            backend, backend, access, checkpoints, exports, clock, limits, archive
         )
         self._changes = ChangesService(self._incremental)
+        self._watches = WatchService(self._incremental, watches)
         self._history_export = HistoryExportService(self._incremental)
-        self._attachments = AttachmentService(backend, access, policy_provider, downloads, clock)
+        self._attachments = AttachmentService(
+            backend, access, policy_provider, downloads, clock, archive
+        )
         self._catalog = CatalogService(backend, access, cursors, clock)
         self._discovery = DiscoveryService(backend, policy_provider)
         preparation = QueryPreparation(backend, backend, access, cursors, clock)
@@ -97,7 +113,31 @@ class Service:
             try:
                 await self._incremental.close()
             finally:
-                await self._runtime.close()
+                try:
+                    self._watches.store.close()
+                finally:
+                    await self._runtime.close()
+
+    async def create_watch(
+        self,
+        name: str,
+        chat_refs: list[str] | None = None,
+        folder_ids: list[int] | None = None,
+        date_from: datetime | None = None,
+    ) -> WatchInfo:
+        return await self._watches.create(name, chat_refs, folder_ids, date_from)
+
+    async def list_watches(self) -> WatchList:
+        return await self._watches.list()
+
+    async def get_watch_changes(self, name: str, limit: int = 30) -> WatchChangesResult:
+        return await self._watches.changes(name, limit)
+
+    async def ack_watch_changes(self, name: str, batch_id: str) -> WatchAcknowledgement:
+        return await self._watches.acknowledge(name, batch_id)
+
+    async def delete_watch(self, name: str) -> WatchDeletion:
+        return await self._watches.delete(name)
 
     async def get_changes(
         self,
@@ -105,8 +145,9 @@ class Service:
         checkpoint: str | None = None,
         limit: int = 30,
         output: ChangeOutput = "inline",
+        save: bool = False,
     ) -> ChangesResult:
-        return await self._changes.get_changes(chat_ref, checkpoint, limit, output)
+        return await self._changes.get_changes(chat_ref, checkpoint, limit, output, save)
 
     async def export_history(
         self,
@@ -115,16 +156,17 @@ class Service:
         date_to: datetime | None = None,
         checkpoint: str | None = None,
         format: ExportFormat = "jsonl",
+        save: bool = False,
     ) -> ExportHistoryResult:
         return await self._history_export.export_history(
-            chat_ref, date_from, date_to, checkpoint, format
+            chat_ref, date_from, date_to, checkpoint, format, save
         )
 
     async def read_export_resource(self, uri: str) -> tuple[str, str]:
         return await self._incremental.read_resource(uri)
 
-    async def download_attachment(self, attachment_id: str) -> DownloadResult:
-        return await self._attachments.download(attachment_id)
+    async def download_attachment(self, attachment_id: str, save: bool = False) -> DownloadResult:
+        return await self._attachments.download(attachment_id, save)
 
     async def read_download_resource(self, uri: str) -> tuple[bytes, str]:
         return await self._attachments.read_resource(uri)
@@ -139,6 +181,7 @@ class Service:
             "allow_public_channel_reads": policy.allow_public_channel_reads,
             "allow_public_channel_discovery": policy.allow_public_channel_discovery,
             "allow_attachment_downloads": policy.allow_attachment_downloads,
+            "archive_enabled": self._archive.enabled,
             "attachment_max_bytes": MAX_ATTACHMENT_BYTES,
             "download_ttl_seconds": DOWNLOAD_TTL_SECONDS,
             "download_max_bytes": MAX_DOWNLOAD_BYTES,

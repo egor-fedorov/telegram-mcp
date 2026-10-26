@@ -97,7 +97,7 @@ async def test_two_http_clients_share_cursors_and_only_daemon_owns_shutdown(
                     streamable_http_client(endpoint(settings), http_client=http), mode=second_mode
                 ) as second:
                     one, two = await asyncio.gather(first.list_tools(), second.list_tools())
-                    assert len(one.tools) == 17 and one.tools == two.tools
+                    assert len(one.tools) == 22 and one.tools == two.tools
                     page = await first.call_tool("get_history", {"chat_id": "1", "limit": 1})
                     assert page.structured_content is not None
                     cursor = page.structured_content["next_cursor"]
@@ -162,7 +162,7 @@ async def test_two_stdio_bridge_subprocesses_keep_daemon_alive(tmp_path: Path) -
         async with Client(command, mode="legacy") as first:
             async with Client(command, mode="auto") as second:
                 results = await asyncio.gather(first.list_tools(), second.list_tools())
-                assert len(results[0].tools) == len(results[1].tools) == 17
+                assert len(results[0].tools) == len(results[1].tools) == 22
                 page = await first.call_tool("get_messages", {"refs": ["1:1"]})
                 assert not page.is_error
                 assert not (await second.call_tool("get_status", {})).is_error
@@ -252,7 +252,7 @@ async def test_http_overlapping_tools_do_not_block_tool_discovery(
             active = asyncio.create_task(first.call_tool("get_status", {}))
             await entered.wait()
             queued = asyncio.create_task(second.call_tool("get_status", {}))
-            assert len((await second.list_tools()).tools) == 17
+            assert len((await second.list_tools()).tools) == 22
             await asyncio.wait_for(both_entered.wait(), 5)
             assert calls == 2
             release.set()

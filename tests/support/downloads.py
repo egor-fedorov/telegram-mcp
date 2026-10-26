@@ -56,9 +56,16 @@ class AttachmentBackend(FakeBackend):
 @asynccontextmanager
 async def setup_downloads(
     tmp_path: Path,
+    *,
+    archive: bool = False,
 ) -> AsyncGenerator[tuple[Service, AttachmentBackend, Settings, DownloadStore, FakeClock]]:
     backend = AttachmentBackend()
-    settings = Settings(allow_attachment_downloads=True, allowed_chat_ids=["1"])
+    settings = Settings(
+        allow_attachment_downloads=True,
+        allowed_chat_ids=["1"],
+        session_path=tmp_path / "account.session",
+        archive_directory=tmp_path / "archive" if archive else None,
+    )
     clock = FakeClock()
     store = DownloadStore(tmp_path / "account.session", clock, root=tmp_path / "downloads")
     service = build_service(backend, settings, clock=clock, downloads=store)

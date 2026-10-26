@@ -1,546 +1,21 @@
 {
   "definitions": {
-    "Issue": {
-      "additionalProperties": false,
-      "properties": {
-        "code": {
-          "type": "string"
-        },
-        "message": {
-          "type": "string"
-        },
-        "chat_id": {
-          "pattern": "^-?[1-9]\\d*$",
-          "type": "string"
-        },
-        "message_ref": {
-          "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
-          "type": "string"
-        },
-        "retry_after_seconds": {
-          "type": "integer"
-        },
-        "input_index": {
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "code",
-        "message"
-      ],
-      "type": "object"
-    },
-    "PublicChannel": {
-      "additionalProperties": false,
-      "properties": {
-        "id": {
-          "pattern": "^-?[1-9]\\d*$",
-          "type": "string"
-        },
-        "title": {
-          "type": "string"
-        },
-        "username": {
-          "type": "string"
-        },
-        "url": {
-          "type": "string"
-        },
-        "participants_count": {
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "id",
-        "title",
-        "username",
-        "url"
-      ],
-      "type": "object"
-    },
-    "Folder": {
-      "additionalProperties": false,
-      "properties": {
-        "id": {
-          "type": "integer"
-        },
-        "title": {
-          "type": "string"
-        },
-        "position": {
-          "type": "integer"
-        },
-        "included_chat_ids": {
-          "items": {
-            "pattern": "^-?[1-9]\\d*$",
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "pinned_chat_ids": {
-          "items": {
-            "pattern": "^-?[1-9]\\d*$",
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "excluded_chat_ids": {
-          "items": {
-            "pattern": "^-?[1-9]\\d*$",
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "include_contacts": {
-          "type": "boolean"
-        },
-        "include_non_contacts": {
-          "type": "boolean"
-        },
-        "include_bots": {
-          "type": "boolean"
-        },
-        "include_groups": {
-          "type": "boolean"
-        },
-        "include_channels": {
-          "type": "boolean"
-        },
-        "exclude_muted": {
-          "type": "boolean"
-        },
-        "exclude_read": {
-          "type": "boolean"
-        },
-        "exclude_archived": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "id",
-        "title",
-        "position",
-        "included_chat_ids",
-        "pinned_chat_ids",
-        "excluded_chat_ids",
-        "include_contacts",
-        "include_non_contacts",
-        "include_bots",
-        "include_groups",
-        "include_channels",
-        "exclude_muted",
-        "exclude_read",
-        "exclude_archived"
-      ],
-      "type": "object"
-    },
-    "Chat": {
-      "additionalProperties": false,
-      "properties": {
-        "title": {
-          "type": "string"
-        },
-        "type": {
-          "enum": [
-            "private",
-            "group",
-            "channel",
-            "bot",
-            "saved"
-          ],
-          "type": "string"
-        },
-        "username": {
-          "type": "string"
-        },
-        "is_contact": {
-          "type": "boolean"
-        },
-        "is_muted": {
-          "type": "boolean"
-        },
-        "is_archived": {
-          "type": "boolean"
-        },
-        "is_supergroup": {
-          "type": "boolean"
-        },
-        "is_forum": {
-          "type": "boolean"
-        },
-        "is_community": {
-          "type": "boolean"
-        },
-        "unread_count": {
-          "type": "integer"
-        },
-        "unread_mentions_count": {
-          "type": "integer"
-        },
-        "marked_unread": {
-          "type": "boolean"
-        },
-        "matched_folder_ids": {
-          "items": {
-            "type": "integer"
-          },
-          "type": "array"
-        },
-        "pinned_in_folder_ids": {
-          "items": {
-            "type": "integer"
-          },
-          "type": "array"
-        },
-        "id": {
-          "pattern": "^-?[1-9]\\d*$",
-          "type": "string"
-        }
-      },
-      "required": [
-        "title",
-        "type",
-        "is_contact",
-        "is_muted",
-        "is_archived",
-        "is_supergroup",
-        "is_forum",
-        "is_community",
-        "unread_count",
-        "unread_mentions_count",
-        "marked_unread",
-        "matched_folder_ids",
-        "pinned_in_folder_ids",
-        "id"
-      ],
-      "type": "object"
-    },
-    "Scope": {
-      "additionalProperties": false,
-      "properties": {
-        "folder_ids": {
-          "items": {
-            "type": "integer"
-          },
-          "type": "array"
-        },
-        "chat_ids": {
-          "items": {
-            "pattern": "^-?[1-9]\\d*$",
-            "type": "string"
-          },
-          "type": "array",
-          "maxItems": 20
-        },
-        "resolved_at": {
-          "format": "date-time",
-          "type": "string"
-        },
-        "pending_chat_ids": {
-          "items": {
-            "pattern": "^-?[1-9]\\d*$",
-            "type": "string"
-          },
-          "type": "array",
-          "maxItems": 20
-        },
-        "complete": {
-          "type": "boolean"
-        },
-        "chat_count": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "chat_ids_truncated": {
-          "type": "boolean"
-        },
-        "pending_chat_count": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "pending_chat_ids_truncated": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "folder_ids",
-        "chat_ids",
-        "chat_count",
-        "chat_ids_truncated",
-        "resolved_at",
-        "pending_chat_ids",
-        "pending_chat_count",
-        "pending_chat_ids_truncated",
-        "complete"
-      ],
-      "type": "object"
-    },
-    "ForumTopic": {
-      "additionalProperties": false,
-      "properties": {
-        "id": {
-          "exclusiveMinimum": 0,
-          "type": "integer"
-        },
-        "chat_id": {
-          "pattern": "^-?[1-9]\\d*$",
-          "type": "string"
-        },
-        "title": {
-          "type": "string"
-        },
-        "created_at": {
-          "format": "date-time",
-          "type": "string"
-        },
-        "is_general": {
-          "type": "boolean"
-        },
-        "is_closed": {
-          "type": "boolean"
-        },
-        "is_hidden": {
-          "type": "boolean"
-        },
-        "is_pinned": {
-          "type": "boolean"
-        },
-        "is_deleted": {
-          "type": "boolean"
-        },
-        "is_short": {
-          "type": "boolean"
-        },
-        "unread_count": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "icon_color": {
-          "type": "integer"
-        },
-        "icon_emoji_id": {
-          "type": "string"
-        },
-        "root_message_ref": {
-          "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
-          "type": "string"
-        },
-        "top_message_ref": {
-          "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
-          "type": "string"
-        },
-        "url": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "id",
-        "chat_id",
-        "is_general",
-        "is_deleted",
-        "is_short"
-      ],
-      "type": "object"
-    },
     "Attachment": {
       "additionalProperties": false,
       "properties": {
         "id": {
           "type": "string"
         },
-        "type": {
-          "enum": [
-            "text",
-            "photo",
-            "video",
-            "voice",
-            "audio",
-            "document",
-            "other"
-          ],
+        "mime_type": {
           "type": "string"
         },
         "name": {
-          "type": "string"
-        },
-        "mime_type": {
           "type": "string"
         },
         "size": {
           "type": "integer"
-        }
-      },
-      "required": [
-        "id",
-        "type"
-      ],
-      "type": "object"
-    },
-    "ChatSummary": {
-      "additionalProperties": false,
-      "properties": {
-        "title": {
-          "type": "string"
         },
         "type": {
-          "enum": [
-            "private",
-            "group",
-            "channel",
-            "bot",
-            "saved"
-          ],
-          "type": "string"
-        },
-        "username": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "title",
-        "type"
-      ],
-      "type": "object"
-    },
-    "Entity": {
-      "additionalProperties": false,
-      "properties": {
-        "type": {
-          "type": "string"
-        },
-        "offset": {
-          "type": "integer"
-        },
-        "length": {
-          "type": "integer"
-        },
-        "url": {
-          "type": "string"
-        },
-        "language": {
-          "type": "string"
-        },
-        "user_id": {
-          "type": "string"
-        },
-        "document_id": {
-          "type": "string"
-        },
-        "collapsed": {
-          "type": "boolean"
-        },
-        "date": {
-          "format": "date-time",
-          "type": "string"
-        },
-        "relative": {
-          "type": "boolean"
-        },
-        "short_time": {
-          "type": "boolean"
-        },
-        "long_time": {
-          "type": "boolean"
-        },
-        "short_date": {
-          "type": "boolean"
-        },
-        "long_date": {
-          "type": "boolean"
-        },
-        "day_of_week": {
-          "type": "boolean"
-        },
-        "old_text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "type",
-        "offset",
-        "length"
-      ],
-      "type": "object"
-    },
-    "FormattedText": {
-      "additionalProperties": false,
-      "properties": {
-        "text": {
-          "type": "string"
-        },
-        "entities": {
-          "items": {
-            "$ref": "#/$defs/Entity"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "type": "object"
-    },
-    "ForwardOrigin": {
-      "additionalProperties": false,
-      "properties": {
-        "sender_id": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "message_ref": {
-          "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
-          "type": "string"
-        },
-        "sent_at": {
-          "format": "date-time",
-          "type": "string"
-        },
-        "post_author": {
-          "type": "string"
-        },
-        "saved_from_ref": {
-          "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
-          "type": "string"
-        },
-        "saved_from_sender_id": {
-          "type": "string"
-        },
-        "saved_from_name": {
-          "type": "string"
-        },
-        "saved_at": {
-          "format": "date-time",
-          "type": "string"
-        }
-      },
-      "type": "object"
-    },
-    "Message": {
-      "additionalProperties": false,
-      "properties": {
-        "message_ref": {
-          "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
-          "type": "string"
-        },
-        "sender": {
-          "$ref": "#/$defs/Sender"
-        },
-        "sent_at": {
-          "format": "date-time",
-          "type": "string"
-        },
-        "edited_at": {
-          "format": "date-time",
-          "type": "string"
-        },
-        "text": {
-          "type": "string"
-        },
-        "content_type": {
           "enum": [
             "text",
             "photo",
@@ -551,404 +26,12 @@
             "other"
           ],
           "type": "string"
-        },
-        "has_link": {
-          "type": "boolean"
-        },
-        "web_page": {
-          "$ref": "#/$defs/WebPage"
-        },
-        "entities": {
-          "items": {
-            "$ref": "#/$defs/Entity"
-          },
-          "type": "array"
-        },
-        "reply_to": {
-          "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
-          "type": "string"
-        },
-        "thread_ref": {
-          "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
-          "type": "string"
-        },
-        "topic_id": {
-          "exclusiveMinimum": 0,
-          "maximum": 2147483647,
-          "type": "integer"
-        },
-        "forward_origin": {
-          "$ref": "#/$defs/ForwardOrigin"
-        },
-        "attachments": {
-          "items": {
-            "$ref": "#/$defs/Attachment"
-          },
-          "type": "array"
-        },
-        "album_id": {
-          "type": "string"
-        },
-        "view_count": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "forward_count": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "reply_count": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "reactions": {
-          "$ref": "#/$defs/ReactionSummary"
-        },
-        "poll": {
-          "$ref": "#/$defs/PollData"
-        },
-        "url": {
-          "type": "string"
-        },
-        "text_offset": {
-          "type": "integer"
-        },
-        "text_total_length": {
-          "type": "integer"
-        },
-        "next_text_offset": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "required": [
-        "message_ref",
-        "sent_at",
-        "text",
-        "content_type",
-        "has_link",
-        "text_offset",
-        "text_total_length",
-        "next_text_offset"
-      ],
-      "type": "object"
-    },
-    "PollAnswerResult": {
-      "additionalProperties": false,
-      "properties": {
-        "option_id": {
-          "type": "string"
-        },
-        "voter_count": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "is_chosen": {
-          "type": "boolean"
-        },
-        "is_correct": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "option_id"
-      ],
-      "type": "object"
-    },
-    "PollData": {
-      "additionalProperties": false,
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "question": {
-          "$ref": "#/$defs/FormattedText"
-        },
-        "answers": {
-          "items": {
-            "$ref": "#/$defs/PollOption"
-          },
-          "type": "array"
-        },
-        "is_closed": {
-          "type": "boolean"
-        },
-        "is_quiz": {
-          "type": "boolean"
-        },
-        "public_voters": {
-          "type": "boolean"
-        },
-        "multiple_choice": {
-          "type": "boolean"
-        },
-        "allows_new_answers": {
-          "type": "boolean"
-        },
-        "revoting_disabled": {
-          "type": "boolean"
-        },
-        "shuffle_answers": {
-          "type": "boolean"
-        },
-        "hide_results_until_close": {
-          "type": "boolean"
-        },
-        "close_period_seconds": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "closes_at": {
-          "format": "date-time",
-          "type": "string"
-        },
-        "results": {
-          "$ref": "#/$defs/PollResults"
         }
       },
       "required": [
         "id",
-        "question",
-        "answers",
-        "is_closed",
-        "is_quiz",
-        "public_voters",
-        "multiple_choice",
-        "allows_new_answers",
-        "revoting_disabled",
-        "shuffle_answers",
-        "hide_results_until_close"
-      ],
-      "type": "object"
-    },
-    "PollOption": {
-      "additionalProperties": false,
-      "properties": {
-        "option_id": {
-          "type": "string"
-        },
-        "text": {
-          "$ref": "#/$defs/FormattedText"
-        }
-      },
-      "required": [
-        "option_id",
-        "text"
-      ],
-      "type": "object"
-    },
-    "PollResults": {
-      "additionalProperties": false,
-      "properties": {
-        "is_min": {
-          "type": "boolean"
-        },
-        "total_voters": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "answers": {
-          "items": {
-            "$ref": "#/$defs/PollAnswerResult"
-          },
-          "type": "array"
-        },
-        "solution": {
-          "$ref": "#/$defs/FormattedText"
-        }
-      },
-      "required": [
-        "is_min"
-      ],
-      "type": "object"
-    },
-    "ReactionCount": {
-      "additionalProperties": false,
-      "properties": {
-        "type": {
-          "enum": [
-            "emoji",
-            "custom_emoji",
-            "paid",
-            "empty",
-            "unknown"
-          ],
-          "type": "string"
-        },
-        "emoji": {
-          "type": "string"
-        },
-        "document_id": {
-          "type": "string"
-        },
-        "count": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "is_chosen": {
-          "type": "boolean"
-        },
-        "chosen_order": {
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "type",
-        "count"
-      ],
-      "type": "object"
-    },
-    "ReactionSummary": {
-      "additionalProperties": false,
-      "properties": {
-        "is_min": {
-          "type": "boolean"
-        },
-        "reactions_as_tags": {
-          "type": "boolean"
-        },
-        "results": {
-          "items": {
-            "$ref": "#/$defs/ReactionCount"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "is_min",
-        "reactions_as_tags",
-        "results"
-      ],
-      "type": "object"
-    },
-    "SearchProgress": {
-      "additionalProperties": false,
-      "properties": {
-        "sources_total": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "sources_ready": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "sources_exhausted": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "rpc_pages_this_call": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "sources_started": {
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "sources_total",
-        "sources_started",
-        "sources_ready",
-        "sources_exhausted",
-        "rpc_pages_this_call"
-      ],
-      "type": "object"
-    },
-    "Sender": {
-      "additionalProperties": false,
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "type": {
-          "enum": [
-            "user",
-            "chat",
-            "unknown"
-          ],
-          "type": "string"
-        }
-      },
-      "required": [
         "type"
       ],
-      "type": "object"
-    },
-    "WebPage": {
-      "additionalProperties": false,
-      "properties": {
-        "status": {
-          "enum": [
-            "available",
-            "pending",
-            "empty",
-            "not_modified"
-          ],
-          "type": "string"
-        },
-        "id": {
-          "type": "string"
-        },
-        "url": {
-          "type": "string"
-        },
-        "display_url": {
-          "type": "string"
-        },
-        "type": {
-          "type": "string"
-        },
-        "site_name": {
-          "type": "string"
-        },
-        "title": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        },
-        "author": {
-          "type": "string"
-        },
-        "pending_until": {
-          "format": "date-time",
-          "type": "string"
-        }
-      },
-      "required": [
-        "status"
-      ],
-      "type": "object"
-    },
-    "MessageRef": {
-      "additionalProperties": false,
-      "properties": {
-        "chat_id": {
-          "pattern": "^-?[1-9]\\d*$",
-          "title": "Chat Id",
-          "type": "string"
-        },
-        "message_id": {
-          "exclusiveMinimum": 0,
-          "title": "Message Id",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "chat_id",
-        "message_id"
-      ],
-      "title": "MessageRef",
       "type": "object"
     },
     "Change": {
@@ -985,6 +68,173 @@
       ],
       "type": "object"
     },
+    "Chat": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^-?[1-9]\\d*$",
+          "type": "string"
+        },
+        "is_archived": {
+          "type": "boolean"
+        },
+        "is_community": {
+          "type": "boolean"
+        },
+        "is_contact": {
+          "type": "boolean"
+        },
+        "is_forum": {
+          "type": "boolean"
+        },
+        "is_muted": {
+          "type": "boolean"
+        },
+        "is_supergroup": {
+          "type": "boolean"
+        },
+        "marked_unread": {
+          "type": "boolean"
+        },
+        "matched_folder_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "pinned_in_folder_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "private",
+            "group",
+            "channel",
+            "bot",
+            "saved"
+          ],
+          "type": "string"
+        },
+        "unread_count": {
+          "type": "integer"
+        },
+        "unread_mentions_count": {
+          "type": "integer"
+        },
+        "username": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "type",
+        "is_contact",
+        "is_muted",
+        "is_archived",
+        "is_supergroup",
+        "is_forum",
+        "is_community",
+        "unread_count",
+        "unread_mentions_count",
+        "marked_unread",
+        "matched_folder_ids",
+        "pinned_in_folder_ids",
+        "id"
+      ],
+      "type": "object"
+    },
+    "ChatSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "private",
+            "group",
+            "channel",
+            "bot",
+            "saved"
+          ],
+          "type": "string"
+        },
+        "username": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "type"
+      ],
+      "type": "object"
+    },
+    "Entity": {
+      "additionalProperties": false,
+      "properties": {
+        "collapsed": {
+          "type": "boolean"
+        },
+        "date": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "day_of_week": {
+          "type": "boolean"
+        },
+        "document_id": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string"
+        },
+        "length": {
+          "type": "integer"
+        },
+        "long_date": {
+          "type": "boolean"
+        },
+        "long_time": {
+          "type": "boolean"
+        },
+        "offset": {
+          "type": "integer"
+        },
+        "old_text": {
+          "type": "string"
+        },
+        "relative": {
+          "type": "boolean"
+        },
+        "short_date": {
+          "type": "boolean"
+        },
+        "short_time": {
+          "type": "boolean"
+        },
+        "type": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "user_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "offset",
+        "length"
+      ],
+      "type": "object"
+    },
     "ExportFile": {
       "additionalProperties": false,
       "properties": {
@@ -1011,6 +261,9 @@
         "resource_uri": {
           "type": "string"
         },
+        "saved_file": {
+          "$ref": "#/$defs/SavedFile"
+        },
         "sha256": {
           "type": "string"
         },
@@ -1030,23 +283,1103 @@
         "expires_at"
       ],
       "type": "object"
+    },
+    "Folder": {
+      "additionalProperties": false,
+      "properties": {
+        "exclude_archived": {
+          "type": "boolean"
+        },
+        "exclude_muted": {
+          "type": "boolean"
+        },
+        "exclude_read": {
+          "type": "boolean"
+        },
+        "excluded_chat_ids": {
+          "items": {
+            "pattern": "^-?[1-9]\\d*$",
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "id": {
+          "type": "integer"
+        },
+        "include_bots": {
+          "type": "boolean"
+        },
+        "include_channels": {
+          "type": "boolean"
+        },
+        "include_contacts": {
+          "type": "boolean"
+        },
+        "include_groups": {
+          "type": "boolean"
+        },
+        "include_non_contacts": {
+          "type": "boolean"
+        },
+        "included_chat_ids": {
+          "items": {
+            "pattern": "^-?[1-9]\\d*$",
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pinned_chat_ids": {
+          "items": {
+            "pattern": "^-?[1-9]\\d*$",
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "position": {
+          "type": "integer"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "position",
+        "included_chat_ids",
+        "pinned_chat_ids",
+        "excluded_chat_ids",
+        "include_contacts",
+        "include_non_contacts",
+        "include_bots",
+        "include_groups",
+        "include_channels",
+        "exclude_muted",
+        "exclude_read",
+        "exclude_archived"
+      ],
+      "type": "object"
+    },
+    "FormattedText": {
+      "additionalProperties": false,
+      "properties": {
+        "entities": {
+          "items": {
+            "$ref": "#/$defs/Entity"
+          },
+          "type": "array"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "type": "object"
+    },
+    "ForumTopic": {
+      "additionalProperties": false,
+      "properties": {
+        "chat_id": {
+          "pattern": "^-?[1-9]\\d*$",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "icon_color": {
+          "type": "integer"
+        },
+        "icon_emoji_id": {
+          "type": "string"
+        },
+        "id": {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "is_closed": {
+          "type": "boolean"
+        },
+        "is_deleted": {
+          "type": "boolean"
+        },
+        "is_general": {
+          "type": "boolean"
+        },
+        "is_hidden": {
+          "type": "boolean"
+        },
+        "is_pinned": {
+          "type": "boolean"
+        },
+        "is_short": {
+          "type": "boolean"
+        },
+        "root_message_ref": {
+          "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "top_message_ref": {
+          "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
+          "type": "string"
+        },
+        "unread_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "chat_id",
+        "is_general",
+        "is_deleted",
+        "is_short"
+      ],
+      "type": "object"
+    },
+    "ForwardOrigin": {
+      "additionalProperties": false,
+      "properties": {
+        "message_ref": {
+          "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "post_author": {
+          "type": "string"
+        },
+        "saved_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "saved_from_name": {
+          "type": "string"
+        },
+        "saved_from_ref": {
+          "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
+          "type": "string"
+        },
+        "saved_from_sender_id": {
+          "type": "string"
+        },
+        "sender_id": {
+          "type": "string"
+        },
+        "sent_at": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "Issue": {
+      "additionalProperties": false,
+      "properties": {
+        "chat_id": {
+          "pattern": "^-?[1-9]\\d*$",
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "input_index": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "message": {
+          "type": "string"
+        },
+        "message_ref": {
+          "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
+          "type": "string"
+        },
+        "retry_after_seconds": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "type": "object"
+    },
+    "Message": {
+      "additionalProperties": false,
+      "properties": {
+        "album_id": {
+          "type": "string"
+        },
+        "attachments": {
+          "items": {
+            "$ref": "#/$defs/Attachment"
+          },
+          "type": "array"
+        },
+        "content_type": {
+          "enum": [
+            "text",
+            "photo",
+            "video",
+            "voice",
+            "audio",
+            "document",
+            "other"
+          ],
+          "type": "string"
+        },
+        "edited_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "entities": {
+          "items": {
+            "$ref": "#/$defs/Entity"
+          },
+          "type": "array"
+        },
+        "forward_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "forward_origin": {
+          "$ref": "#/$defs/ForwardOrigin"
+        },
+        "has_link": {
+          "type": "boolean"
+        },
+        "message_ref": {
+          "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
+          "type": "string"
+        },
+        "next_text_offset": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "poll": {
+          "$ref": "#/$defs/PollData"
+        },
+        "reactions": {
+          "$ref": "#/$defs/ReactionSummary"
+        },
+        "reply_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "reply_to": {
+          "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
+          "type": "string"
+        },
+        "sender": {
+          "$ref": "#/$defs/Sender"
+        },
+        "sent_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "text_offset": {
+          "type": "integer"
+        },
+        "text_total_length": {
+          "type": "integer"
+        },
+        "thread_ref": {
+          "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
+          "type": "string"
+        },
+        "topic_id": {
+          "exclusiveMinimum": 0,
+          "maximum": 2147483647,
+          "type": "integer"
+        },
+        "url": {
+          "type": "string"
+        },
+        "view_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "web_page": {
+          "$ref": "#/$defs/WebPage"
+        }
+      },
+      "required": [
+        "message_ref",
+        "sent_at",
+        "text",
+        "content_type",
+        "has_link",
+        "text_offset",
+        "text_total_length",
+        "next_text_offset"
+      ],
+      "type": "object"
+    },
+    "MessageRef": {
+      "additionalProperties": false,
+      "properties": {
+        "chat_id": {
+          "pattern": "^-?[1-9]\\d*$",
+          "title": "Chat Id",
+          "type": "string"
+        },
+        "message_id": {
+          "exclusiveMinimum": 0,
+          "title": "Message Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "chat_id",
+        "message_id"
+      ],
+      "title": "MessageRef",
+      "type": "object"
+    },
+    "PollAnswerResult": {
+      "additionalProperties": false,
+      "properties": {
+        "is_chosen": {
+          "type": "boolean"
+        },
+        "is_correct": {
+          "type": "boolean"
+        },
+        "option_id": {
+          "type": "string"
+        },
+        "voter_count": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "option_id"
+      ],
+      "type": "object"
+    },
+    "PollData": {
+      "additionalProperties": false,
+      "properties": {
+        "allows_new_answers": {
+          "type": "boolean"
+        },
+        "answers": {
+          "items": {
+            "$ref": "#/$defs/PollOption"
+          },
+          "type": "array"
+        },
+        "close_period_seconds": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "closes_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "hide_results_until_close": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "is_closed": {
+          "type": "boolean"
+        },
+        "is_quiz": {
+          "type": "boolean"
+        },
+        "multiple_choice": {
+          "type": "boolean"
+        },
+        "public_voters": {
+          "type": "boolean"
+        },
+        "question": {
+          "$ref": "#/$defs/FormattedText"
+        },
+        "results": {
+          "$ref": "#/$defs/PollResults"
+        },
+        "revoting_disabled": {
+          "type": "boolean"
+        },
+        "shuffle_answers": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "question",
+        "answers",
+        "is_closed",
+        "is_quiz",
+        "public_voters",
+        "multiple_choice",
+        "allows_new_answers",
+        "revoting_disabled",
+        "shuffle_answers",
+        "hide_results_until_close"
+      ],
+      "type": "object"
+    },
+    "PollOption": {
+      "additionalProperties": false,
+      "properties": {
+        "option_id": {
+          "type": "string"
+        },
+        "text": {
+          "$ref": "#/$defs/FormattedText"
+        }
+      },
+      "required": [
+        "option_id",
+        "text"
+      ],
+      "type": "object"
+    },
+    "PollResults": {
+      "additionalProperties": false,
+      "properties": {
+        "answers": {
+          "items": {
+            "$ref": "#/$defs/PollAnswerResult"
+          },
+          "type": "array"
+        },
+        "is_min": {
+          "type": "boolean"
+        },
+        "solution": {
+          "$ref": "#/$defs/FormattedText"
+        },
+        "total_voters": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "is_min"
+      ],
+      "type": "object"
+    },
+    "PublicChannel": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^-?[1-9]\\d*$",
+          "type": "string"
+        },
+        "participants_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "title": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "username": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "username",
+        "url"
+      ],
+      "type": "object"
+    },
+    "ReactionCount": {
+      "additionalProperties": false,
+      "properties": {
+        "chosen_order": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "document_id": {
+          "type": "string"
+        },
+        "emoji": {
+          "type": "string"
+        },
+        "is_chosen": {
+          "type": "boolean"
+        },
+        "type": {
+          "enum": [
+            "emoji",
+            "custom_emoji",
+            "paid",
+            "empty",
+            "unknown"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "count"
+      ],
+      "type": "object"
+    },
+    "ReactionSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "is_min": {
+          "type": "boolean"
+        },
+        "reactions_as_tags": {
+          "type": "boolean"
+        },
+        "results": {
+          "items": {
+            "$ref": "#/$defs/ReactionCount"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "is_min",
+        "reactions_as_tags",
+        "results"
+      ],
+      "type": "object"
+    },
+    "SavedFile": {
+      "additionalProperties": false,
+      "properties": {
+        "local_path": {
+          "type": "string"
+        },
+        "saved_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "size": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "local_path",
+        "size",
+        "sha256",
+        "saved_at"
+      ],
+      "type": "object"
+    },
+    "Scope": {
+      "additionalProperties": false,
+      "properties": {
+        "chat_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "chat_ids": {
+          "items": {
+            "pattern": "^-?[1-9]\\d*$",
+            "type": "string"
+          },
+          "maxItems": 20,
+          "type": "array"
+        },
+        "chat_ids_truncated": {
+          "type": "boolean"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "folder_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "pending_chat_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pending_chat_ids": {
+          "items": {
+            "pattern": "^-?[1-9]\\d*$",
+            "type": "string"
+          },
+          "maxItems": 20,
+          "type": "array"
+        },
+        "pending_chat_ids_truncated": {
+          "type": "boolean"
+        },
+        "resolved_at": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "folder_ids",
+        "chat_ids",
+        "chat_count",
+        "chat_ids_truncated",
+        "resolved_at",
+        "pending_chat_ids",
+        "pending_chat_count",
+        "pending_chat_ids_truncated",
+        "complete"
+      ],
+      "type": "object"
+    },
+    "SearchProgress": {
+      "additionalProperties": false,
+      "properties": {
+        "rpc_pages_this_call": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sources_exhausted": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sources_ready": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sources_started": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sources_total": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sources_total",
+        "sources_started",
+        "sources_ready",
+        "sources_exhausted",
+        "rpc_pages_this_call"
+      ],
+      "type": "object"
+    },
+    "Sender": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "user",
+            "chat",
+            "unknown"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    },
+    "WatchInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "completed_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "folder_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "issue_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "pending_batch_id": {
+          "type": "string"
+        },
+        "pending_change_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "selector": {
+          "enum": [
+            "chats",
+            "folders"
+          ],
+          "type": "string"
+        },
+        "source_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "started_at": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "selector",
+        "started_at",
+        "source_count",
+        "folder_ids",
+        "pending_change_count",
+        "issue_count"
+      ],
+      "type": "object"
+    },
+    "WatchProgress": {
+      "additionalProperties": false,
+      "properties": {
+        "pending_source_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rpc_pages_this_call": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sources_this_call": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source_count",
+        "pending_source_count",
+        "sources_this_call",
+        "rpc_pages_this_call"
+      ],
+      "type": "object"
+    },
+    "WebPage": {
+      "additionalProperties": false,
+      "properties": {
+        "author": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "display_url": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "pending_until": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "site_name": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "available",
+            "pending",
+            "empty",
+            "not_modified"
+          ],
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "type": "object"
     }
   },
   "tools": {
-    "download_attachment": {
+    "ack_watch_changes": {
+      "annotations": {
+        "destructive_hint": false,
+        "idempotent_hint": false,
+        "open_world_hint": true,
+        "read_only_hint": false,
+        "title": null
+      },
       "input": {
-        "type": "object",
+        "properties": {
+          "batch_id": {
+            "title": "Batch Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "batch_id"
+        ],
+        "title": "ack_watch_changesArguments",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "acknowledged": {
+            "const": true,
+            "type": "boolean"
+          },
+          "batch_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "batch_id",
+          "acknowledged"
+        ],
+        "type": "object"
+      }
+    },
+    "create_watch": {
+      "annotations": {
+        "destructive_hint": false,
+        "idempotent_hint": false,
+        "open_world_hint": true,
+        "read_only_hint": false,
+        "title": null
+      },
+      "input": {
+        "properties": {
+          "chat_refs": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 1000,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Chat Refs"
+          },
+          "date_from": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Date From"
+          },
+          "folder_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 100,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Folder Ids"
+          },
+          "name": {
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "create_watchArguments",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "completed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "folder_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "issue_count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pending_batch_id": {
+            "type": "string"
+          },
+          "pending_change_count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "selector": {
+            "enum": [
+              "chats",
+              "folders"
+            ],
+            "type": "string"
+          },
+          "source_count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "started_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "selector",
+          "started_at",
+          "source_count",
+          "folder_ids",
+          "pending_change_count",
+          "issue_count"
+        ],
+        "type": "object"
+      }
+    },
+    "delete_watch": {
+      "annotations": {
+        "destructive_hint": true,
+        "idempotent_hint": true,
+        "open_world_hint": true,
+        "read_only_hint": false,
+        "title": null
+      },
+      "input": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "delete_watchArguments",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "deleted"
+        ],
+        "type": "object"
+      }
+    },
+    "download_attachment": {
+      "annotations": {
+        "destructive_hint": false,
+        "idempotent_hint": false,
+        "open_world_hint": true,
+        "read_only_hint": false,
+        "title": null
+      },
+      "input": {
         "properties": {
           "attachment_id": {
             "minLength": 1,
             "title": "Attachment Id",
             "type": "string"
+          },
+          "save": {
+            "default": false,
+            "title": "Save",
+            "type": "boolean"
           }
         },
         "required": [
           "attachment_id"
         ],
-        "title": "download_attachmentArguments"
+        "title": "download_attachmentArguments",
+        "type": "object"
       },
       "output": {
         "additionalProperties": false,
@@ -1054,32 +1387,35 @@
           "attachment_id": {
             "type": "string"
           },
-          "message_ref": {
-            "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "mime_type": {
-            "type": "string"
-          },
-          "size": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "sha256": {
+          "expires_at": {
+            "format": "date-time",
             "type": "string"
           },
           "local_path": {
             "type": "string"
           },
+          "message_ref": {
+            "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
+            "type": "string"
+          },
+          "mime_type": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
           "resource_uri": {
             "type": "string"
           },
-          "expires_at": {
-            "format": "date-time",
+          "saved_file": {
+            "$ref": "#/$defs/SavedFile"
+          },
+          "sha256": {
             "type": "string"
+          },
+          "size": {
+            "minimum": 0,
+            "type": "integer"
           }
         },
         "required": [
@@ -1094,1530 +1430,6 @@
           "expires_at"
         ],
         "type": "object"
-      },
-      "annotations": {
-        "title": null,
-        "read_only_hint": false,
-        "destructive_hint": false,
-        "idempotent_hint": false,
-        "open_world_hint": true
-      }
-    },
-    "get_status": {
-      "input": {
-        "type": "object",
-        "properties": {},
-        "title": "get_statusArguments"
-      },
-      "output": {
-        "additionalProperties": false,
-        "properties": {
-          "authorized": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "connected": {
-            "type": "boolean"
-          },
-          "error": {
-            "$ref": "#/$defs/Issue"
-          },
-          "mode": {
-            "const": "read_only",
-            "type": "string"
-          },
-          "allow_all_chats": {
-            "type": "boolean"
-          },
-          "allow_public_channel_reads": {
-            "type": "boolean"
-          },
-          "allow_public_channel_discovery": {
-            "type": "boolean"
-          },
-          "allow_attachment_downloads": {
-            "type": "boolean"
-          },
-          "attachment_max_bytes": {
-            "exclusiveMinimum": 0,
-            "type": "integer"
-          },
-          "download_ttl_seconds": {
-            "exclusiveMinimum": 0,
-            "type": "integer"
-          },
-          "download_max_bytes": {
-            "exclusiveMinimum": 0,
-            "type": "integer"
-          },
-          "download_max_files": {
-            "exclusiveMinimum": 0,
-            "type": "integer"
-          },
-          "allowed_chat_ids": {
-            "items": {
-              "pattern": "^-?[1-9]\\d*$",
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "allowed_folder_ids": {
-            "items": {
-              "type": "integer"
-            },
-            "type": "array"
-          },
-          "cursor_ttl_seconds": {
-            "exclusiveMinimum": 0,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "authorized",
-          "connected",
-          "mode",
-          "allow_all_chats",
-          "allow_public_channel_reads",
-          "allow_public_channel_discovery",
-          "allow_attachment_downloads",
-          "attachment_max_bytes",
-          "download_ttl_seconds",
-          "download_max_bytes",
-          "download_max_files",
-          "allowed_chat_ids",
-          "allowed_folder_ids",
-          "cursor_ttl_seconds"
-        ],
-        "type": "object"
-      },
-      "annotations": {
-        "title": null,
-        "read_only_hint": true,
-        "destructive_hint": null,
-        "idempotent_hint": null,
-        "open_world_hint": true
-      }
-    },
-    "search_public_channels": {
-      "input": {
-        "type": "object",
-        "properties": {
-          "query": {
-            "maxLength": 1000,
-            "minLength": 1,
-            "title": "Query",
-            "type": "string"
-          },
-          "limit": {
-            "default": 20,
-            "maximum": 100,
-            "minimum": 1,
-            "title": "Limit",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "query"
-        ],
-        "title": "search_public_channelsArguments"
-      },
-      "output": {
-        "additionalProperties": false,
-        "properties": {
-          "channels": {
-            "items": {
-              "$ref": "#/$defs/PublicChannel"
-            },
-            "type": "array"
-          },
-          "returned_count": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "telegram_total_count": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "locally_truncated": {
-            "type": "boolean"
-          },
-          "exhaustive": {
-            "const": false,
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "channels",
-          "returned_count",
-          "locally_truncated",
-          "exhaustive"
-        ],
-        "type": "object"
-      },
-      "annotations": {
-        "title": null,
-        "read_only_hint": true,
-        "destructive_hint": null,
-        "idempotent_hint": null,
-        "open_world_hint": true
-      }
-    },
-    "get_similar_channels": {
-      "input": {
-        "type": "object",
-        "properties": {
-          "chat_ref": {
-            "minLength": 1,
-            "title": "Chat Ref",
-            "type": "string"
-          },
-          "limit": {
-            "default": 20,
-            "maximum": 100,
-            "minimum": 1,
-            "title": "Limit",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "chat_ref"
-        ],
-        "title": "get_similar_channelsArguments"
-      },
-      "output": {
-        "additionalProperties": false,
-        "properties": {
-          "channels": {
-            "items": {
-              "$ref": "#/$defs/PublicChannel"
-            },
-            "type": "array"
-          },
-          "returned_count": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "telegram_total_count": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "locally_truncated": {
-            "type": "boolean"
-          },
-          "exhaustive": {
-            "const": false,
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "channels",
-          "returned_count",
-          "locally_truncated",
-          "exhaustive"
-        ],
-        "type": "object"
-      },
-      "annotations": {
-        "title": null,
-        "read_only_hint": true,
-        "destructive_hint": null,
-        "idempotent_hint": null,
-        "open_world_hint": true
-      }
-    },
-    "list_folders": {
-      "input": {
-        "type": "object",
-        "properties": {
-          "query": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Query"
-          }
-        },
-        "title": "list_foldersArguments"
-      },
-      "output": {
-        "additionalProperties": false,
-        "properties": {
-          "folders": {
-            "items": {
-              "$ref": "#/$defs/Folder"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "folders"
-        ],
-        "type": "object"
-      },
-      "annotations": {
-        "title": null,
-        "read_only_hint": true,
-        "destructive_hint": null,
-        "idempotent_hint": null,
-        "open_world_hint": true
-      }
-    },
-    "list_chats": {
-      "input": {
-        "type": "object",
-        "properties": {
-          "query": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Query"
-          },
-          "chat_type": {
-            "anyOf": [
-              {
-                "enum": [
-                  "private",
-                  "group",
-                  "channel",
-                  "bot",
-                  "saved"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Chat Type"
-          },
-          "folder_ids": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "integer"
-                },
-                "maxItems": 100,
-                "minItems": 1,
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Folder Ids"
-          },
-          "limit": {
-            "default": 30,
-            "maximum": 100,
-            "minimum": 1,
-            "title": "Limit",
-            "type": "integer"
-          },
-          "cursor": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Cursor"
-          }
-        },
-        "title": "list_chatsArguments"
-      },
-      "output": {
-        "additionalProperties": false,
-        "properties": {
-          "chats": {
-            "items": {
-              "$ref": "#/$defs/Chat"
-            },
-            "type": "array"
-          },
-          "next_cursor": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "scope": {
-            "$ref": "#/$defs/Scope"
-          }
-        },
-        "required": [
-          "chats",
-          "next_cursor",
-          "scope"
-        ],
-        "type": "object"
-      },
-      "annotations": {
-        "title": null,
-        "read_only_hint": true,
-        "destructive_hint": null,
-        "idempotent_hint": null,
-        "open_world_hint": true
-      }
-    },
-    "get_chat": {
-      "input": {
-        "type": "object",
-        "properties": {
-          "chat_ref": {
-            "title": "Chat Ref",
-            "type": "string"
-          }
-        },
-        "required": [
-          "chat_ref"
-        ],
-        "title": "get_chatArguments"
-      },
-      "output": {
-        "additionalProperties": false,
-        "properties": {
-          "chat": {
-            "$ref": "#/$defs/Chat"
-          },
-          "description": {
-            "type": "string"
-          },
-          "linked_chat_id": {
-            "pattern": "^-?[1-9]\\d*$",
-            "type": "string"
-          },
-          "server_can_send": {
-            "const": false,
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "chat",
-          "server_can_send"
-        ],
-        "type": "object"
-      },
-      "annotations": {
-        "title": null,
-        "read_only_hint": true,
-        "destructive_hint": null,
-        "idempotent_hint": null,
-        "open_world_hint": true
-      }
-    },
-    "list_topics": {
-      "input": {
-        "type": "object",
-        "properties": {
-          "chat_ref": {
-            "minLength": 1,
-            "title": "Chat Ref",
-            "type": "string"
-          },
-          "query": {
-            "anyOf": [
-              {
-                "maxLength": 1000,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Query"
-          },
-          "limit": {
-            "default": 30,
-            "maximum": 100,
-            "minimum": 1,
-            "title": "Limit",
-            "type": "integer"
-          },
-          "cursor": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Cursor"
-          }
-        },
-        "required": [
-          "chat_ref"
-        ],
-        "title": "list_topicsArguments"
-      },
-      "output": {
-        "additionalProperties": false,
-        "properties": {
-          "topics": {
-            "items": {
-              "$ref": "#/$defs/ForumTopic"
-            },
-            "type": "array"
-          },
-          "next_cursor": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "scope": {
-            "$ref": "#/$defs/Scope"
-          },
-          "issues": {
-            "items": {
-              "$ref": "#/$defs/Issue"
-            },
-            "type": "array"
-          },
-          "telegram_total_count": {
-            "type": "integer"
-          },
-          "order": {
-            "enum": [
-              "creation_date",
-              "last_message_date"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "topics",
-          "next_cursor",
-          "scope",
-          "issues"
-        ],
-        "type": "object"
-      },
-      "annotations": {
-        "title": null,
-        "read_only_hint": true,
-        "destructive_hint": null,
-        "idempotent_hint": null,
-        "open_world_hint": true
-      }
-    },
-    "get_pinned_messages": {
-      "input": {
-        "type": "object",
-        "properties": {
-          "chat_ref": {
-            "minLength": 1,
-            "title": "Chat Ref",
-            "type": "string"
-          },
-          "limit": {
-            "default": 30,
-            "maximum": 100,
-            "minimum": 1,
-            "title": "Limit",
-            "type": "integer"
-          },
-          "cursor": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Cursor"
-          },
-          "topic_id": {
-            "anyOf": [
-              {
-                "exclusiveMinimum": 0,
-                "maximum": 2147483647,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Topic Id"
-          }
-        },
-        "required": [
-          "chat_ref"
-        ],
-        "title": "get_pinned_messagesArguments"
-      },
-      "output": {
-        "additionalProperties": false,
-        "properties": {
-          "chats": {
-            "patternProperties": {
-              "^-?[1-9]\\d*$": {
-                "$ref": "#/$defs/ChatSummary"
-              }
-            },
-            "type": "object"
-          },
-          "messages": {
-            "items": {
-              "$ref": "#/$defs/Message"
-            },
-            "type": "array"
-          },
-          "issues": {
-            "items": {
-              "$ref": "#/$defs/Issue"
-            },
-            "type": "array"
-          },
-          "next_cursor": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "scope": {
-            "$ref": "#/$defs/Scope"
-          },
-          "order": {
-            "enum": [
-              "newest_first",
-              "oldest_first"
-            ],
-            "type": "string"
-          },
-          "thread_root": {
-            "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
-            "type": "string"
-          },
-          "topic_id": {
-            "exclusiveMinimum": 0,
-            "maximum": 2147483647,
-            "type": "integer"
-          },
-          "progress": {
-            "$ref": "#/$defs/SearchProgress"
-          },
-          "ordering": {
-            "enum": [
-              "page",
-              "global"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "chats",
-          "messages",
-          "issues",
-          "next_cursor",
-          "scope",
-          "order",
-          "ordering"
-        ],
-        "type": "object"
-      },
-      "annotations": {
-        "title": null,
-        "read_only_hint": true,
-        "destructive_hint": null,
-        "idempotent_hint": null,
-        "open_world_hint": true
-      }
-    },
-    "search_messages": {
-      "input": {
-        "type": "object",
-        "properties": {
-          "query": {
-            "maxLength": 1000,
-            "title": "Query",
-            "type": "string"
-          },
-          "chat_ids": {
-            "anyOf": [
-              {
-                "items": {
-                  "pattern": "^-?[1-9]\\d*$",
-                  "type": "string"
-                },
-                "maxItems": 1000,
-                "minItems": 1,
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Chat Ids"
-          },
-          "folder_ids": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "integer"
-                },
-                "maxItems": 100,
-                "minItems": 1,
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Folder Ids"
-          },
-          "date_from": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Date From"
-          },
-          "date_to": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Date To"
-          },
-          "sender_id": {
-            "anyOf": [
-              {
-                "pattern": "^-?[1-9]\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Sender Id"
-          },
-          "content_type": {
-            "anyOf": [
-              {
-                "enum": [
-                  "text",
-                  "photo",
-                  "video",
-                  "voice",
-                  "audio",
-                  "document",
-                  "other"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Content Type"
-          },
-          "has_link": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Has Link"
-          },
-          "limit": {
-            "default": 30,
-            "maximum": 100,
-            "minimum": 1,
-            "title": "Limit",
-            "type": "integer"
-          },
-          "cursor": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Cursor"
-          },
-          "order": {
-            "default": "newest_first",
-            "enum": [
-              "newest_first",
-              "oldest_first"
-            ],
-            "title": "Order",
-            "type": "string"
-          },
-          "ordering": {
-            "default": "page",
-            "enum": [
-              "page",
-              "global"
-            ],
-            "title": "Ordering",
-            "type": "string"
-          }
-        },
-        "required": [
-          "query"
-        ],
-        "title": "search_messagesArguments"
-      },
-      "output": {
-        "additionalProperties": false,
-        "properties": {
-          "chats": {
-            "patternProperties": {
-              "^-?[1-9]\\d*$": {
-                "$ref": "#/$defs/ChatSummary"
-              }
-            },
-            "type": "object"
-          },
-          "messages": {
-            "items": {
-              "$ref": "#/$defs/Message"
-            },
-            "type": "array"
-          },
-          "issues": {
-            "items": {
-              "$ref": "#/$defs/Issue"
-            },
-            "type": "array"
-          },
-          "next_cursor": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "scope": {
-            "$ref": "#/$defs/Scope"
-          },
-          "order": {
-            "enum": [
-              "newest_first",
-              "oldest_first"
-            ],
-            "type": "string"
-          },
-          "thread_root": {
-            "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
-            "type": "string"
-          },
-          "topic_id": {
-            "exclusiveMinimum": 0,
-            "maximum": 2147483647,
-            "type": "integer"
-          },
-          "progress": {
-            "$ref": "#/$defs/SearchProgress"
-          },
-          "ordering": {
-            "enum": [
-              "page",
-              "global"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "chats",
-          "messages",
-          "issues",
-          "next_cursor",
-          "scope",
-          "order",
-          "ordering"
-        ],
-        "type": "object"
-      },
-      "annotations": {
-        "title": null,
-        "read_only_hint": true,
-        "destructive_hint": null,
-        "idempotent_hint": null,
-        "open_world_hint": true
-      }
-    },
-    "get_history": {
-      "input": {
-        "type": "object",
-        "properties": {
-          "chat_id": {
-            "anyOf": [
-              {
-                "pattern": "^-?[1-9]\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Chat Id"
-          },
-          "date_from": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Date From"
-          },
-          "date_to": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Date To"
-          },
-          "order": {
-            "default": "newest_first",
-            "enum": [
-              "newest_first",
-              "oldest_first"
-            ],
-            "title": "Order",
-            "type": "string"
-          },
-          "limit": {
-            "default": 30,
-            "maximum": 100,
-            "minimum": 1,
-            "title": "Limit",
-            "type": "integer"
-          },
-          "cursor": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Cursor"
-          },
-          "chat_ref": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Chat Ref"
-          },
-          "topic_id": {
-            "anyOf": [
-              {
-                "exclusiveMinimum": 0,
-                "maximum": 2147483647,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Topic Id"
-          }
-        },
-        "title": "get_historyArguments"
-      },
-      "output": {
-        "additionalProperties": false,
-        "properties": {
-          "chats": {
-            "patternProperties": {
-              "^-?[1-9]\\d*$": {
-                "$ref": "#/$defs/ChatSummary"
-              }
-            },
-            "type": "object"
-          },
-          "messages": {
-            "items": {
-              "$ref": "#/$defs/Message"
-            },
-            "type": "array"
-          },
-          "issues": {
-            "items": {
-              "$ref": "#/$defs/Issue"
-            },
-            "type": "array"
-          },
-          "next_cursor": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "scope": {
-            "$ref": "#/$defs/Scope"
-          },
-          "order": {
-            "enum": [
-              "newest_first",
-              "oldest_first"
-            ],
-            "type": "string"
-          },
-          "thread_root": {
-            "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
-            "type": "string"
-          },
-          "topic_id": {
-            "exclusiveMinimum": 0,
-            "maximum": 2147483647,
-            "type": "integer"
-          },
-          "progress": {
-            "$ref": "#/$defs/SearchProgress"
-          },
-          "ordering": {
-            "enum": [
-              "page",
-              "global"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "chats",
-          "messages",
-          "issues",
-          "next_cursor",
-          "scope",
-          "order",
-          "ordering"
-        ],
-        "type": "object"
-      },
-      "annotations": {
-        "title": null,
-        "read_only_hint": true,
-        "destructive_hint": null,
-        "idempotent_hint": null,
-        "open_world_hint": true
-      }
-    },
-    "get_messages": {
-      "input": {
-        "type": "object",
-        "properties": {
-          "refs": {
-            "items": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "$ref": "#/$defs/MessageRef"
-                }
-              ]
-            },
-            "maxItems": 100,
-            "minItems": 1,
-            "title": "Refs",
-            "type": "array"
-          },
-          "text_offset": {
-            "default": 0,
-            "minimum": 0,
-            "title": "Text Offset",
-            "type": "integer"
-          },
-          "text_limit": {
-            "default": 12000,
-            "maximum": 100000,
-            "minimum": 1,
-            "title": "Text Limit",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "refs"
-        ],
-        "title": "get_messagesArguments"
-      },
-      "output": {
-        "additionalProperties": false,
-        "properties": {
-          "chats": {
-            "patternProperties": {
-              "^-?[1-9]\\d*$": {
-                "$ref": "#/$defs/ChatSummary"
-              }
-            },
-            "type": "object"
-          },
-          "messages": {
-            "items": {
-              "$ref": "#/$defs/Message"
-            },
-            "type": "array"
-          },
-          "issues": {
-            "items": {
-              "$ref": "#/$defs/Issue"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "chats",
-          "messages",
-          "issues"
-        ],
-        "type": "object"
-      },
-      "annotations": {
-        "title": null,
-        "read_only_hint": true,
-        "destructive_hint": null,
-        "idempotent_hint": null,
-        "open_world_hint": true
-      }
-    },
-    "get_album": {
-      "input": {
-        "type": "object",
-        "properties": {
-          "ref": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "$ref": "#/$defs/MessageRef"
-              }
-            ],
-            "title": "Ref"
-          },
-          "scan_limit": {
-            "default": 30,
-            "maximum": 100,
-            "minimum": 1,
-            "title": "Scan Limit",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "ref"
-        ],
-        "title": "get_albumArguments"
-      },
-      "output": {
-        "additionalProperties": false,
-        "properties": {
-          "chats": {
-            "patternProperties": {
-              "^-?[1-9]\\d*$": {
-                "$ref": "#/$defs/ChatSummary"
-              }
-            },
-            "type": "object"
-          },
-          "anchor_ref": {
-            "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
-            "type": "string"
-          },
-          "album_id": {
-            "type": "string"
-          },
-          "messages": {
-            "items": {
-              "$ref": "#/$defs/Message"
-            },
-            "maxItems": 201,
-            "type": "array"
-          },
-          "order": {
-            "const": "oldest_first",
-            "type": "string"
-          },
-          "completeness": {
-            "const": "unknown",
-            "type": "string"
-          },
-          "scan_limit": {
-            "maximum": 100,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "scanned_before": {
-            "maximum": 100,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "scanned_after": {
-            "maximum": 100,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "before_exhausted": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "after_exhausted": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "issues": {
-            "items": {
-              "$ref": "#/$defs/Issue"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "chats",
-          "anchor_ref",
-          "album_id",
-          "messages",
-          "order",
-          "completeness",
-          "scan_limit",
-          "scanned_before",
-          "scanned_after",
-          "before_exhausted",
-          "after_exhausted",
-          "issues"
-        ],
-        "type": "object"
-      },
-      "annotations": {
-        "title": null,
-        "read_only_hint": true,
-        "destructive_hint": null,
-        "idempotent_hint": null,
-        "open_world_hint": true
-      }
-    },
-    "get_context": {
-      "input": {
-        "type": "object",
-        "properties": {
-          "ref": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "$ref": "#/$defs/MessageRef"
-              }
-            ],
-            "title": "Ref"
-          },
-          "before": {
-            "default": 10,
-            "maximum": 30,
-            "minimum": 0,
-            "title": "Before",
-            "type": "integer"
-          },
-          "after": {
-            "default": 10,
-            "maximum": 30,
-            "minimum": 0,
-            "title": "After",
-            "type": "integer"
-          },
-          "reply_depth": {
-            "default": 3,
-            "maximum": 10,
-            "minimum": 0,
-            "title": "Reply Depth",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "ref"
-        ],
-        "title": "get_contextArguments"
-      },
-      "output": {
-        "additionalProperties": false,
-        "properties": {
-          "chats": {
-            "patternProperties": {
-              "^-?[1-9]\\d*$": {
-                "$ref": "#/$defs/ChatSummary"
-              }
-            },
-            "type": "object"
-          },
-          "anchor": {
-            "anyOf": [
-              {
-                "$ref": "#/$defs/Message"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "before": {
-            "items": {
-              "$ref": "#/$defs/Message"
-            },
-            "type": "array"
-          },
-          "after": {
-            "items": {
-              "$ref": "#/$defs/Message"
-            },
-            "type": "array"
-          },
-          "reply_chain": {
-            "items": {
-              "$ref": "#/$defs/Message"
-            },
-            "type": "array"
-          },
-          "issues": {
-            "items": {
-              "$ref": "#/$defs/Issue"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "chats",
-          "anchor",
-          "before",
-          "after",
-          "reply_chain",
-          "issues"
-        ],
-        "type": "object"
-      },
-      "annotations": {
-        "title": null,
-        "read_only_hint": true,
-        "destructive_hint": null,
-        "idempotent_hint": null,
-        "open_world_hint": true
-      }
-    },
-    "get_thread": {
-      "input": {
-        "type": "object",
-        "properties": {
-          "ref": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "$ref": "#/$defs/MessageRef"
-              }
-            ],
-            "title": "Ref"
-          },
-          "limit": {
-            "default": 30,
-            "maximum": 100,
-            "minimum": 1,
-            "title": "Limit",
-            "type": "integer"
-          },
-          "cursor": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Cursor"
-          }
-        },
-        "required": [
-          "ref"
-        ],
-        "title": "get_threadArguments"
-      },
-      "output": {
-        "additionalProperties": false,
-        "properties": {
-          "chats": {
-            "patternProperties": {
-              "^-?[1-9]\\d*$": {
-                "$ref": "#/$defs/ChatSummary"
-              }
-            },
-            "type": "object"
-          },
-          "messages": {
-            "items": {
-              "$ref": "#/$defs/Message"
-            },
-            "type": "array"
-          },
-          "issues": {
-            "items": {
-              "$ref": "#/$defs/Issue"
-            },
-            "type": "array"
-          },
-          "next_cursor": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "scope": {
-            "$ref": "#/$defs/Scope"
-          },
-          "order": {
-            "enum": [
-              "newest_first",
-              "oldest_first"
-            ],
-            "type": "string"
-          },
-          "thread_root": {
-            "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
-            "type": "string"
-          },
-          "topic_id": {
-            "exclusiveMinimum": 0,
-            "maximum": 2147483647,
-            "type": "integer"
-          },
-          "progress": {
-            "$ref": "#/$defs/SearchProgress"
-          },
-          "ordering": {
-            "enum": [
-              "page",
-              "global"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "chats",
-          "messages",
-          "issues",
-          "next_cursor",
-          "scope",
-          "order",
-          "ordering"
-        ],
-        "type": "object"
-      },
-      "annotations": {
-        "title": null,
-        "read_only_hint": true,
-        "destructive_hint": null,
-        "idempotent_hint": null,
-        "open_world_hint": true
       }
     },
     "export_history": {
@@ -2688,6 +1500,11 @@
             ],
             "title": "Format",
             "type": "string"
+          },
+          "save": {
+            "default": false,
+            "title": "Save",
+            "type": "boolean"
           }
         },
         "title": "export_historyArguments",
@@ -2759,6 +1576,133 @@
         "type": "object"
       }
     },
+    "get_album": {
+      "annotations": {
+        "destructive_hint": null,
+        "idempotent_hint": null,
+        "open_world_hint": true,
+        "read_only_hint": true,
+        "title": null
+      },
+      "input": {
+        "properties": {
+          "ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/MessageRef"
+              }
+            ],
+            "title": "Ref"
+          },
+          "scan_limit": {
+            "default": 30,
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Scan Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ref"
+        ],
+        "title": "get_albumArguments",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "after_exhausted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "album_id": {
+            "type": "string"
+          },
+          "anchor_ref": {
+            "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
+            "type": "string"
+          },
+          "before_exhausted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "chats": {
+            "patternProperties": {
+              "^-?[1-9]\\d*$": {
+                "$ref": "#/$defs/ChatSummary"
+              }
+            },
+            "type": "object"
+          },
+          "completeness": {
+            "const": "unknown",
+            "type": "string"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/$defs/Issue"
+            },
+            "type": "array"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/$defs/Message"
+            },
+            "maxItems": 201,
+            "type": "array"
+          },
+          "order": {
+            "const": "oldest_first",
+            "type": "string"
+          },
+          "scan_limit": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "scanned_after": {
+            "maximum": 100,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scanned_before": {
+            "maximum": 100,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "chats",
+          "anchor_ref",
+          "album_id",
+          "messages",
+          "order",
+          "completeness",
+          "scan_limit",
+          "scanned_before",
+          "scanned_after",
+          "before_exhausted",
+          "after_exhausted",
+          "issues"
+        ],
+        "type": "object"
+      }
+    },
     "get_changes": {
       "annotations": {
         "destructive_hint": false,
@@ -2809,6 +1753,11 @@
             ],
             "title": "Output",
             "type": "string"
+          },
+          "save": {
+            "default": false,
+            "title": "Save",
+            "type": "boolean"
           }
         },
         "title": "get_changesArguments",
@@ -2817,6 +1766,9 @@
       "output": {
         "additionalProperties": false,
         "properties": {
+          "baseline_created": {
+            "type": "boolean"
+          },
           "changes": {
             "items": {
               "$ref": "#/$defs/Change"
@@ -2892,6 +1844,7 @@
         "required": [
           "chats",
           "chat_id",
+          "baseline_created",
           "changes",
           "returned_count",
           "omitted_count",
@@ -2901,6 +1854,1528 @@
           "tracked_count",
           "next_checkpoint",
           "issues"
+        ],
+        "type": "object"
+      }
+    },
+    "get_chat": {
+      "annotations": {
+        "destructive_hint": null,
+        "idempotent_hint": null,
+        "open_world_hint": true,
+        "read_only_hint": true,
+        "title": null
+      },
+      "input": {
+        "properties": {
+          "chat_ref": {
+            "title": "Chat Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "chat_ref"
+        ],
+        "title": "get_chatArguments",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "chat": {
+            "$ref": "#/$defs/Chat"
+          },
+          "description": {
+            "type": "string"
+          },
+          "linked_chat_id": {
+            "pattern": "^-?[1-9]\\d*$",
+            "type": "string"
+          },
+          "server_can_send": {
+            "const": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "chat",
+          "server_can_send"
+        ],
+        "type": "object"
+      }
+    },
+    "get_context": {
+      "annotations": {
+        "destructive_hint": null,
+        "idempotent_hint": null,
+        "open_world_hint": true,
+        "read_only_hint": true,
+        "title": null
+      },
+      "input": {
+        "properties": {
+          "after": {
+            "default": 10,
+            "maximum": 30,
+            "minimum": 0,
+            "title": "After",
+            "type": "integer"
+          },
+          "before": {
+            "default": 10,
+            "maximum": 30,
+            "minimum": 0,
+            "title": "Before",
+            "type": "integer"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/MessageRef"
+              }
+            ],
+            "title": "Ref"
+          },
+          "reply_depth": {
+            "default": 3,
+            "maximum": 10,
+            "minimum": 0,
+            "title": "Reply Depth",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ref"
+        ],
+        "title": "get_contextArguments",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "items": {
+              "$ref": "#/$defs/Message"
+            },
+            "type": "array"
+          },
+          "anchor": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Message"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "before": {
+            "items": {
+              "$ref": "#/$defs/Message"
+            },
+            "type": "array"
+          },
+          "chats": {
+            "patternProperties": {
+              "^-?[1-9]\\d*$": {
+                "$ref": "#/$defs/ChatSummary"
+              }
+            },
+            "type": "object"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/$defs/Issue"
+            },
+            "type": "array"
+          },
+          "reply_chain": {
+            "items": {
+              "$ref": "#/$defs/Message"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "chats",
+          "anchor",
+          "before",
+          "after",
+          "reply_chain",
+          "issues"
+        ],
+        "type": "object"
+      }
+    },
+    "get_history": {
+      "annotations": {
+        "destructive_hint": null,
+        "idempotent_hint": null,
+        "open_world_hint": true,
+        "read_only_hint": true,
+        "title": null
+      },
+      "input": {
+        "properties": {
+          "chat_id": {
+            "anyOf": [
+              {
+                "pattern": "^-?[1-9]\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Chat Id"
+          },
+          "chat_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Chat Ref"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Cursor"
+          },
+          "date_from": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Date From"
+          },
+          "date_to": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Date To"
+          },
+          "limit": {
+            "default": 30,
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "order": {
+            "default": "newest_first",
+            "enum": [
+              "newest_first",
+              "oldest_first"
+            ],
+            "title": "Order",
+            "type": "string"
+          },
+          "topic_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "maximum": 2147483647,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Topic Id"
+          }
+        },
+        "title": "get_historyArguments",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "chats": {
+            "patternProperties": {
+              "^-?[1-9]\\d*$": {
+                "$ref": "#/$defs/ChatSummary"
+              }
+            },
+            "type": "object"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/$defs/Issue"
+            },
+            "type": "array"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/$defs/Message"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "order": {
+            "enum": [
+              "newest_first",
+              "oldest_first"
+            ],
+            "type": "string"
+          },
+          "ordering": {
+            "enum": [
+              "page",
+              "global"
+            ],
+            "type": "string"
+          },
+          "progress": {
+            "$ref": "#/$defs/SearchProgress"
+          },
+          "scope": {
+            "$ref": "#/$defs/Scope"
+          },
+          "thread_root": {
+            "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
+            "type": "string"
+          },
+          "topic_id": {
+            "exclusiveMinimum": 0,
+            "maximum": 2147483647,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "chats",
+          "messages",
+          "issues",
+          "next_cursor",
+          "scope",
+          "order",
+          "ordering"
+        ],
+        "type": "object"
+      }
+    },
+    "get_messages": {
+      "annotations": {
+        "destructive_hint": null,
+        "idempotent_hint": null,
+        "open_world_hint": true,
+        "read_only_hint": true,
+        "title": null
+      },
+      "input": {
+        "properties": {
+          "refs": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/$defs/MessageRef"
+                }
+              ]
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Refs",
+            "type": "array"
+          },
+          "text_limit": {
+            "default": 12000,
+            "maximum": 100000,
+            "minimum": 1,
+            "title": "Text Limit",
+            "type": "integer"
+          },
+          "text_offset": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Text Offset",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "refs"
+        ],
+        "title": "get_messagesArguments",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "chats": {
+            "patternProperties": {
+              "^-?[1-9]\\d*$": {
+                "$ref": "#/$defs/ChatSummary"
+              }
+            },
+            "type": "object"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/$defs/Issue"
+            },
+            "type": "array"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/$defs/Message"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "chats",
+          "messages",
+          "issues"
+        ],
+        "type": "object"
+      }
+    },
+    "get_pinned_messages": {
+      "annotations": {
+        "destructive_hint": null,
+        "idempotent_hint": null,
+        "open_world_hint": true,
+        "read_only_hint": true,
+        "title": null
+      },
+      "input": {
+        "properties": {
+          "chat_ref": {
+            "minLength": 1,
+            "title": "Chat Ref",
+            "type": "string"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Cursor"
+          },
+          "limit": {
+            "default": 30,
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "topic_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "maximum": 2147483647,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Topic Id"
+          }
+        },
+        "required": [
+          "chat_ref"
+        ],
+        "title": "get_pinned_messagesArguments",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "chats": {
+            "patternProperties": {
+              "^-?[1-9]\\d*$": {
+                "$ref": "#/$defs/ChatSummary"
+              }
+            },
+            "type": "object"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/$defs/Issue"
+            },
+            "type": "array"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/$defs/Message"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "order": {
+            "enum": [
+              "newest_first",
+              "oldest_first"
+            ],
+            "type": "string"
+          },
+          "ordering": {
+            "enum": [
+              "page",
+              "global"
+            ],
+            "type": "string"
+          },
+          "progress": {
+            "$ref": "#/$defs/SearchProgress"
+          },
+          "scope": {
+            "$ref": "#/$defs/Scope"
+          },
+          "thread_root": {
+            "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
+            "type": "string"
+          },
+          "topic_id": {
+            "exclusiveMinimum": 0,
+            "maximum": 2147483647,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "chats",
+          "messages",
+          "issues",
+          "next_cursor",
+          "scope",
+          "order",
+          "ordering"
+        ],
+        "type": "object"
+      }
+    },
+    "get_similar_channels": {
+      "annotations": {
+        "destructive_hint": null,
+        "idempotent_hint": null,
+        "open_world_hint": true,
+        "read_only_hint": true,
+        "title": null
+      },
+      "input": {
+        "properties": {
+          "chat_ref": {
+            "minLength": 1,
+            "title": "Chat Ref",
+            "type": "string"
+          },
+          "limit": {
+            "default": 20,
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "chat_ref"
+        ],
+        "title": "get_similar_channelsArguments",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "channels": {
+            "items": {
+              "$ref": "#/$defs/PublicChannel"
+            },
+            "type": "array"
+          },
+          "exhaustive": {
+            "const": false,
+            "type": "boolean"
+          },
+          "locally_truncated": {
+            "type": "boolean"
+          },
+          "returned_count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "telegram_total_count": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "channels",
+          "returned_count",
+          "locally_truncated",
+          "exhaustive"
+        ],
+        "type": "object"
+      }
+    },
+    "get_status": {
+      "annotations": {
+        "destructive_hint": null,
+        "idempotent_hint": null,
+        "open_world_hint": true,
+        "read_only_hint": true,
+        "title": null
+      },
+      "input": {
+        "properties": {},
+        "title": "get_statusArguments",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_all_chats": {
+            "type": "boolean"
+          },
+          "allow_attachment_downloads": {
+            "type": "boolean"
+          },
+          "allow_public_channel_discovery": {
+            "type": "boolean"
+          },
+          "allow_public_channel_reads": {
+            "type": "boolean"
+          },
+          "allowed_chat_ids": {
+            "items": {
+              "pattern": "^-?[1-9]\\d*$",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "allowed_folder_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "archive_enabled": {
+            "type": "boolean"
+          },
+          "attachment_max_bytes": {
+            "exclusiveMinimum": 0,
+            "type": "integer"
+          },
+          "authorized": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "connected": {
+            "type": "boolean"
+          },
+          "cursor_ttl_seconds": {
+            "exclusiveMinimum": 0,
+            "type": "integer"
+          },
+          "download_max_bytes": {
+            "exclusiveMinimum": 0,
+            "type": "integer"
+          },
+          "download_max_files": {
+            "exclusiveMinimum": 0,
+            "type": "integer"
+          },
+          "download_ttl_seconds": {
+            "exclusiveMinimum": 0,
+            "type": "integer"
+          },
+          "error": {
+            "$ref": "#/$defs/Issue"
+          },
+          "mode": {
+            "const": "read_only",
+            "type": "string"
+          }
+        },
+        "required": [
+          "authorized",
+          "connected",
+          "mode",
+          "allow_all_chats",
+          "allow_public_channel_reads",
+          "allow_public_channel_discovery",
+          "allow_attachment_downloads",
+          "archive_enabled",
+          "attachment_max_bytes",
+          "download_ttl_seconds",
+          "download_max_bytes",
+          "download_max_files",
+          "allowed_chat_ids",
+          "allowed_folder_ids",
+          "cursor_ttl_seconds"
+        ],
+        "type": "object"
+      }
+    },
+    "get_thread": {
+      "annotations": {
+        "destructive_hint": null,
+        "idempotent_hint": null,
+        "open_world_hint": true,
+        "read_only_hint": true,
+        "title": null
+      },
+      "input": {
+        "properties": {
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Cursor"
+          },
+          "limit": {
+            "default": 30,
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/MessageRef"
+              }
+            ],
+            "title": "Ref"
+          }
+        },
+        "required": [
+          "ref"
+        ],
+        "title": "get_threadArguments",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "chats": {
+            "patternProperties": {
+              "^-?[1-9]\\d*$": {
+                "$ref": "#/$defs/ChatSummary"
+              }
+            },
+            "type": "object"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/$defs/Issue"
+            },
+            "type": "array"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/$defs/Message"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "order": {
+            "enum": [
+              "newest_first",
+              "oldest_first"
+            ],
+            "type": "string"
+          },
+          "ordering": {
+            "enum": [
+              "page",
+              "global"
+            ],
+            "type": "string"
+          },
+          "progress": {
+            "$ref": "#/$defs/SearchProgress"
+          },
+          "scope": {
+            "$ref": "#/$defs/Scope"
+          },
+          "thread_root": {
+            "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
+            "type": "string"
+          },
+          "topic_id": {
+            "exclusiveMinimum": 0,
+            "maximum": 2147483647,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "chats",
+          "messages",
+          "issues",
+          "next_cursor",
+          "scope",
+          "order",
+          "ordering"
+        ],
+        "type": "object"
+      }
+    },
+    "get_watch_changes": {
+      "annotations": {
+        "destructive_hint": false,
+        "idempotent_hint": false,
+        "open_world_hint": true,
+        "read_only_hint": false,
+        "title": null
+      },
+      "input": {
+        "properties": {
+          "limit": {
+            "default": 30,
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "get_watch_changesArguments",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "batch_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/$defs/Change"
+            },
+            "type": "array"
+          },
+          "chats": {
+            "patternProperties": {
+              "^-?[1-9]\\d*$": {
+                "$ref": "#/$defs/ChatSummary"
+              }
+            },
+            "type": "object"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "issue_count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/$defs/Issue"
+            },
+            "maxItems": 20,
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "omitted_count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "progress": {
+            "$ref": "#/$defs/WatchProgress"
+          },
+          "returned_count": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "chats",
+          "name",
+          "batch_id",
+          "changes",
+          "returned_count",
+          "omitted_count",
+          "complete",
+          "progress",
+          "issues",
+          "issue_count"
+        ],
+        "type": "object"
+      }
+    },
+    "list_chats": {
+      "annotations": {
+        "destructive_hint": null,
+        "idempotent_hint": null,
+        "open_world_hint": true,
+        "read_only_hint": true,
+        "title": null
+      },
+      "input": {
+        "properties": {
+          "chat_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "private",
+                  "group",
+                  "channel",
+                  "bot",
+                  "saved"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Chat Type"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Cursor"
+          },
+          "folder_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 100,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Folder Ids"
+          },
+          "limit": {
+            "default": 30,
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Query"
+          }
+        },
+        "title": "list_chatsArguments",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "chats": {
+            "items": {
+              "$ref": "#/$defs/Chat"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scope": {
+            "$ref": "#/$defs/Scope"
+          }
+        },
+        "required": [
+          "chats",
+          "next_cursor",
+          "scope"
+        ],
+        "type": "object"
+      }
+    },
+    "list_folders": {
+      "annotations": {
+        "destructive_hint": null,
+        "idempotent_hint": null,
+        "open_world_hint": true,
+        "read_only_hint": true,
+        "title": null
+      },
+      "input": {
+        "properties": {
+          "query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Query"
+          }
+        },
+        "title": "list_foldersArguments",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "folders": {
+            "items": {
+              "$ref": "#/$defs/Folder"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "folders"
+        ],
+        "type": "object"
+      }
+    },
+    "list_topics": {
+      "annotations": {
+        "destructive_hint": null,
+        "idempotent_hint": null,
+        "open_world_hint": true,
+        "read_only_hint": true,
+        "title": null
+      },
+      "input": {
+        "properties": {
+          "chat_ref": {
+            "minLength": 1,
+            "title": "Chat Ref",
+            "type": "string"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Cursor"
+          },
+          "limit": {
+            "default": 30,
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Query"
+          }
+        },
+        "required": [
+          "chat_ref"
+        ],
+        "title": "list_topicsArguments",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "issues": {
+            "items": {
+              "$ref": "#/$defs/Issue"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "order": {
+            "enum": [
+              "creation_date",
+              "last_message_date"
+            ],
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/$defs/Scope"
+          },
+          "telegram_total_count": {
+            "type": "integer"
+          },
+          "topics": {
+            "items": {
+              "$ref": "#/$defs/ForumTopic"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "topics",
+          "next_cursor",
+          "scope",
+          "issues"
+        ],
+        "type": "object"
+      }
+    },
+    "list_watches": {
+      "annotations": {
+        "destructive_hint": null,
+        "idempotent_hint": null,
+        "open_world_hint": true,
+        "read_only_hint": true,
+        "title": null
+      },
+      "input": {
+        "properties": {},
+        "title": "list_watchesArguments",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "watches": {
+            "items": {
+              "$ref": "#/$defs/WatchInfo"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "watches"
+        ],
+        "type": "object"
+      }
+    },
+    "search_messages": {
+      "annotations": {
+        "destructive_hint": null,
+        "idempotent_hint": null,
+        "open_world_hint": true,
+        "read_only_hint": true,
+        "title": null
+      },
+      "input": {
+        "properties": {
+          "chat_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "pattern": "^-?[1-9]\\d*$",
+                  "type": "string"
+                },
+                "maxItems": 1000,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Chat Ids"
+          },
+          "content_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "text",
+                  "photo",
+                  "video",
+                  "voice",
+                  "audio",
+                  "document",
+                  "other"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Content Type"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Cursor"
+          },
+          "date_from": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Date From"
+          },
+          "date_to": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Date To"
+          },
+          "folder_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 100,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Folder Ids"
+          },
+          "has_link": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Has Link"
+          },
+          "limit": {
+            "default": 30,
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "order": {
+            "default": "newest_first",
+            "enum": [
+              "newest_first",
+              "oldest_first"
+            ],
+            "title": "Order",
+            "type": "string"
+          },
+          "ordering": {
+            "default": "page",
+            "enum": [
+              "page",
+              "global"
+            ],
+            "title": "Ordering",
+            "type": "string"
+          },
+          "query": {
+            "maxLength": 1000,
+            "title": "Query",
+            "type": "string"
+          },
+          "sender_id": {
+            "anyOf": [
+              {
+                "pattern": "^-?[1-9]\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Sender Id"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "search_messagesArguments",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "chats": {
+            "patternProperties": {
+              "^-?[1-9]\\d*$": {
+                "$ref": "#/$defs/ChatSummary"
+              }
+            },
+            "type": "object"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/$defs/Issue"
+            },
+            "type": "array"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/$defs/Message"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "order": {
+            "enum": [
+              "newest_first",
+              "oldest_first"
+            ],
+            "type": "string"
+          },
+          "ordering": {
+            "enum": [
+              "page",
+              "global"
+            ],
+            "type": "string"
+          },
+          "progress": {
+            "$ref": "#/$defs/SearchProgress"
+          },
+          "scope": {
+            "$ref": "#/$defs/Scope"
+          },
+          "thread_root": {
+            "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
+            "type": "string"
+          },
+          "topic_id": {
+            "exclusiveMinimum": 0,
+            "maximum": 2147483647,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "chats",
+          "messages",
+          "issues",
+          "next_cursor",
+          "scope",
+          "order",
+          "ordering"
+        ],
+        "type": "object"
+      }
+    },
+    "search_public_channels": {
+      "annotations": {
+        "destructive_hint": null,
+        "idempotent_hint": null,
+        "open_world_hint": true,
+        "read_only_hint": true,
+        "title": null
+      },
+      "input": {
+        "properties": {
+          "limit": {
+            "default": 20,
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "query": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "search_public_channelsArguments",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "channels": {
+            "items": {
+              "$ref": "#/$defs/PublicChannel"
+            },
+            "type": "array"
+          },
+          "exhaustive": {
+            "const": false,
+            "type": "boolean"
+          },
+          "locally_truncated": {
+            "type": "boolean"
+          },
+          "returned_count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "telegram_total_count": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "channels",
+          "returned_count",
+          "locally_truncated",
+          "exhaustive"
         ],
         "type": "object"
       }

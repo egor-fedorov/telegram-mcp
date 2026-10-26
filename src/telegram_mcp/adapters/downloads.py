@@ -259,6 +259,13 @@ class DownloadStore:
             if isinstance(writer, _BoundedWriter) and writer in self._writers:
                 self._discard_writer(writer)
 
+    async def discard_resource(self, token: str) -> None:
+        async with self._lock:
+            entry = self._entries.pop(token, None)
+            if entry is not None:
+                self._orphans[entry.path] = entry.stored.result.size
+                self._remove_orphans()
+
     def _discard_writer(self, writer: _BoundedWriter) -> None:
         with suppress(OSError):
             writer.stream.close()

@@ -205,7 +205,7 @@ def main(dependencies: CliDependencies) -> None:
             if args.transport == "http":
                 dependencies.serve_http(service, settings)
             else:
-                create_server(service).run(transport="stdio")
+                create_server(service, schema_mode=settings.mcp_schema_mode).run(transport="stdio")
         elif args.command == "connect":
             asyncio.run(dependencies.connect(settings))
         elif args.command == "login":

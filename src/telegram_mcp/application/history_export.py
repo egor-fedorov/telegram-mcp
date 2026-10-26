@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from telegram_mcp.application.change_ports import MAX_EXPORT_BYTES, MAX_EXPORT_RECORDS
-from telegram_mcp.application.incremental import BudgetExhausted, IncrementalContext, ReadBudget
+from telegram_mcp.application.incremental import BudgetExhausted, IncrementalContext
 from telegram_mcp.domain.changes import ExportFormat, ExportHistoryResult
 from telegram_mcp.domain.exporting import ExportPart
 from telegram_mcp.domain.models import Issue, ToolError
@@ -20,10 +20,13 @@ class HistoryExportService:
         date_to: datetime | None = None,
         checkpoint: str | None = None,
         format: ExportFormat = "jsonl",
+        save: bool = False,
     ) -> ExportHistoryResult:
         if format not in ("jsonl", "markdown"):
             raise ToolError("INVALID_ARGUMENT", "Use format jsonl or markdown.")
         ctx = self.context
+        if save:
+            ctx.archive.require_enabled()
         async with ctx.request():
             prepared = await ctx.prepare("history", chat_ref, checkpoint, date_from, date_to)
             state = prepared.state
@@ -32,7 +35,7 @@ class HistoryExportService:
             result = ExportHistoryResult(
                 chat_id=state.chat_id, date_from=state.date_from, date_to=state.date_to
             )
-            budget = ReadBudget(ctx.clock, ctx.limits)
+            budget = ctx.budget()
             part: ExportPart | None = None
             try:
                 if state.upper_id is None:
@@ -115,15 +118,33 @@ class HistoryExportService:
                 )
             result.complete = state.phase == "done"
             result.upper_message_id = state.upper_id
+            receipt = None
             if not result.complete:
-                receipt = ctx.checkpoints.put(state, prepared.binding, retain=checkpoint)
+                receipt = ctx.checkpoints.put(
+                    state, prepared.binding, retain=checkpoint, pending=True
+                )
                 result.next_checkpoint, result.checkpoint_expires_at = (
                     receipt.token,
                     receipt.expires_at,
                 )
-            if part is not None:
-                data = part.finish(result.model_dump(mode="json", exclude={"export"}))
-                result.export = await ctx.exports.save(
-                    data, format, state.chat_id, prepared.binding
-                )
+            try:
+                if part is not None:
+                    data = part.finish(result.model_dump(mode="json", exclude={"export"}))
+                    result.export = await ctx.exports.save(
+                        data, format, state.chat_id, prepared.binding
+                    )
+                    if save:
+                        result.export.saved_file = await ctx.archive.save(
+                            data, result.export.name, result.export.sha256
+                        )
+                if receipt is not None:
+                    ctx.checkpoints.confirm(receipt.token)
+            except BaseException:
+                if receipt is not None:
+                    ctx.checkpoints.discard(receipt.token)
+                if result.export is not None:
+                    if result.export.saved_file is not None:
+                        await ctx.archive.discard(result.export.saved_file)
+                    await ctx.exports.discard(result.export.resource_uri)
+                raise
             return result

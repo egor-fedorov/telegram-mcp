@@ -4,12 +4,21 @@ import argparse
 import asyncio
 import json
 import logging
+import sys
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, field
+from datetime import datetime
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any, Never, Protocol
 from urllib.parse import parse_qs, urlparse
 
+if __package__ in (None, ""):
+    # Keep the documented direct-script invocation working alongside python -m.
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from scripts.probe_artifacts import check_attachment, check_changes_and_exports
+from telegram_mcp.adapters.archive import ArchiveStore
 from telegram_mcp.adapters.checkpoints import CheckpointStore
 from telegram_mcp.adapters.clock import SystemClock
 from telegram_mcp.adapters.config import ConfiguredPolicyProvider, Settings, load_settings
@@ -17,6 +26,13 @@ from telegram_mcp.adapters.cursors import CursorStore
 from telegram_mcp.adapters.downloads import DownloadStore
 from telegram_mcp.adapters.exports import ExportStore
 from telegram_mcp.adapters.telegram import TelegramBackend
+from telegram_mcp.adapters.watches import WatchStore
+from telegram_mcp.application.attachment_ports import (
+    AttachmentKind,
+    AttachmentSource,
+    AttachmentWriter,
+)
+from telegram_mcp.application.attachments import parse_attachment_id
 from telegram_mcp.application.ports import Backend, ExecutionLimits, MessageOffset
 from telegram_mcp.application.requests import MessageRead
 from telegram_mcp.application.service import Service
@@ -58,6 +74,22 @@ KNOWN_CODES = frozenset(
         "VALIDATION_TIMEOUT",
         "UNEXPECTED_ERROR",
         "INTERRUPTED",
+        "ATTACHMENT_UNAVAILABLE",
+        "ATTACHMENT_PROTECTED",
+        "ATTACHMENT_TOO_LARGE",
+        "DOWNLOADS_DISABLED",
+        "DOWNLOAD_UNAVAILABLE",
+        "DOWNLOAD_STORAGE_FULL",
+        "CHECKPOINT_EXPIRED",
+        "CHECKPOINT_INCOMPATIBLE",
+        "CHECKPOINT_STORAGE_ERROR",
+        "CHECKPOINT_STORAGE_FULL",
+        "EXPORT_PROTECTED",
+        "EXPORT_UNAVAILABLE",
+        "EXPORT_STORAGE_FULL",
+        "EXPORT_RECORD_TOO_LARGE",
+        "ARCHIVE_STORAGE_ERROR",
+        "VALIDATION_MISMATCH",
     }
 )
 STOP_CODES = frozenset(
@@ -82,10 +114,17 @@ class Check:
     check: str
     count: int = 0
     issue_codes: list[str] = field(default_factory=list)
+    status: str = "passed"
+
+    def __post_init__(self) -> None:
+        if self.issue_codes:
+            self.status = "failed"
 
 
 class ProbeBackend(Backend, Protocol):
-    def select(self, chat_ids: set[str]) -> None: ...
+    def select(
+        self, chat_ids: set[str], *, attachment_id: str | None = None, m4: bool = False
+    ) -> None: ...
     async def disconnect_owned(self) -> None: ...
 
 
@@ -96,9 +135,68 @@ class LiveBackend(TelegramBackend):
         super().__init__(settings)
         self.selected: set[str] = set()
         self.stopped: ToolError | None = None
+        self.attachment_id: str | None = None
+        self.m4 = False
 
-    def select(self, chat_ids: set[str]) -> None:
+    def select(
+        self, chat_ids: set[str], *, attachment_id: str | None = None, m4: bool = False
+    ) -> None:
         self.selected = set(chat_ids)
+        self.attachment_id, self.m4 = attachment_id, m4
+
+    def require_incremental(self, chat_id: str, count: int = 1) -> None:
+        self.require_selected(chat_id)
+        if not self.m4 or not 0 <= count <= 100:
+            raise ToolError("VALIDATION_SCOPE_DENIED", "Incremental read is outside probe bounds.")
+
+    async def recent_observations(
+        self, chat_id: str, limit: int, *, before: datetime | None = None
+    ) -> Any:
+        self.require_incremental(chat_id, limit)
+        return await self.bounded_read(super().recent_observations(chat_id, limit, before=before))
+
+    async def observe_messages(self, chat_id: str, message_ids: list[int]) -> Any:
+        self.require_incremental(chat_id, len(message_ids))
+        return await self.bounded_read(super().observe_messages(chat_id, message_ids))
+
+    async def read_incremental(
+        self,
+        chat_id: str,
+        *,
+        after_id: int,
+        through_id: int,
+        limit: int,
+        date_from: datetime | None = None,
+    ) -> Any:
+        self.require_incremental(chat_id, limit)
+        return await self.bounded_read(
+            super().read_incremental(
+                chat_id,
+                after_id=after_id,
+                through_id=through_id,
+                limit=min(limit, PAGE_SIZE),
+                date_from=date_from,
+            )
+        )
+
+    async def check_export_source(self, chat_id: str) -> None:
+        self.require_incremental(chat_id)
+        await self.bounded_read(super().check_export_source(chat_id))
+
+    def require_attachment(self, attachment_id: str, chat_id: str) -> None:
+        self.require_selected(chat_id)
+        if self.attachment_id is None or attachment_id != self.attachment_id:
+            raise ToolError(
+                "VALIDATION_SCOPE_DENIED", "Attachment was not selected for this probe."
+            )
+
+    async def prepare_attachment(self, ref: MessageRef, kind: AttachmentKind) -> AttachmentSource:
+        self.require_attachment(f"{ref.key}:{kind}", ref.chat_id)
+        return await self.bounded_read(super().prepare_attachment(ref, kind))
+
+    async def download_attachment(self, source: AttachmentSource, writer: AttachmentWriter) -> None:
+        self.require_attachment(source.attachment_id, source.message_ref.chat_id)
+        await self.bounded_read(super().download_attachment(source, writer))
 
     def require_selected(self, chat_id: str, limit: int = 1) -> None:
         if self.stopped is not None:
@@ -183,8 +281,12 @@ class Recorder:
         self.emit = emit
         self.checks: list[Check] = []
 
-    def add(self, name: str, count: int = 0, codes: list[str] | None = None) -> None:
+    def add(
+        self, name: str, count: int = 0, codes: list[str] | None = None, *, skipped: bool = False
+    ) -> None:
         check = Check(name, count, sorted({safe_code(code) for code in codes or []}))
+        if skipped:
+            check.status = "skipped"
         self.checks.append(check)
         self.emit(check)
         if STOP_CODES.intersection(check.issue_codes):
@@ -205,7 +307,13 @@ class Recorder:
         else:
             messages = getattr(result, "messages", None)
             topics = getattr(result, "topics", None)
-            if messages is not None:
+            if isinstance(result, int):
+                count = result
+            elif hasattr(result, "returned_count"):
+                count = result.returned_count
+            elif hasattr(result, "exported_count"):
+                count = result.exported_count
+            elif messages is not None:
                 count = len(messages)
             elif topics is not None:
                 count = len(topics)
@@ -237,10 +345,12 @@ async def probe(
     message_refs: list[str],
     query: str = "link",
     topics: bool = False,
+    attachment_id: str | None = None,
+    m4: bool = False,
     backend_factory: Callable[[Settings], ProbeBackend] = LiveBackend,
     emit: Callable[[Check], None] = lambda _: None,
 ) -> list[Check]:
-    """Run only selected reads; no configuration changes or output content are persisted."""
+    """Run only selected reads; temporary probe data is removed on every exit path."""
     validate_selectors(chats, message_refs, query)
     restricted = settings.model_copy(
         deep=True,
@@ -255,6 +365,9 @@ async def probe(
     )
     backend = backend_factory(restricted)
     recorder = Recorder(emit)
+    temporary = TemporaryDirectory(prefix="telegram-mcp-probe-")
+    root = Path(temporary.name)
+    service: Service | None = None
     try:
         async with asyncio.timeout(MAX_SECONDS):
             selected: dict[str, Chat] = {}
@@ -267,7 +380,13 @@ async def probe(
                     "VALIDATION_SCOPE_DENIED", "Message source must be selected explicitly."
                 )
             restricted.allowed_chat_ids = list(selected)
-            backend.select(set(selected))
+            if attachment_id is not None:
+                attachment_ref, _ = parse_attachment_id(attachment_id)
+                if attachment_ref.chat_id not in selected:
+                    raise ToolError(
+                        "VALIDATION_SCOPE_DENIED", "Attachment source must be selected explicitly."
+                    )
+            backend.select(set(selected), attachment_id=attachment_id, m4=m4)
             recorder.add("selected_sources", len(selected))
             clock = SystemClock()
             service = Service(
@@ -278,9 +397,11 @@ async def probe(
                 ),
                 CursorStore(clock, maximum=32, max_bytes=1024 * 1024),
                 clock,
-                DownloadStore(restricted.session_path, clock),
-                CheckpointStore(restricted.session_path, clock),
-                ExportStore(restricted.session_path, clock),
+                DownloadStore(restricted.session_path, clock, root=root / "downloads"),
+                CheckpointStore(restricted.session_path, clock, root=root / "checkpoints"),
+                ExportStore(restricted.session_path, clock, root=root / "exports"),
+                WatchStore(restricted.session_path, root=root / "watches"),
+                ArchiveStore(root / "archive", clock),
             )
             await recorder.call("status", service.get_status())
             for index, chat in enumerate(selected.values()):
@@ -362,6 +483,24 @@ async def probe(
                     )
                     if available[ref.key].album_id is not None:
                         await recorder.call(f"album_{index}", service.get_album(ref, scan_limit=5))
+            if attachment_id is not None:
+                await recorder.call(
+                    "attachment_resource_and_archive", check_attachment(service, attachment_id)
+                )
+            else:
+                recorder.add("attachment_resource_and_archive", skipped=True)
+            if m4:
+                await check_changes_and_exports(
+                    service,
+                    recorder,
+                    list(selected),
+                    restricted.session_path,
+                    root / "checkpoints",
+                    clock,
+                    await backend.checkpoint_binding(),
+                )
+            else:
+                recorder.add("changes_and_exports", skipped=True)
             await backend.disconnect_owned()
             recorder.add("disconnect_owned", 1)
             await recorder.call("reconnect_status", service.get_status())
@@ -382,9 +521,14 @@ async def probe(
         recorder.add("probe", codes=["UNEXPECTED_ERROR"])
     finally:
         try:
-            await backend.close()
+            if service is not None:
+                await service.close()
+            else:
+                await backend.close()
         except Exception:
             recorder.add("close", codes=["UNEXPECTED_ERROR"])
+        finally:
+            temporary.cleanup()
     return recorder.checks
 
 
@@ -416,6 +560,15 @@ def parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Also check one page of topics in selected forum chats.",
     )
+    result.add_argument(
+        "--attachment-id",
+        help="Download and verify exactly this selected attachment (up to 20 MiB).",
+    )
+    result.add_argument(
+        "--m4",
+        action="store_true",
+        help="Check durable changes and two bounded one-day export parts per selected source.",
+    )
     return result
 
 
@@ -436,6 +589,8 @@ def main(argv: list[str] | None = None) -> int:
                 message_refs=args.message_ref,
                 query=args.query,
                 topics=args.topics,
+                attachment_id=args.attachment_id,
+                m4=args.m4,
                 emit=print_check,
             )
         )

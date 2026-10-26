@@ -61,7 +61,40 @@ deadline. Failed authorization or folder checks never release saved message buff
 
 STDIO, HTTP and `connect` now share four active tool/resource slots and a FIFO queue of
 16 calls, waiting up to 120 seconds. Queue overflow or timeout returns `SERVER_BUSY`
-with a five-second retry delay. Download/checkpoint operations keep their own locks.
+with a five-second retry delay. Downloads remain serialized; independent incremental
+reads can overlap, while operations on the same named subscription serialize.
+
+## Durable monitoring and selected files
+
+Checkpoint database version 2 migrates existing tokens in place. With no legacy
+ancestry to inspect, migration protects the newest valid token per authorization,
+tool and canonical chat. Current heads are then protected from capacity eviction
+for 30 days; unchanged heads reuse their token and renew expiry. Superseded versions
+remain readable until expiry or capacity eviction. Resuming an older token creates
+an independent branch. `CHECKPOINT_STORAGE_FULL` preserves existing positions rather
+than evicting a protected head. Do not downgrade a migrated database to the old writer.
+
+`get_changes` now reports `baseline_created`. `CHECKPOINT_EXPIRED` never silently
+starts another baseline: recover the missing date range with history/export before
+deliberately starting at the current head.
+
+Use the five named-watch tools for monitoring without retaining per-chat tokens.
+Subscriptions persist positions and one unacknowledged response, including text, in a
+separate private store. Acknowledge each `batch_id` only after processing it. They have
+no automatic expiration or eviction. See [the polling contract](usage.md#monitor-a-folder-or-selected-sources-unreleased).
+
+`save=true` adds a permanent copy to selected downloads or file exports when
+`archive_directory` is configured. The new optional `saved_file` includes its path,
+size, hash and timestamp; ordinary resources retain their 15-minute expiry.
+Permanent copies are managed by the user, not the cache cleaner.
+
+## Compact tool discovery
+
+The default `mcp_schema_mode="compact"` omits optional output schemas from `tools/list`
+while retaining input schemas, descriptions, annotations, typed server-side validation,
+and identical JSON responses. Use `"full"` to advertise output schemas. The 22-tool
+fixture is about 25 KiB in compact mode versus 108 KiB in full mode; server instructions
+stay below 1 KiB. These are regression budgets, not limits on legitimate message text.
 
 ## Offline regression coverage
 
