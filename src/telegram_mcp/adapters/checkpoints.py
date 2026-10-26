@@ -45,6 +45,7 @@ class CheckpointStore:
         self.maximum, self.max_bytes = maximum, max_bytes
         self._connection: sqlite3.Connection | None = None
         self._closed = False
+        self._writer_initialized = False
 
     def _db(self) -> sqlite3.Connection:
         if self._closed:
@@ -97,10 +98,6 @@ class CheckpointStore:
                     )
                     connection.execute("CREATE INDEX checkpoint_parents ON checkpoints(parent)")
                     connection.execute("PRAGMA user_version = 2")
-            # This store is owned by the session process. Unpublished receipts
-            # cannot have reached a caller before a previous process crashed.
-            with connection:
-                connection.execute("DELETE FROM checkpoints WHERE published = 0")
             self._connection = connection
             return connection
         except (OSError, sqlite3.Error):
@@ -119,7 +116,8 @@ class CheckpointStore:
             row = (
                 self._db()
                 .execute(
-                    "SELECT binding, kind, expires, payload FROM checkpoints WHERE token = ?",
+                    "SELECT binding, kind, expires, payload FROM checkpoints "
+                    "WHERE token = ? AND published = 1",
                     (token,),
                 )
                 .fetchone()
@@ -165,6 +163,13 @@ class CheckpointStore:
         token = secrets.token_urlsafe(32)
         try:
             db = self._db()
+            if not self._writer_initialized:
+                # A write follows authenticated source preparation and ownership
+                # of the Telegram session lease. Merely reading a cooldown before
+                # acquiring that lease must not remove another process's receipt.
+                with db:
+                    db.execute("DELETE FROM checkpoints WHERE published = 0")
+                self._writer_initialized = True
             with db:
                 db.execute("DELETE FROM checkpoints WHERE expires <= ?", (now.timestamp(),))
                 db.execute("DELETE FROM cooldowns WHERE until <= ?", (now.timestamp(),))

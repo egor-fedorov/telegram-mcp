@@ -250,6 +250,25 @@ def test_unpublished_file_receipt_keeps_parent_until_confirm_and_cleans_up_after
         reopened.close()
 
 
+def test_cooldown_reader_cannot_remove_an_active_writers_unpublished_receipt(tmp_path):
+    root = tmp_path / "state"
+    writer = CheckpointStore(tmp_path / "session", FakeClock(), root=root)
+    reader = CheckpointStore(tmp_path / "session", FakeClock(), root=root)
+    try:
+        parent = writer.put(state(), "auth")
+        pending = writer.put(state(4), "auth", retain=parent.token, pending=True)
+        # A competing process checks the cooldown before attempting the session lease.
+        assert reader.retry_at("session") is None
+        assert reader.get(parent.token, "auth", "changes").position == 3
+        with pytest.raises(ToolError, match="CHECKPOINT_EXPIRED"):
+            reader.get(pending.token, "auth", "changes")
+        writer.confirm(pending.token)
+        assert reader.get(pending.token, "auth", "changes").position == 4
+    finally:
+        reader.close()
+        writer.close()
+
+
 def test_v1_migration_preserves_tokens_and_protects_latest_per_source(tmp_path):
     root = tmp_path / "state"
     root.mkdir()

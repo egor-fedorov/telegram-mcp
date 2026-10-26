@@ -115,7 +115,7 @@ Compact discovery reduces the 22-tool fixture from 110,210 to 25,330 bytes; full
 remain optional and typed server-side output validation remains enabled. Instructions
 are 851 bytes and distinguish Telegram reads from local state/file writes.
 
-`make check` passes with 1218 tests and two platform-specific skips on Linux. Coverage
+`make check` passes with 1219 tests and two platform-specific skips on Linux. Coverage
 includes 4200 polls under the 4096-snapshot quota, restart/replay/ack, source failures,
 access revocation, single-page budgets, Unicode, permanent-file cleanup boundaries and
 all transports in compact/full schema modes. Isolated wheel and source installations
