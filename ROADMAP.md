@@ -24,6 +24,7 @@ need a concrete contract before implementation; no delivery dates are assigned.
 | M4 | Complete for 0.4 | Durable checkpoints, recent revisions and source-linked JSONL/Markdown exports |
 | R4 | Complete for 0.4 | Bounded scope previews, early restricted search, reusable catalogs and concurrent calls |
 | R5 | Complete for 0.4 | Named subscriptions, protected positions, permanent selected files and compact discovery |
+| M5 | Proposed for 0.5 | Reusable monitoring prompts, source-linked digests and prompt support across transports |
 
 The [0.4 changelog](CHANGELOG.md#040---2026-10-26), [migration guide](docs/migration-0.4.md)
 and [validation record](docs/validation-0.4.md) describe the complete release scope.
@@ -55,12 +56,44 @@ Telegram readers and shared explicit fixtures. Dependency and development-tool u
 receive manual review; CI checks supported Python/platform combinations and fresh
 wheel/source installations.
 
-## Next decisions
+## Proposed 0.5: monitoring workflows
 
-Review 0.4 usage and concrete bug reports before selecting another milestone. No M5
-scope is committed. Broader change journals and multi-source exports remain later
-decisions, alongside saved searches, local text/semantic indexes, OCR or transcription,
-scheduled monitoring, optional writes or administration, and isolated account profiles.
+The [M5 proposal](docs/specs/m5-monitoring-workflows.md) is ready for review; it is not
+implemented or released. Make the existing subscriptions usable from a new agent
+session through prompts for pending changes, a period digest and vacancy selection.
+The calling agent performs analysis, preserves source links, reports partial coverage
+and acknowledges each batch only after processing it. Extend prompt discovery and
+retrieval through STDIO, native HTTP and `connect`.
+
+Reuse the 0.4 watch positions, acknowledgement protocol and permanent archive.
+Do not add another folder-checkpoint API, server-side deduplication store, scheduler
+or built-in LLM. Known forwards can be grouped in a digest while retaining every
+publication reference. See the proposal for contracts and acceptance criteria.
+
+## Distribution follow-ups
+
+These can ship independently and do not gate M5:
+
+1. [Publish the PyPI package to the MCP Registry (#39)](https://github.com/egor-fedorov/telegram-mcp/issues/39).
+2. [Support opt-in shared HTTP server autostart (#40)](https://github.com/egor-fedorov/telegram-mcp/issues/40), starting with a tested user-level systemd service.
+3. [Ship a validated MCPB bundle (#41)](https://github.com/egor-fedorov/telegram-mcp/issues/41), after the setup and session-ownership model is settled.
+
+## Later decisions
+
+A candidate for 0.6 is optional text extraction from text-based PDF and DOCX
+attachments, with bounded work and document provenance. OCR and voice transcription
+need separate decisions about engines, dependencies and local versus external processing.
+
+Optional Telegram writes remain a later candidate: drafts first, then separately
+authorized sending, with editing/deletion considered afterward. The
+[sending proposal in PR #32](https://github.com/egor-fedorov/telegram-mcp/pull/32) is a
+discussion input, not the M5 contract. Confirmation defaults, client/bridge support,
+existing draft preservation and recovery after an uncertain send need decisions
+before implementation. No 0.7 scope is committed.
+
+Broader change journals, multi-source exports, saved searches, local text/semantic
+indexes, scheduled monitoring, administration and isolated account profiles also
+remain later decisions. Prioritize concrete usage and bug reports from 0.4.
 
 Preserve original content and links; summaries must not replace them. Basic retrieval
 should require neither a built-in LLM nor a persistent message database. Features

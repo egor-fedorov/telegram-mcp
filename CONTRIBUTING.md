@@ -3,8 +3,8 @@
 Use English for repository documentation, code comments, CLI text, commit messages,
 and pull requests. Keep multilingual fixtures when their language matters to a test.
 See [ROADMAP.md](ROADMAP.md) for current priorities, [Architecture](docs/architecture.md)
-for dependency boundaries, and [completed specifications](docs/specs/README.md) for
-the accepted milestone contracts.
+for dependency boundaries, and [milestone specifications](docs/specs/README.md) for
+proposed and completed contracts, clearly marked by status.
 
 ## Local setup and checks
 

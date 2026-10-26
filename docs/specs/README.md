@@ -1,8 +1,14 @@
-# Completed specifications
+# Milestone specifications
 
-These documents preserve accepted delivery specifications. They describe
-the implementation at each milestone; later changes are recorded in the
+Proposed contracts are review material, not implemented features. Completed contracts
+describe delivery at each milestone; later changes are recorded in the
 [changelog](../../CHANGELOG.md) and [roadmap](../../ROADMAP.md).
+
+## Proposed
+
+- [M5: Monitoring workflows (0.5)](m5-monitoring-workflows.md)
+
+## Completed
 
 - [M1: Public-channel discovery](m1-public-channel-discovery.md)
 - [M2: Message navigation and metadata](m2-message-navigation.md)

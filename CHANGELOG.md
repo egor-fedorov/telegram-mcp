@@ -8,6 +8,11 @@ A version entry describes its target artifact. Verify publication on
 
 ## [Unreleased]
 
+### Documentation
+
+- Propose 0.5 monitoring workflows and track Registry, shared-server autostart and
+  MCPB distribution separately. The proposal does not add runtime capabilities.
+
 ## [0.4.0] - 2026-10-26
 
 ### Added
