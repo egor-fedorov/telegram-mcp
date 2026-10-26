@@ -101,6 +101,12 @@ def test_full_v2_database_migrates_conservatively_and_offline_prune_restores_cap
         db.execute("PRAGMA user_version = 2")
     store = CheckpointStore(tmp_path / "session", clock, root=root, maximum=4)
     try:
+        # The session-wide cooldown is read before the runtime owns its lease.
+        # An existing version-2 process must still be able to use its old schema.
+        assert store.retry_at("session") == until
+        with sqlite3.connect(store.path) as db:
+            assert db.execute("PRAGMA user_version").fetchone()[0] == 2
+            assert len(db.execute("PRAGMA table_info(checkpoints)").fetchall()) == 9
         assert store.status()["count"] == 4
         with pytest.raises(ToolError, match="CHECKPOINT_STORAGE_FULL"):
             store.put(snapshot(5), "auth")

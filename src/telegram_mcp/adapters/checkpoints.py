@@ -401,15 +401,37 @@ class CheckpointStore:
             raise _storage_error() from None
 
     def retry_at(self, binding: str) -> datetime | None:
+        if self._closed:
+            raise _storage_error()
+        connection = self._connection
+        owned = False
         try:
-            row = (
-                self._db()
-                .execute("SELECT until FROM cooldowns WHERE binding = ?", (binding,))
-                .fetchone()
-            )
+            if connection is None:
+                if not self.path.exists():
+                    return None
+                # This read precedes ownership of the Telegram session. In
+                # particular, do not migrate an old server's live schema here.
+                connection = open_private_database(self.path)
+                owned = True
+                version = connection.execute("PRAGMA user_version").fetchone()[0]
+                if version not in (0, 1, 2, 3):
+                    raise ToolError(
+                        "CHECKPOINT_INCOMPATIBLE", "Unknown checkpoint database version."
+                    )
+                if (
+                    version == 0
+                    and not connection.execute("SELECT name FROM sqlite_master").fetchone()
+                ):
+                    return None
+            row = connection.execute(
+                "SELECT until FROM cooldowns WHERE binding = ?", (binding,)
+            ).fetchone()
             return datetime.fromtimestamp(row[0], UTC) if row else None
-        except (sqlite3.Error, ValueError, OverflowError):
+        except (OSError, sqlite3.Error, ValueError, OverflowError):
             raise _storage_error() from None
+        finally:
+            if owned and connection is not None:
+                connection.close()
 
     def defer(self, binding: str, until: datetime) -> None:
         try:
