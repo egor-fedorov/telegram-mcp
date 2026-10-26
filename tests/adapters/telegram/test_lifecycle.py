@@ -188,8 +188,8 @@ async def test_catalog_message_and_forum_gateways_share_one_runtime(tmp_path: Pa
     from telethon import types
 
     from telegram_mcp.adapters.telegram import TelegramBackend
-    from telegram_mcp.application.ports import TopicOffset
-    from telegram_mcp.application.requests import HistoryRead
+    from telegram_mcp.application.ports import GlobalOffset, TopicOffset
+    from telegram_mcp.application.requests import HistoryRead, SearchRead, TopicRead
     from tests.support.fakes import BASE
 
     settings = settings_for_session(tmp_path)
@@ -223,6 +223,16 @@ async def test_catalog_message_and_forum_gateways_share_one_runtime(tmp_path: Pa
             return types.messages.Dialogs(dialogs=[dialog], messages=[], chats=[entity], users=[])
         if isinstance(request, functions.messages.GetDialogFiltersRequest):
             return SimpleNamespace(filters=[])
+        if isinstance(
+            request,
+            (
+                functions.messages.SearchRequest,
+                functions.messages.SearchGlobalRequest,
+                functions.messages.GetRepliesRequest,
+                functions.messages.GetHistoryRequest,
+            ),
+        ):
+            return types.messages.Messages(messages=[], topics=[], chats=[], users=[])
         assert isinstance(request, functions.messages.GetForumTopicsRequest)
         return types.messages.ForumTopics(
             count=0, topics=[], messages=[], chats=[], users=[], pts=1
@@ -241,12 +251,22 @@ async def test_catalog_message_and_forum_gateways_share_one_runtime(tmp_path: Pa
         assert len(chats) == 1 and chats[0].is_forum
         assert (await backend.read(chats[0].id, HistoryRead())).messages == []
         assert (await backend.fetch_topics(chats[0].id, offset=TopicOffset())).topics == []
+        assert (await backend.read(chats[0].id, SearchRead("query"))).messages == []
+        assert (await backend.read(chats[0].id, TopicRead(1))).messages == []
+        assert (
+            await backend.history_window(chats[0].id, anchor_id=10, limit=5, newer=True)
+        ).messages == []
+        assert (
+            await backend.search_global(
+                SearchRead("query"), offset=GlobalOffset(), limit=5, chat_ids=[chats[0].id]
+            )
+        ).messages == []
         constructor.assert_called_once()
         client.connect.assert_awaited_once()
         client.get_entity.assert_not_called()
         client.get_messages.assert_awaited_once()
-        client.get_input_entity.assert_awaited_once()
-        assert client.await_count == 6
+        assert client.get_input_entity.await_count == 4
+        assert client.await_count == 10
     finally:
         await backend.close()
     client.disconnect.assert_awaited_once()
