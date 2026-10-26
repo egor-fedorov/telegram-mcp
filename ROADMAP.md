@@ -22,6 +22,7 @@ need a detailed contract before implementation; no delivery dates are assigned.
 | R3 | Done | Recoverable connections, bounded catalogs/search, and compact typed 0.3 responses |
 | M3 | Implemented, unreleased | Selected attachment downloads with size limits and delivery to the calling client |
 | M4 | Planned after M3 | New messages and available changes, persistent checkpoints, and source-linked export |
+| M5 | Proposed | Optional plain-text message sending with a separate allowlist and explicit delivery status |
 
 The [historical completion records](docs/specs/README.md#historical-completion-records)
 include offline test results. They do not claim live Telegram validation.
@@ -70,11 +71,18 @@ publication is included in the implementation PR; published 0.3.0 is unchanged.
 Define persistent checkpoints, retrieval of new messages and available changes, and
 export with original source links. Its detailed contract remains to be planned.
 
+## Proposed: M5 — Optional message sending
+
+Adds `send_message` for plain text in explicitly allowlisted chats, separate from read
+permissions and off by default, with optional per-message confirmation and a reported
+delivery status that is never retried automatically. Under review; see the
+[M5 proposal](docs/specs/m5-message-sending.md).
+
 ## Later decisions
 
 M4 will define persistent checkpoints and explicit export coverage. Other directions
 remain proposals: saved searches and source collections, local text/semantic indexes,
-OCR or transcription, monitoring and notifications, optional writes or administration,
+OCR or transcription, monitoring and notifications, other writes or administration,
 and remote access or separately isolated account profiles.
 
 Preserve originals and source links; summaries must not replace them. No basic
