@@ -71,10 +71,11 @@ wheel/source installations.
   completion, forwarded through STDIO, HTTP and `connect`. Templates treat Telegram
   content as data and bound each workflow. The vacancy digest is a documented preset.
 
-Offline `make check` passes: Ruff, ty and 1338 tests (two platform-specific skips). Before publication,
-acceptance criterion 6 requires a bounded live check of prompt/completion discovery and
-a workflow in a real client on selected sources, including interruption after archiving
-and recovery from retained files. No live Telegram or client validation has been done.
+Offline `make check` passes: Ruff, ty and 1338 tests (two platform-specific skips).
+Before publication, acceptance criterion 6 requires a bounded live check of
+prompt/completion discovery and a workflow in a real client on selected sources,
+including interruption after archiving and recovery from retained files. No live
+Telegram or client validation has been done.
 
 ## Distribution follow-ups
 
