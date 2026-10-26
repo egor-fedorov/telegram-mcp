@@ -1,172 +1,76 @@
 # Telegram MCP roadmap
 
-The project aims to provide general-purpose Telegram access for agents: discover sources,
-retrieve original messages and files, and track changes. The calling agent
-performs content analysis. Reading, downloading, writing, and administration remain
+The project provides general-purpose Telegram access for agents: discover permitted
+sources, retrieve original messages and files, and track changes. The calling agent
+performs content analysis. Reading, downloading, writing and administration remain
 separate capabilities with separate permissions.
 
-This file tracks priorities and delivery status. Completed implementation contracts
+This file tracks priorities and delivery status. Historical implementation contracts
 are preserved in [docs/specs](docs/specs/README.md); current behavior is described in
-[usage](docs/usage.md) and [configuration](docs/configuration.md). Planned milestones
-need a detailed contract before implementation; no delivery dates are assigned.
+[usage](docs/usage.md) and [configuration](docs/configuration.md). Future milestones
+need a concrete contract before implementation; no delivery dates are assigned.
 
 ## Milestones
 
 | ID | Status | Outcome |
 | --- | --- | --- |
-| M0 | Done | Reliable references, explicit public reads, batches, recovery, and fresh authorization status |
+| M0 | Done | Reliable references, explicit public reads, batches, recovery and fresh authorization |
 | M1 | Done | Opt-in public-channel search and recommendations without granting post access |
-| M2 | Done | Forum topics, pins, counters, reactions, polls, and bounded selected-album retrieval |
-| R1 | Done | Domain/application/adapter layers and explicit dependencies, preserving all 14 tools |
-| R2 | Done | Installable 0.2.0 package, Windows support, shared local HTTP process, client guides, and release automation |
-| R3 | Done | Recoverable connections, bounded catalogs/search, and compact typed 0.3 responses |
-| M3 | Implemented, unreleased | Selected attachment downloads with size limits and delivery to the calling client |
-| M4 | Implemented, unreleased | New messages, bounded recent revisions, persistent checkpoints, and source-linked JSONL/Markdown export |
-| R4 | Implemented, unreleased | Bounded scope previews, early restricted-search results, reusable dialog snapshots and concurrent transport calls |
-| R5 | Implemented, unreleased | Protected checkpoint heads, named subscriptions with acknowledged delivery, permanent selected files and compact tool discovery |
+| M2 | Done | Topics, pins, counters, reactions, polls and bounded album retrieval |
+| R1 | Done | Domain/application/adapter layers with explicit dependencies |
+| R2 | Done (0.2) | Installable package, Windows support, shared local HTTP, client guides and release automation |
+| R3 | Done (0.3) | Recoverable connections, bounded catalogs/search and compact typed responses |
+| M3 | Complete for 0.4 | Selected attachment downloads with limits and resource delivery |
+| M4 | Complete for 0.4 | Durable checkpoints, recent revisions and source-linked JSONL/Markdown exports |
+| R4 | Complete for 0.4 | Bounded scope previews, early restricted search, reusable catalogs and concurrent calls |
+| R5 | Complete for 0.4 | Named subscriptions, protected positions, permanent selected files and compact discovery |
 
-The [historical completion records](docs/specs/README.md#historical-completion-records)
-include offline test results. They do not claim live Telegram validation.
+The [0.4 changelog](CHANGELOG.md#040---2026-10-26), [migration guide](docs/migration-0.4.md)
+and [validation record](docs/validation-0.4.md) describe the complete release scope.
+A merged PR is not proof of publication: verify the version on
+[PyPI](https://pypi.org/project/telegram-context-mcp/0.4.0/) and
+[GitHub Releases](https://github.com/egor-fedorov/telegram-mcp/releases/tag/v0.4.0).
+The [0.3 validation record](docs/validation-0.3.md) retains earlier measurements.
 
-The published 0.3.0 retrieval work is recorded in the [changelog](CHANGELOG.md#030---2026-10-22),
-[migration guide](docs/migration-0.3.md) and [validation record](docs/validation-0.3.md).
-Release and live-validation evidence belongs there, rather than in this priority list.
+## 0.4 completion
 
-## Completed maintenance: repository organization
+Monitoring now batches selected peer metadata, supports acknowledgement with the next
+poll, and bounds explicit watch creation. One unused baseline per source remains
+protected; consumed chains retain independent protection. Conservative migration and
+local preview/cleanup commands recover already full stores. Permanent copies include
+source metadata and publish through bounded worker threads with cancellation cleanup.
 
-Tests now follow the domain, application, adapter, integration and contract boundaries;
-shared helpers are explicit support modules. Telegram search, topic history and album
-windows have focused readers sharing the existing runtime and entity cache. Existing
-MCP contracts and retrieval behavior are preserved. The architecture and contributor
-guides describe the current structure, and the usage guide has a navigation index.
+Selected-source live checks exercised photo and video/document downloads, checkpoint
+reopen/continuation, JSONL export integrity and owned-client reconnect. A manual test
+through real STDIO MCP processes verified new-message delivery, exact replay after
+restart, edits without a new post, duplicate acknowledgements and an empty final poll.
+The validation record distinguishes agent-run checks from the maintainer-provided M4
+report and records the limits of live coverage. Source content and credentials are not
+part of the public record; disposable test state and files were removed.
 
-Development maintenance also updates ty to 0.0.92 and Ruff to 0.17.2, corrects async context-manager
-annotations, and separates development-tool updates in Dependabot while retaining
-manual review and CI. See [contributor guidance](CONTRIBUTING.md#dependencies-and-releases).
+Offline coverage includes 4200-poll and fresh-baseline retention regressions, large
+catalog/scope fixtures, edit and retry behavior, access revocation, archive cancellation,
+all transports and both schema modes. Tests are organized by layer, with focused
+Telegram readers and shared explicit fixtures. Dependency and development-tool updates
+receive manual review; CI checks supported Python/platform combinations and fresh
+wheel/source installations.
 
-Dependency maintenance updates MCP to 2.3.0, the HTTP stack and platformdirs, plus PyJWT 2.15.1
-and OpenTelemetry API 1.45.1 for the reported transitive dependency vulnerabilities.
-Updates receive manual compatibility review and offline/CI validation.
-CI and release workflows also use reviewed patch updates of the SHA-pinned setup
-and artifact actions.
+## Next decisions
 
-## M3 — Selected attachment downloads (unreleased)
+Review 0.4 usage and concrete bug reports before selecting another milestone. No M5
+scope is committed. Broader change journals and multi-source exports remain later
+decisions, alongside saved searches, local text/semantic indexes, OCR or transcription,
+scheduled monitoring, optional writes or administration, and isolated account profiles.
 
-Adds opt-in `download_attachment` for one selected attachment up to 20 MiB, with a
-temporary local file and MCP resource delivered over STDIO, HTTP, or `connect`.
-Downloads expire after 15 minutes; storage is bounded to 100 MiB / 32 files. Access,
-protection and media identity are rechecked before resource output. Temporary files
-are cleaned up, and stale Telegram references receive one controlled refresh.
-See the [M3 contract](docs/specs/m3-attachment-downloads.md) and
-[usage](docs/usage.md#download-a-selected-attachment-unreleased).
-
-Local `make check` passed with 1,036 tests and two Windows-only skips on Linux,
-including full 20 MiB resource transfers over all three connection paths.
-
-Live attachment validation on explicitly selected photo/document sources is separate
-and remains required before publishing this capability. No version tag or package
-publication is included in the implementation PR; published 0.3.0 is unchanged.
-
-## M4 — Changes and export (unreleased)
-
-Adds `get_changes` for one selected chat and `export_history` for frozen date ranges.
-Immutable checkpoints survive restart and preserve partial progress and FloodWait
-deadlines without storing message bodies. Rechecks cover the last 100 known messages;
-unavailability is not a deletion claim. Export parts retain original text, metadata
-and source links in JSONL or Markdown and use bounded temporary MCP resources.
-See the [M4 contract](docs/specs/m4-changes-export.md) and
-[usage](docs/usage.md#changes-and-exports-unreleased).
-
-Offline coverage includes restart/replay, retention, access revocation, recovery,
-protection omissions, Unicode, part limits and all three resource transports.
-`make check` passes: formatting, lint, types, and 1118 tests (2 platform-specific skips).
-Selected-source live validation remains separate. No tag or package is published here.
-
-## R4 — Large-account retrieval (unreleased)
-
-The source version is `0.4.0.dev0`. Scope responses preview at most 20 selected and
-pending IDs with exact counts. Restricted search defaults to page-local ordering and
-returns early; strict global ordering remains an explicit choice. No outside-allowlist
-message reads are introduced. Dialog snapshots default to five minutes of reuse plus
-five minutes during one shared background refresh; folder definitions and authorization
-remain fresh on each dependent call. All transports admit four concurrent calls and
-up to 16 FIFO waiters with a 120-second queue timeout.
-
-Offline regressions cover 3000-source payload sizes, 100/300-source search traversal,
-2000-dialog reuse and hard expiry, access revocation, FloodWait, worker cancellation,
-and overlapping calls/cursor replay through STDIO, HTTP and the proxy. See the
-[0.4 migration](docs/migration-0.4.md) and [architecture](docs/architecture.md).
-Local `make check` passes: formatting, lint, types, and 1164 tests (2 platform-specific skips).
-Dependency versions are unchanged. Live validation, tags and package publication are separate.
-
-## R5 — Reliable monitoring and retained files (unreleased)
-
-Current checkpoint heads now survive capacity pressure for 30 days. Unchanged heads
-reuse their token, independent branches remain protected, and a full store reports an
-explicit error instead of discarding a position. Existing databases migrate in place.
-Named chat/folder subscriptions persist one unacknowledged batch and positions across
-sessions, with explicit acknowledgement, fair bounded polling and no background scheduler.
-New folder members start at the previous completed sweep boundary; returning members resume.
-
-Selected downloads and exports support `save=true` under a configured archive directory.
-Permanent copies survive cache expiry and shutdown, with no automatic deletion. Client
-documentation distinguishes advertised resource capabilities from tested SDK delivery.
-Compact discovery reduces the 22-tool fixture from 110,210 to 25,330 bytes; full schemas
-remain optional and typed server-side output validation remains enabled. Instructions
-are 851 bytes and distinguish Telegram reads from local state/file writes.
-
-`make check` passes with 1219 tests and two platform-specific skips on Linux. Coverage
-includes 4200 polls under the 4096-snapshot quota, restart/replay/ack, source failures,
-access revocation, single-page budgets, Unicode, permanent-file cleanup boundaries and
-all transports in compact/full schema modes. Isolated wheel and source installations
-also pass the compact/full contract probe. The extended live-probe harness tests
-selected M3/M4 artifacts and checkpoint reopen with explicit skipped coverage reporting;
-its bounds, redaction and cleanup are verified offline. See [usage](docs/usage.md),
-[migration](docs/migration-0.4.md) and [live validation](docs/live-validation.md).
-Dependencies and source version remain unchanged; no live run, tag or publication is included.
-
-## Monitoring resource fixes (unreleased)
-
-Known channel/supergroup subscriptions now compare selected peer heads and `pts` in
-batches of 100, preserving ordinary revision checks for unsupported cases and observed
-polls. Warm offline fixtures need one peer RPC for 100 unchanged channels and ten for
-1000, plus shared authorization/folder checks. `ack_batch_id` combines explicit
-acknowledgement with the next poll. Creation accepts 20 explicit references, deduplicates
-aliases and has a 35-second deadline; folders cover larger selections.
-
-One unused baseline per source remains protected; consumed chains retain independent
-30-day protection. Version-3 checkpoint migration preserves ambiguous legacy roots,
-with offline preview/cleanup commands to recover an already full store. Permanent
-copies include source metadata and publish through two worker threads with cancellation
-cleanup. The monitoring live-probe mode accepts up to 40 explicitly approved selectors;
-offline coverage verifies its bounds and redaction. Live validation remains separate.
-
-`make check` passes with 1255 tests and two platform-specific skips on Linux. Coverage
-includes 4200 fresh baselines, migration/cleanup, one-RPC budgets, edits without a new
-head, FloodWait, lost acknowledgements and archive cancellation. Compact/full contracts
-and combined acknowledgement/source metadata are exercised over all three transports.
-Dependencies and the development version are unchanged; no Telegram live run or release
-is included in this fix.
-
-## Next: validate and release
-
-Complete the selected-source live validation of M3/M4 and the 0.4 retrieval changes before publication.
-Follow the release procedure separately; a merged implementation is not a published package.
-
-## Later decisions
-
-Broader change journals and multi-source exports remain later decisions. Other directions
-remain proposals: saved searches and source collections, local text/semantic indexes,
-OCR or transcription, scheduled monitoring and notifications, optional writes or administration,
-and remote access or separately isolated account profiles.
-
-Preserve originals and source links; summaries must not replace them. No basic
-retrieval capability should require a built-in LLM or a persistent message database.
+Preserve original content and links; summaries must not replace them. Basic retrieval
+should require neither a built-in LLM nor a persistent message database. Features
+should address demonstrated needs and retain explicit permissions and bounded work.
 
 ## Working process
 
-Select a bounded item, finalize its contract, and use a Conventional Branch from the
-latest `main`. Add appropriate offline checks and documentation, open a focused PR,
-wait for the required GitHub `checks` job, and squash-merge. Record completed work
-here and public changes in [CHANGELOG.md](CHANGELOG.md). Archive detailed completed
-specifications instead of growing this status document. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Start a Conventional Branch from current `main` for one bounded change. Add appropriate
+offline checks and documentation, open one focused PR, wait for the required GitHub
+`checks` job and squash-merge. Record completed work here and public changes in
+[CHANGELOG.md](CHANGELOG.md). Archive detailed completed contracts rather than growing
+this status document. See [CONTRIBUTING.md](CONTRIBUTING.md) and the separate
+[release procedure](docs/releasing.md).

@@ -8,102 +8,76 @@ A version entry describes its target artifact. Verify publication on
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-26
+
 ### Added
 
-- `get_watch_changes(ack_batch_id=...)` acknowledges an already processed batch and
-  polls in the same call. Duplicate acknowledgement retries replay the next pending batch.
-- Offline `telegram-mcp checkpoints status/prune` commands, with preview by default,
-  explicit deletion flags and the normal exclusive session lease.
-- Permanent copies include a versioned `metadata.json` with source provenance,
-  original filename, MIME type, checksum and export boundaries; `saved_file.metadata_path`
-  points to it. File and metadata publication and rollback run in bounded worker threads.
-- Opt-in `scripts/probe_telegram.py --monitoring` for up to 40 explicitly selected
-  references, bounded username resolution, peer metadata batches and watch creation.
-
-- Named subscriptions via `create_watch`, `list_watches`, `get_watch_changes`,
-  `ack_watch_changes`, and `delete_watch`. Chat/folder consumers retain positions and
-  one unacknowledged batch across agent/server restarts, require explicit acknowledgement,
-  and never expire or evict pending data under their 64-name / 64 MiB quota. Polling
-  remains on demand, with early bounded results and per-source failure isolation.
-- Optional `archive_directory` and `save=true` for selected downloads and file exports.
-  Private permanent copies have generated paths and checksums, survive cache cleanup,
-  and are managed explicitly by the user. `get_status` reports archive availability.
-- Opt-in M3/M4 live-probe checks for one selected attachment, resource/copy integrity,
-  checkpoint reopen/continuation and bounded history export. Missing flags report
-  skipped coverage; disposable files are cleaned up and reports contain no source content.
-- `get_changes` for one explicitly selected chat: current-head baselines, new messages,
-  bounded recent revision checks, explicit unavailability and durable immutable checkpoints.
-  Checkpoints retain positions/fingerprints without message bodies, survive restart,
-  recheck access and preserve M4 FloodWait deadlines across retries and restarts.
-- `export_history` and file output from `get_changes`, with versioned JSONL and readable
-  Markdown, full original text/metadata and source links. History parts freeze their
-  upper date/ID and resume with checkpoints. Protected/expiring records are omitted explicitly.
-- Temporary UTF-8 export resources through STDIO, HTTP and `connect`, with SHA-256,
-  20 MiB parts, a separate 100 MiB / 32-file cache, 15-minute expiry and cleanup.
-  The original M4 implementation preserved the previous 15 tool contracts; the 0.4
-  changes below apply to the combined development tree. Published 0.3.0 is unchanged.
-
-- Opt-in `download_attachment` for one selected file up to 20 MiB, with a private
-  temporary local path, SHA-256, and an MCP resource available through STDIO, HTTP,
-  and `connect`. Resource reads recheck access, source protection and media identity.
-- Bounded storage (100 MiB / 32 files), 15-minute expiry, cleanup, controlled Telegram
-  file-reference recovery, and FloodWait cooldowns. Published 0.3.0 is unchanged.
+- Opt-in `download_attachment` for a selected photo or document up to 20 MiB, with
+  SHA-256, a private local file and an MCP resource. The 100 MiB / 32-file cache
+  expires after 15 minutes; reads recheck access, protection and media identity.
+- `get_changes` for new messages and bounded recent revisions in one selected chat.
+  Durable checkpoints survive restart without storing message bodies, retain
+  FloodWait deadlines and report unavailable messages without claiming deletion.
+- `export_history` and JSONL/Markdown output from `get_changes`, preserving original
+  text, metadata and source links in bounded, restartable parts. History exports
+  freeze their upper date/ID and omit protected or expiring records explicitly.
+- Named chat/folder subscriptions through `create_watch`, `list_watches`,
+  `get_watch_changes`, `ack_watch_changes` and `delete_watch`. Positions and one
+  unacknowledged batch survive restart; polling is on demand. `ack_batch_id`
+  acknowledges processed data and polls in one call, with safe duplicate retries.
+- Optional `archive_directory` and `save=true` for permanent selected downloads and
+  exports. Each copy includes versioned `metadata.json` provenance, original name,
+  MIME type, checksum and export boundaries. Publication and rollback use bounded
+  worker threads so disk writes do not block other calls.
+- Offline `telegram-mcp checkpoints status/prune`, with preview by default and
+  explicit flags for deleting protected positions under the session lease.
+- Bounded opt-in live probes for selected downloads, checkpoints, exports and peer
+  metadata, with redacted reports and disposable-state cleanup.
 
 ### Changed
 
-- Named watches batch selected channel/supergroup heads and `pts` in groups of 100.
-  Completed unchanged sources skip history/revision RPCs; missing markers, unsupported
-  sources and observed polls retain ordinary checks. Budgets and access checks still apply.
-- Fresh `get_changes(chat_ref=...)` calls protect one unused baseline per source and
-  authorization. Repeated equivalent baselines reuse tokens; superseded unused roots
-  can be evicted. Consumed positions and independent branches remain protected.
-  Version 3 migration conservatively protects ambiguous legacy roots; local cleanup
-  can recover an already full store without removing watches or FloodWait deadlines.
-- `create_watch` accepts at most 20 explicit references, deduplicates equivalent selectors
-  before resolution, and has a 35-second work deadline. Use folders for larger selections;
-  existing larger watches remain readable.
-
-- Current checkpoint heads are protected from capacity eviction for 30 days. Unchanged
-  heads reuse their token and renew expiry; independent branches keep separate heads.
-  A full protected store fails without discarding a position. Database migration keeps
-  existing tokens, and `baseline_created` makes deliberate current-head starts explicit.
-- Compact MCP tool discovery is now the default: optional output schemas are omitted,
-  with typed server-side validation and identical output JSON retained. Set
-  `mcp_schema_mode="full"` to advertise them. The 22-tool fixture is about 25 KiB versus
-  108 KiB in full mode; instructions stay below 1 KiB and describe local write effects.
-- Independent checkpoint/export calls can overlap; subscription operations serialize
-  only by name. The shared transport gate and durable M4 FloodWait cooldown remain.
-- **Breaking 0.4 contract:** scope ID arrays are previews of at most 20 entries, with
-  exact selected/pending counts and explicit truncation flags. Internal authorization
-  and continuation retain the full scope. See [migration guidance](docs/migration-0.4.md).
-- Restricted `search_messages` defaults to `ordering="page"` for early, fairly traversed
-  results sorted within each page; `ordering="global"` retains strict merging. Responses
-  report the actual guarantee and `progress.sources_started`. Both order directions are
-  exposed in MCP. Native unrestricted global search keeps its existing access rules.
-- Dialog cache defaults to 300 seconds plus 300 seconds during background refresh.
-  Current folder definitions and authorization are checked on each dependent call.
-  One shared worker retains scan progress; normal network failures preserve valid
-  snapshots. Cold/hard-expired reads return `CATALOG_LOADING` after a bounded wait.
-- STDIO, HTTP and `connect` now share four active tool/resource slots, a FIFO queue of
-  16 calls and a 120-second queue timeout. Cancellation removes queued work; overflow
-  or timeout returns `SERVER_BUSY` with a five-second retry delay.
-- Set the source version to `0.4.0.dev0`, without a release tag or PyPI publication.
-- Separated Telegram search, topic-history and album-window readers while retaining
-  the shared runtime, entity cache, pagination behavior and MCP contracts.
-- Organized tests by layer with explicit shared helpers; refreshed the architecture
-  guide, shortened the roadmap and added navigation to the usage guide.
-- Updated development checks to ty 0.0.92 and Ruff 0.17.2, with current async
-  context-manager annotations. Dependabot separates development tools from other library updates;
-  updates continue to require manual review and passing CI.
-- Updated the locked MCP packages to 2.3.0, HTTP libraries and platformdirs after
-  compatibility review, preserving the versioned tool contracts and all transports.
-- Updated SHA-pinned setup-uv and artifact upload/download actions in CI and release workflows.
+- **Breaking response contract:** `scope.chat_ids` and `pending_chat_ids` preview at
+  most 20 IDs, with exact counts and truncation flags. Authorization and continuation
+  retain the full scope. See the [migration guide](docs/migration-0.4.md).
+- **Changed search default:** restricted `search_messages` uses `ordering="page"`
+  to return results before every source is initialized. Select `ordering="global"`
+  for ordering across pages. Both traversal directions remain available.
+- Dialog snapshots default to 300 seconds of reuse plus 300 seconds during one
+  shared background refresh. Authorization and folder definitions remain fresh;
+  ordinary connection failures preserve catalog progress and usable snapshots.
+- STDIO, HTTP and `connect` share four active calls, 16 FIFO waiters and a
+  120-second queue timeout. Independent incremental reads can overlap; subscription
+  operations serialize only by name. Downloads remain serialized.
+- Watches compare selected channel/supergroup heads and `pts` in batches of 100.
+  Completed unchanged sources skip history reads; unsupported markers and observed
+  polls retain ordinary revision checks. Creation accepts 20 explicit references,
+  deduplicates aliases and has a 35-second deadline; folders cover larger selections.
+- Current checkpoint heads retain 30-day protection. Equivalent positions reuse
+  tokens; fresh starts protect one unused baseline per source and authorization.
+  Consumed chains and independent branches remain protected. Version-3 migration
+  conservatively retains ambiguous legacy roots; offline cleanup can recover a full store.
+- Compact tool discovery omits optional output schemas by default while retaining
+  typed validation and identical JSON responses. Set `mcp_schema_mode="full"` to
+  advertise them. The full surface now contains 22 tools.
+- Organized tests by layer and separated Telegram search, topic-history and album
+  readers. Updated ty to 0.0.92 and Ruff to 0.17.2; Dependabot separates development
+  tooling and retains manual review. CI/release actions use reviewed pinned updates.
+- Updated locked MCP packages to 2.3.0, the HTTP stack and platformdirs after
+  compatibility checks across STDIO, HTTP and the bridge.
 
 ### Security
 
-- Updated locked PyJWT to 2.15.1 and OpenTelemetry API to 1.45.1 to address the
-  reported vulnerabilities in MCP's transitive dependencies. The local HTTP server
-  continues to authenticate with its configured bearer token.
+- Updated locked PyJWT to 2.15.1 and OpenTelemetry API to 1.45.1 for reported
+  vulnerabilities in transitive dependencies. Local HTTP still requires its bearer token.
+
+### Compatibility and validation
+
+- Existing Telegram sessions and source permissions remain supported. New downloads
+  and permanent copies require explicit opt-ins. After upgrading, restart the server
+  and refresh client tool schemas; do not downgrade a migrated checkpoint database.
+- Offline checks cover Python 3.12–3.15 and all three transports. Selected-source live
+  checks cover photo/video downloads, export integrity, durable monitoring and reconnect.
+  See the [validation record](docs/validation-0.4.md) for measurements and coverage limits.
 
 ## [0.3.0] - 2026-10-22
 

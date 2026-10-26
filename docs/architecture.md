@@ -1,8 +1,8 @@
 # Architecture
 
 The server separates domain contracts, application policy and concrete adapters.
-This document describes the current 0.4 development tree, including unreleased attachment,
-change and export capabilities. The [roadmap](../ROADMAP.md) and [changelog](../CHANGELOG.md) track delivery;
+This document describes the 0.4 architecture, including attachment downloads,
+durable monitoring and export capabilities. The [roadmap](../ROADMAP.md) and [changelog](../CHANGELOG.md) track delivery;
 [completed specifications](specs/README.md) preserve milestone contracts.
 
 ## Dependency rules
@@ -96,7 +96,7 @@ the worker; partial state cannot grant access. Transient failures retain progres
 stop the worker until a later call after the retry deadline. Shutdown cancels and awaits
 it. Self/notification lookups needed by new folder rules are separately serialized.
 Fresh public-channel metadata remains request-local. Direct reads skip the catalog
-when folder policy is absent. See [freshness limits](configuration.md#catalog-freshness-and-recovery-04-unreleased).
+when folder policy is absent. See [freshness limits](configuration.md#catalog-freshness-and-recovery-04).
 
 ## Transports and local resources
 

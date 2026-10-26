@@ -63,7 +63,7 @@ folder/chat metadata. The local catalog does not output message text.
 | `allow_all_chats` | Permits all account chats instead of restricting reads to the allowlist |
 | `allow_public_channel_reads` | Additionally permits an explicitly selected public broadcast channel |
 | `allow_public_channel_discovery` | Enables public-channel search and recommendations; grants no post-reading permission |
-| `allow_attachment_downloads` | Enables selected downloads from already permitted sources; default `false` (unreleased) |
+| `allow_attachment_downloads` | Enables selected downloads from already permitted sources; default `false` |
 
 All four flags default to `false`; both allowlists default to empty. `configure`
 prompts separately for each flag, including `allow_all_chats`. Enter keeps the existing
@@ -80,7 +80,7 @@ Folders form a union; explicit `chat_ids` intersect with selected folders. Query
 cannot expand server permissions. Comments and parent replies from another chat require
 permission for that other chat. No operation automatically joins a source.
 
-## M4 local state (unreleased)
+## M4 local state
 
 Change tracking and text export use ordinary read permissions; they do not enable
 attachment downloads or add source grants. Source builds store checkpoint metadata
@@ -103,12 +103,12 @@ user-data directory. They store positions and one unacknowledged response per na
 including its message text. They have no TTL or automatic eviction; the shared limit
 is 64 subscriptions / 64 MiB. A full store fails without discarding state. Names and
 positions belong to the authorization, not a client; use different names for independent
-consumers. See [monitoring usage](usage.md#monitor-a-folder-or-selected-sources-unreleased).
+consumers. See [monitoring usage](usage.md#monitor-a-folder-or-selected-sources).
 
 Temporary exports expire after 15 minutes or shutdown, with a separate 100 MiB / 32-file
 quota. These tools use the existing read budgets and never run background Telegram polling.
 
-## Permanent copies and tool schemas (unreleased)
+## Permanent copies and tool schemas
 
 ```toml
 # Disabled unless a directory is configured AND the tool receives save=true.
@@ -198,7 +198,7 @@ Cursors additionally share a fixed 64 MiB serialized-data budget. They are proce
 and may expire or be evicted. Increasing a timeout or page budget does not bypass
 Telegram's FloodWait. See [usage](usage.md#retrieval-rules) for continuation and text budgets.
 
-## Catalog freshness and recovery (0.4, unreleased)
+## Catalog freshness and recovery (0.4)
 
 Each catalog-dependent call checks authorization and retrieves current folder definitions
 with `GetDialogFilters`. Removing a folder, changing its categories, or explicitly
@@ -229,11 +229,11 @@ it does not silently start a complete dialog scan. A normal timeout or reconnect
 with unchanged authorization preserves the snapshot. Authorization loss or replacement
 invalidates both completed and unfinished state. See [migration guidance](migration-0.4.md).
 
-## Selected download limits (unreleased)
+## Selected download limits
 
 `allow_attachment_downloads` is the only additional setting; `configure` preserves
 its current value on Enter. Fixed limits are 20 MiB per attachment, 60 seconds per
 operation, 100 MiB / 32 temporary files, and a 15-minute lifetime. `get_status` exposes
 `attachment_max_bytes`, `download_max_bytes`, `download_max_files`, and
-`download_ttl_seconds`. See [download usage](usage.md#download-a-selected-attachment-unreleased)
+`download_ttl_seconds`. See [download usage](usage.md#download-a-selected-attachment)
 for selection, storage cleanup and resource delivery. Proxy settings do not grant downloads.

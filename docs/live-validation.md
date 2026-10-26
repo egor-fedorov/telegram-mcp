@@ -65,6 +65,17 @@ The selected attachment also requires `allow_attachment_downloads=true` in confi
 `--m4` opts into checkpoint and export checks for the selected chats.
 There is no global-search option.
 
+Channel attachment IDs start with a negative chat ID. Use `=` so the argument parser
+treats the complete value as an ID rather than another option:
+
+```sh
+uv run --locked python scripts/probe_telegram.py \
+  --chat @selected_channel \
+  --attachment-id=-1001234567890:123:photo
+```
+
+The value above is illustrative; use the actual ID returned for the selected post.
+
 The script clones settings in memory, replaces the allowlist with the selected
 canonical IDs, and disables folder grants, unrestricted access, public-channel
 read exceptions, and discovery. It does not save configuration changes. The

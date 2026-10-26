@@ -1,9 +1,10 @@
 # M3: Selected attachment downloads
 
-Status: implemented in source, unreleased. Live attachment validation remains separate.
-User-facing behavior and errors are documented in [usage](../usage.md#download-a-selected-attachment-unreleased).
+Status: implemented for 0.4.0. Selected-source live checks are recorded in
+[0.4 validation](../validation-0.4.md).
+User-facing behavior and errors are documented in [usage](../usage.md#download-a-selected-attachment).
 This is the original milestone contract. Later permanent-copy behavior is documented
-in the [current guide](../usage.md#keep-selected-files-unreleased).
+in the [current guide](../usage.md#keep-selected-files).
 
 ## Capability and contract
 

@@ -1,8 +1,8 @@
 # M4: Changes and export
 
-Status: implemented, unreleased. No version tag or PyPI publication is part of this
-milestone. Published 0.3.0 and its existing retrieval interfaces remain unchanged.
-Current examples and operational limits are in [usage](../usage.md#changes-and-exports-unreleased).
+Status: implemented for 0.4.0. Selected-source live checks are recorded in
+[0.4 validation](../validation-0.4.md); publication follows the release procedure.
+Current examples and operational limits are in [usage](../usage.md#changes-and-exports).
 This is the original milestone contract. The current guide supersedes its FIFO
 retention rule and single-chat-only monitoring scope with protected checkpoint heads
 and named subscriptions.

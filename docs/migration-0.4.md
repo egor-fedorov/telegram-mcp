@@ -1,10 +1,12 @@
 # Migrating to the 0.4 contract
 
-The source version is `0.4.0.dev0`; this is not a published PyPI release. Installation
-examples pinned to 0.3.0 continue to use the previous behavior. Source users should
-restart the server and refresh their client's tool schemas. Process-local cursors
+Version **0.4.0** adds downloads, durable monitoring and exports, and changes retrieval
+defaults. Update both the shared server and client proxies, restart the server, and
+refresh the client's tool schemas. Process-local cursors
 expire on restart; begin those searches again. There is no legacy response switch.
 Existing configuration, Telegram sessions and durable M4 checkpoint formats remain usable.
+Check [PyPI](https://pypi.org/project/telegram-context-mcp/0.4.0/) for the published artifact
+and the [validation record](validation-0.4.md) for tested paths and limitations.
 
 ## Scope is a bounded preview
 
@@ -53,7 +55,7 @@ The default `catalog_cache_ttl_seconds` increases from 30 to 300. New setting
 refresh for at most another five minutes. Existing explicit TTL values are preserved.
 TTL zero disables reuse; stale zero disables the grace period. Authorization and folder
 definitions are checked on each dependent call. Cached unread/mute/archive/contact state
-and newly joined dialogs may lag. See the [full freshness contract](configuration.md#catalog-freshness-and-recovery-04-unreleased).
+and newly joined dialogs may lag. See the [full freshness contract](configuration.md#catalog-freshness-and-recovery-04).
 
 Normal network failures retain cached dialog state and scan progress. One shared worker
 refreshes on demand, stops on failure, and resumes only after a later call and any retry
@@ -78,7 +80,7 @@ New unused baselines have one protected head per authorization and chat; fresh
 equivalent starts reuse a token. Continuing a token protects that independent chain.
 Version-2 roots may already have been continued without changing their token, so the
 version-3 migration conservatively keeps them protected. If storage is already full,
-use the [offline preview and cleanup commands](usage.md#inspect-or-clean-checkpoints-unreleased)
+use the [offline preview and cleanup commands](usage.md#inspect-or-clean-checkpoints)
 after stopping the session owner. Protected cleanup explicitly invalidates selected
 tokens; it never resets named watches or stored FloodWait deadlines.
 
@@ -89,7 +91,7 @@ deliberately starting at the current head.
 Use the five named-watch tools for monitoring without retaining per-chat tokens.
 Subscriptions persist positions and one unacknowledged response, including text, in a
 separate private store. Acknowledge each `batch_id` only after processing it. They have
-no automatic expiration or eviction. See [the polling contract](usage.md#monitor-a-folder-or-selected-sources-unreleased).
+no automatic expiration or eviction. See [the polling contract](usage.md#monitor-a-folder-or-selected-sources).
 `get_watch_changes` also accepts `ack_batch_id` for acknowledgement followed by polling.
 Channel/supergroup event markers skip unchanged completed reads; existing watches
 establish their markers through normal bounded passes. Creation now accepts at most
@@ -117,7 +119,8 @@ Fixtures cover 300/3000-source payloads, 100/300-source searches, and a 2000-dia
 catalog. Scope stays below 2 KiB; complete duplicated MCP results stay below 24 KiB for
 10 short messages and 32 KiB for 30 chats in those fixtures. These are measured fixture
 budgets, not universal response limits. Text and metadata are not dropped to meet them.
-For the 3000-source fixture, complete MCP results measure 7,944 bytes for search and
-20,816 bytes for chat listing; the scope object is 896 bytes in each result.
+For the 3000-source release fixture, complete MCP results measure 7,939 bytes for search and
+20,811 bytes for chat listing; the scope object is 896 bytes in each result.
 Real offline STDIO, HTTP and proxy tests cover concurrent histories and cursor replay
-in both MCP modes. Selected-source live validation and publication remain separate.
+in both MCP modes. See the [validation record](validation-0.4.md) for selected-source
+live evidence and its limits; publication follows the separate release procedure.

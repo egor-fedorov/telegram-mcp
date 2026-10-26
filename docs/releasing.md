@@ -1,9 +1,10 @@
 # Releasing Telegram Context MCP
 
 The distribution is `telegram-context-mcp`; its executable is `telegram-mcp`.
-The next release target is **0.4.0**; the source version is currently `0.4.0.dev0`.
-Publishing requires separate selected-source validation, including M3/M4 and the
-retrieval changes in the [0.4 migration](migration-0.4.md). Source changes, a release
+The commands below use **0.4.0**; substitute the version being prepared for later releases.
+Publishing requires selected-source validation, including any changed download,
+monitoring and retrieval paths. The [0.4 validation record](validation-0.4.md) and
+[migration guide](migration-0.4.md) document this release's coverage. Source changes, a release
 tag, a GitHub Release, and a published PyPI distribution are separate states. Do not
 announce a PyPI release until the publishing job has succeeded and its files exist.
 

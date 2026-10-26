@@ -131,7 +131,7 @@ The 0.4 defaults reuse dialog metadata for five minutes, then allow another five
 while a shared worker refreshes it. Folder definitions and authorization are checked on
 each dependent call. Direct reads independent of folders bypass that scan. Local
 `catalog` and `configure` wait up to five minutes; `CATALOG_TIMEOUT` means that wait expired.
-See [freshness settings](configuration.md#catalog-freshness-and-recovery-04-unreleased).
+See [freshness settings](configuration.md#catalog-freshness-and-recovery-04).
 
 Restricted search defaults to `ordering="page"`, returning matches without waiting
 for every source. Use `ordering="global"` only when ordering across pages is needed;
@@ -173,7 +173,7 @@ the entire pending response is withheld; it stays available if access is restore
 
 A `resource_link` does not itself transfer bytes. The client must read the exact returned
 URI; this server does not enumerate private files in `resources/list`. Check the
-[client capability table](clients.md#reading-files-and-resources-unreleased).
+[client capability table](clients.md#reading-files-and-resources).
 
 Temporary resources expire after 15 minutes or server shutdown. Use `save=true` when
 creating a selected download/export to keep a permanent local copy. `ARCHIVE_DISABLED`
