@@ -12,6 +12,7 @@ from telegram_mcp.application.change_ports import Observation, ObservationBatch,
 from telegram_mcp.application.ports import (
     Batch,
     DiscoveryBatch,
+    FolderName,
     GlobalBatch,
     GlobalOffset,
     HistoryWindow,
@@ -113,6 +114,7 @@ class FakeBackend:
         self.history_window_faults: dict[tuple[str, bool], ToolError] = {}
         self.history_window_batches: dict[tuple[str, bool], HistoryWindow] = {}
         self.binding = "test-authorization"
+        self.local_binding_known = True
         self.protected_message_ids: set[int] = set()
         self.export_source_error: ToolError | None = None
         self.peer_pts: dict[str, int] = {}
@@ -141,6 +143,10 @@ class FakeBackend:
     async def checkpoint_binding(self) -> str:
         self.backend_calls.append("checkpoint_binding")
         return self.binding
+
+    def local_checkpoint_binding(self) -> str | None:
+        self.backend_calls.append("local_checkpoint_binding")
+        return self.binding if self.local_binding_known else None
 
     def observation(self, message: Message) -> Observation:
         return Observation(
@@ -238,6 +244,13 @@ class FakeBackend:
         self.backend_calls.append("authorization")
         if self.authorization_fault is not None:
             raise self.authorization_fault
+
+    async def folder_names(self) -> list[FolderName]:
+        self.backend_calls.append("folder_names")
+        await self.check_authorization()
+        if self.catalog_fault:
+            raise self.catalog_fault
+        return [FolderName(id=folder.id, title=folder.title) for folder in self.folders]
 
     async def search_global(
         self, request: SearchRead, *, offset: GlobalOffset, limit: int, chat_ids: list[str]

@@ -27,6 +27,7 @@ from telegram_mcp.application.ports import (
     Clock,
     CursorPort,
     ExecutionLimits,
+    FolderName,
     PolicyProvider,
     RuntimePort,
 )
@@ -81,6 +82,7 @@ class Service:
         self._runtime: RuntimePort = backend
         self._policies = policy_provider
         self._limits = limits
+        self._clock = clock
         self._archive = archive
         access = AccessFactory(backend, policy_provider)
         self._incremental = IncrementalContext(
@@ -132,6 +134,16 @@ class Service:
 
     async def list_watches(self) -> WatchList:
         return await self._watches.list()
+
+    def now(self) -> datetime:
+        """The injected current time, captured once per prompt rendering."""
+        return self._clock.utc_now()
+
+    async def find_folder(self, title: str) -> FolderName:
+        return await self._catalog.find_folder(title)
+
+    def watch_name_suggestions(self, prefix: str) -> list[str]:
+        return self._watches.name_suggestions(prefix)
 
     async def get_watch_changes(
         self, name: str, limit: int = 30, ack_batch_id: str | None = None, save: bool = False

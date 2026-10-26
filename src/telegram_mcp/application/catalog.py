@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from telegram_mcp.application.access import AccessFactory
 from telegram_mcp.application.common import check_limit, fingerprint
-from telegram_mcp.application.ports import ChatPort, Clock, CursorPort
+from telegram_mcp.application.ports import ChatPort, Clock, CursorPort, FolderName
 from telegram_mcp.domain.folders import select_chats
 from telegram_mcp.domain.models import Chat, ChatPage, Folder, Scope, ToolError
 
@@ -22,6 +22,23 @@ class CatalogService:
         self.access = access
         self.cursors = cursors
         self.clock = clock
+
+    async def find_folder(self, title: str) -> FolderName:
+        """Resolve one folder by exact, case-insensitive title; never guess between matches."""
+        wanted = title.strip().casefold()
+        if not wanted or len(wanted) > 128:
+            raise ToolError("INVALID_ARGUMENT", "folder_name must contain 1..128 characters.")
+        matches = [
+            f for f in await self.chats.folder_names() if f.title.strip().casefold() == wanted
+        ]
+        if not matches:
+            raise ToolError("FOLDER_NOT_FOUND", "No folder has this exact title; use folder_id.")
+        if len(matches) > 1:
+            ids = ", ".join(str(f.id) for f in matches[:10])
+            raise ToolError(
+                "FOLDER_AMBIGUOUS", f"Several folders have this title (IDs: {ids}); use folder_id."
+            )
+        return matches[0]
 
     async def list_folders(self, query: str | None = None) -> list[Folder]:
         _, folders = await self.chats.catalog()

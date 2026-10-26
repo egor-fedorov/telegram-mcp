@@ -13,6 +13,8 @@ from mcp_types import (
     INTERNAL_ERROR,
     CallToolRequestParams,
     CallToolResult,
+    CompleteRequestParams,
+    GetPromptRequestParams,
     PaginatedRequestParams,
     ReadResourceRequestParams,
     TextContent,
@@ -78,6 +80,27 @@ def create_bridge(upstream: Client) -> Server:
                 is_error=True,
             )
 
+    async def list_prompts(_context, params: PaginatedRequestParams | None):
+        return await forward(
+            lambda: upstream.list_prompts(cursor=params.cursor if params is not None else None)
+        )
+
+    async def get_prompt(_context, params: GetPromptRequestParams):
+        return await forward(lambda: upstream.get_prompt(params.name, params.arguments))
+
+    async def complete(_context, params: CompleteRequestParams):
+        return await forward(
+            lambda: upstream.complete(
+                params.ref,
+                {"name": params.argument.name, "value": params.argument.value},
+                params.context.arguments if params.context is not None else None,
+            )
+        )
+
+    # Advertise only what the shared server itself supports.
+    capabilities = upstream.server_capabilities
+    prompts = capabilities.prompts is not None
+    completions = capabilities.completions is not None
     info = upstream.server_info
     return Server(
         info.name if info is not None else "Telegram Context",
@@ -88,6 +111,9 @@ def create_bridge(upstream: Client) -> Server:
         on_list_resources=list_resources,
         on_list_resource_templates=list_resource_templates,
         on_read_resource=read_resource,
+        on_list_prompts=list_prompts if prompts else None,
+        on_get_prompt=get_prompt if prompts else None,
+        on_completion=complete if completions else None,
     )
 
 

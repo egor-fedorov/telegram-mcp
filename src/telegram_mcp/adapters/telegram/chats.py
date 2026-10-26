@@ -11,7 +11,7 @@ from telegram_mcp.adapters.telegram.mapping import (
     public_channel_from_entity,
 )
 from telegram_mcp.adapters.telegram.runtime import TelegramRuntime
-from telegram_mcp.application.ports import Clock
+from telegram_mcp.application.ports import Clock, FolderName
 from telegram_mcp.domain.models import Chat, Folder, ToolError
 from telegram_mcp.domain.references import chat_target
 
@@ -43,6 +43,9 @@ class ChatGateway:
 
     async def catalog(self, *, refresh: bool = False) -> tuple[list[Chat], list[Folder]]:
         return await self.dialog_catalog.read(refresh=refresh)
+
+    async def folder_names(self) -> list[FolderName]:
+        return await self.dialog_catalog.folder_names()
 
     async def close(self) -> None:
         await self.dialog_catalog.close()

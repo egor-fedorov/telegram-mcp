@@ -15,13 +15,20 @@ from mcp_types import (
     INTERNAL_ERROR,
     INVALID_PARAMS,
     CallToolResult,
+    CompletionArgument,
+    CompletionContext,
+    GetPromptResult,
+    Prompt,
+    PromptReference,
     ResourceTemplate,
+    ResourceTemplateReference,
     Tool,
     ToolAnnotations,
 )
 from pydantic import AnyUrl, AwareDatetime, Field, StringConstraints
 
 from telegram_mcp.adapters import wire
+from telegram_mcp.adapters.prompts import PromptCatalog
 from telegram_mcp.adapters.tool_gate import ToolCallGate
 from telegram_mcp.adapters.version import get_version
 from telegram_mcp.application.change_ports import EXPORT_RESOURCE_PREFIX
@@ -45,12 +52,22 @@ class ResourceServer(MCPServer[None]):
         service: Service,
         gate: ToolCallGate | None,
         schema_mode: Literal["compact", "full"] = "compact",
+        timezone: str = "UTC",
         **kwargs: Any,
     ) -> None:
         self.service = service
         self.gate = gate
         self.schema_mode = schema_mode
+        self.prompts = PromptCatalog(service, timezone, gate.run if gate is not None else None)
         super().__init__(**kwargs)
+
+    async def list_prompts(self) -> list[Prompt]:
+        return self.prompts.list()
+
+    async def get_prompt(
+        self, name: str, arguments: dict[str, Any] | None = None, context: Any = None
+    ) -> GetPromptResult:
+        return await self.prompts.get(name, arguments)
 
     async def list_tools(self) -> list[Tool]:
         tools = await super().list_tools()
@@ -132,6 +149,7 @@ def create_server(
     gate: ToolCallGate | None = None,
     owns_service: bool = True,
     schema_mode: Literal["compact", "full"] = "compact",
+    timezone: str = "UTC",
 ) -> MCPServer[None]:
     gate = gate if gate is not None else ToolCallGate()
 
@@ -147,10 +165,11 @@ def create_server(
             if owns_service:
                 await service.close()
 
-    server: MCPServer[None] = ResourceServer(
+    server = ResourceServer(
         service,
         gate,
         schema_mode=schema_mode,
+        timezone=timezone,
         name="Telegram Context",
         version=get_version(),
         lifespan=lifespan,
@@ -170,6 +189,16 @@ def create_server(
             "server."
         ),
     )
+
+    @server.completion()
+    async def complete(
+        ref: PromptReference | ResourceTemplateReference,
+        argument: CompletionArgument,
+        context: CompletionContext | None,
+    ):
+        # Local watch names only: no Telegram request, authorization refresh or batch read.
+        return server.prompts.complete(ref, argument.name, argument.value)
+
     readonly = ToolAnnotations(read_only_hint=True, open_world_hint=True)
 
     persistent_read = ToolAnnotations(

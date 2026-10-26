@@ -21,6 +21,7 @@ from telegram_mcp.application.ports import (
     Batch,
     Clock,
     DiscoveryBatch,
+    FolderName,
     GlobalBatch,
     GlobalOffset,
     HistoryWindow,
@@ -58,6 +59,9 @@ class TelegramBackend:
 
     async def checkpoint_binding(self) -> str:
         return await self.incremental_gateway.checkpoint_binding()
+
+    def local_checkpoint_binding(self) -> str | None:
+        return self.incremental_gateway.local_checkpoint_binding()
 
     async def peer_states(self, chat_ids: list[str]) -> dict[str, PeerState]:
         return await self.incremental_gateway.peer_states(chat_ids)
@@ -102,6 +106,9 @@ class TelegramBackend:
 
     async def check_authorization(self) -> None:
         await self.chat_gateway.check_authorization()
+
+    async def folder_names(self) -> list[FolderName]:
+        return await self.chat_gateway.folder_names()
 
     async def resolve_chat(self, ref: str, *, refresh: bool = False) -> Chat:
         return await self.chat_gateway.resolve_chat(ref, refresh=refresh)

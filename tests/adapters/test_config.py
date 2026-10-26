@@ -89,3 +89,13 @@ def test_archive_and_schema_settings_defaults_and_roundtrip(tmp_path: Path) -> N
     loaded = load_settings(path)
     assert loaded.archive_directory == Path("~/telegram-archive").expanduser().resolve()
     assert loaded.mcp_schema_mode == "full"
+
+
+def test_prompt_timezone_defaults_to_utc_and_rejects_unknown_zones(tmp_path: Path) -> None:
+    path = tmp_path / "config.toml"
+    assert Settings().timezone == "UTC"
+    save_settings(Settings(timezone="Europe/Moscow"), path)
+    assert load_settings(path).timezone == "Europe/Moscow"
+    for value in ("Mars/Olympus", "+03:00", "../etc/passwd"):
+        with pytest.raises(ValidationError, match="IANA time zone"):
+            Settings(timezone=value)

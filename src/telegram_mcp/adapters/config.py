@@ -10,9 +10,10 @@ from pathlib import Path
 from typing import Literal
 
 from platformdirs import user_config_path, user_data_path
-from pydantic import Field, SecretStr, ValidationError
+from pydantic import Field, SecretStr, ValidationError, field_validator
 
 from telegram_mcp.domain.models import Model, ToolError
+from telegram_mcp.domain.periods import load_zone
 from telegram_mcp.domain.policy import ReadPolicy
 
 
@@ -30,6 +31,7 @@ class Settings(Model):
     allow_attachment_downloads: bool = False
     archive_directory: Path | None = None
     mcp_schema_mode: Literal["compact", "full"] = "compact"
+    timezone: str = "UTC"
     rpc_timeout_seconds: float = Field(default=20, gt=0, le=60)
     max_dialogs: int = Field(default=10000, ge=1, le=100000)
     catalog_cache_ttl_seconds: float = Field(default=300, ge=0, le=300)
@@ -41,6 +43,15 @@ class Settings(Model):
     http_token_path: Path = Field(
         default_factory=lambda: user_data_path("telegram-mcp") / "mcp.token"
     )
+
+    @field_validator("timezone")
+    @classmethod
+    def known_timezone(cls, value: str) -> str:
+        try:
+            load_zone(value)
+        except ToolError:
+            raise ValueError("must be an IANA time zone name such as Europe/Moscow") from None
+        return value
 
     def credentials(self) -> tuple[int, str]:
         if self.api_id is None or self.api_hash is None:

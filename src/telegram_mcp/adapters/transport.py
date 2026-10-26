@@ -54,8 +54,11 @@ def create_http_app(
     *,
     owns_service: bool = True,
     schema_mode: Literal["compact", "full"] = "compact",
+    timezone: str = "UTC",
 ) -> Starlette:
-    server = create_server(service, owns_service=owns_service, schema_mode=schema_mode)
+    server = create_server(
+        service, owns_service=owns_service, schema_mode=schema_mode, timezone=timezone
+    )
     hosts = [f"{HOST}:{port}"]
     origins = [f"http://{HOST}:{port}"]
     if port == 80:
@@ -84,7 +87,12 @@ async def _serve_http(service: Service, settings: Settings) -> None:
 async def _run_http(service: Service, settings: Settings) -> None:
     token = load_token(settings.http_token_path, create=True)
     app = create_http_app(
-        service, token, settings.http_port, owns_service=False, schema_mode=settings.mcp_schema_mode
+        service,
+        token,
+        settings.http_port,
+        owns_service=False,
+        schema_mode=settings.mcp_schema_mode,
+        timezone=settings.timezone,
     )
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
         if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):

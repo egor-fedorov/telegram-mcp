@@ -442,6 +442,18 @@ class WatchService:
         self.store.save(state, binding)
         return WatchAcknowledgement(name=state.name, batch_id=batch_id)
 
+    def name_suggestions(self, prefix: str, limit: int = 101) -> list[str]:
+        """Local names for prompt completion: no Telegram request and no batch bodies."""
+        if len(prefix) > 64 or not re.fullmatch(r"[a-z0-9_-]*", prefix):
+            return []
+        binding = self.context.backend.local_checkpoint_binding()
+        if binding is None:
+            return []
+        try:
+            return self.store.names(binding, prefix, limit)
+        except ToolError:
+            return []
+
     async def list(self) -> WatchList:
         async with self.context.request():
             await self.context.chats.check_authorization()

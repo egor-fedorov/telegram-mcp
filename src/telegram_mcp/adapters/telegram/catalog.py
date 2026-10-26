@@ -10,7 +10,7 @@ from telethon import functions, types
 from telegram_mcp.adapters.telegram.catalog_pages import DialogScan, DialogScanner
 from telegram_mcp.adapters.telegram.mapping import chat_from_entity, folder_from_tl, peer_id, utc
 from telegram_mcp.adapters.telegram.runtime import TelegramRuntime
-from telegram_mcp.application.ports import Clock
+from telegram_mcp.application.ports import Clock, FolderName
 from telegram_mcp.application.retry import RetryState
 from telegram_mcp.domain.models import Chat, Folder, ToolError
 
@@ -182,6 +182,18 @@ class DialogCatalog:
             if exc.code == "RATE_LIMITED":
                 self._folder_retry.record(exc, None, self.clock)
             raise
+
+    async def folder_names(self) -> list[FolderName]:
+        """Read current folder definitions only; never start a dialog scan."""
+        self._check_generation(self.runtime.auth_generation)
+        await self.check_authorization()
+        client = await self.runtime.ensure()
+        names = []
+        for raw in await self._filters(client):
+            if isinstance(raw, (types.DialogFilter, types.DialogFilterChatlist)):
+                title = raw.title if isinstance(raw.title, str) else raw.title.text
+                names.append(FolderName(id=raw.id, title=title))
+        return names
 
     async def _auxiliary(self, client: Any, scan: DialogScan, filters: list[Any]) -> None:
         async with self._aux_lock:

@@ -1,56 +1,11 @@
 import asyncio
 import json
-import sys
-from contextlib import asynccontextmanager
 from pathlib import Path
 
-import httpx2
 import pytest
-from mcp.client import Client
-from mcp.client.stdio import StdioServerParameters
-from mcp.client.streamable_http import streamable_http_client
 
-from telegram_mcp.adapters.config import save_settings
-from telegram_mcp.adapters.http_token import load_token
-from telegram_mcp.adapters.transport import endpoint
 from tests.support.fakes import BASE
-from tests.support.transport import running_server
-
-
-@asynccontextmanager
-async def connection(kind, path, mode, schema_mode, settings=None):
-    if kind == "stdio":
-        script = (
-            "from pathlib import Path; import sys; "
-            "from tests.support.incremental import export_stdio_service; "
-            "from telegram_mcp.adapters.mcp import create_server; "
-            "create_server(export_stdio_service(Path(sys.argv[1])), schema_mode=sys.argv[2]).run()"
-        )
-        parameters = StdioServerParameters(
-            command=sys.executable, args=["-c", script, str(path), schema_mode]
-        )
-        async with Client(parameters, mode=mode, cache=None) as client:
-            yield client
-    elif kind == "connect":
-        assert settings is not None
-        config = path / "config.toml"
-        save_settings(settings, config)
-        parameters = StdioServerParameters(
-            command=sys.executable,
-            args=["-m", "telegram_mcp.cli", "--config", str(config), "connect"],
-        )
-        async with Client(parameters, mode=mode, cache=None) as client:
-            yield client
-    else:
-        assert settings is not None
-        async with httpx2.AsyncClient(
-            headers={"Authorization": f"Bearer {load_token(settings.http_token_path)}"},
-            trust_env=False,
-        ) as http:
-            async with Client(
-                streamable_http_client(endpoint(settings), http_client=http), mode=mode, cache=None
-            ) as client:
-                yield client
+from tests.support.transport import connection, running_server
 
 
 async def exercise(kind, path, mode, schema_mode, settings=None):

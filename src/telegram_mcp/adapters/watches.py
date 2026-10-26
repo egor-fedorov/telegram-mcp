@@ -86,6 +86,21 @@ class WatchStore:
         except sqlite3.Error:
             raise storage_error() from None
 
+    def names(self, binding: str, prefix: str, limit: int) -> list[str]:
+        if self._connection is None and not self.path.exists():
+            return []  # Completion must not create a missing store.
+        try:
+            return [
+                row[0]
+                for row in self._db().execute(
+                    "SELECT name FROM watches WHERE binding = ? AND substr(name, 1, ?) = ? "
+                    "ORDER BY name LIMIT ?",
+                    (binding, len(prefix), prefix, limit),
+                )
+            ]
+        except sqlite3.Error:
+            raise storage_error() from None
+
     def list(self, binding: str) -> list[WatchState]:
         try:
             return [

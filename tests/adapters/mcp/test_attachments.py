@@ -11,6 +11,7 @@ from mcp.shared.exceptions import MCPError
 from mcp_types import (
     INTERNAL_ERROR,
     INVALID_PARAMS,
+    ServerCapabilities,
 )
 
 from telegram_mcp.adapters.bridge import create_bridge, shared_client
@@ -134,6 +135,7 @@ async def test_bridge_reports_safe_resource_connection_errors(operation: str) ->
     class UnavailableClient:
         server_info = None
         instructions = None
+        server_capabilities = ServerCapabilities()
 
         async def read_resource(self, _uri):
             raise OSError("private upstream details")

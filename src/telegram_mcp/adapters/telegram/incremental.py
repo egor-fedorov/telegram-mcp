@@ -85,11 +85,15 @@ class IncrementalGateway:
 
     async def checkpoint_binding(self) -> str:
         client = await self.runtime.ensure()
-        auth_key = client.session.auth_key
-        if auth_key is None or not auth_key.key:
+        binding = session_binding(client)
+        if binding is None:
             raise ToolError("AUTH_REQUIRED", "No authorized Telegram session is available.")
-        # Bind snapshots to this authorization without storing the key itself.
-        return hashlib.sha256(auth_key.key).hexdigest()
+        return binding
+
+    def local_checkpoint_binding(self) -> str | None:
+        # Only an already opened client: completion must never connect or authorize.
+        client = self.runtime.client
+        return session_binding(client) if client is not None else None
 
     async def recent_observations(
         self, chat_id: str, limit: int, *, before: datetime | None = None
@@ -165,3 +169,11 @@ class IncrementalGateway:
             raise ToolError("SOURCE_UNAVAILABLE", "The export source is unavailable.")
         if getattr(entity, "noforwards", False):
             raise ToolError("EXPORT_PROTECTED", "Telegram restricts saving content from this chat.")
+
+
+def session_binding(client: Any) -> str | None:
+    """Bind snapshots to this authorization without storing the key itself."""
+    auth_key = getattr(getattr(client, "session", None), "auth_key", None)
+    if auth_key is None or not auth_key.key:
+        return None
+    return hashlib.sha256(auth_key.key).hexdigest()
