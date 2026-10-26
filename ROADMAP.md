@@ -118,7 +118,8 @@ are 851 bytes and distinguish Telegram reads from local state/file writes.
 `make check` passes with 1218 tests and two platform-specific skips on Linux. Coverage
 includes 4200 polls under the 4096-snapshot quota, restart/replay/ack, source failures,
 access revocation, single-page budgets, Unicode, permanent-file cleanup boundaries and
-all transports in compact/full schema modes. The extended live-probe harness tests
+all transports in compact/full schema modes. Isolated wheel and source installations
+also pass the compact/full contract probe. The extended live-probe harness tests
 selected M3/M4 artifacts and checkpoint reopen with explicit skipped coverage reporting;
 its bounds, redaction and cleanup are verified offline. See [usage](docs/usage.md),
 [migration](docs/migration-0.4.md) and [live validation](docs/live-validation.md).

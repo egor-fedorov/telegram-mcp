@@ -19,7 +19,9 @@ import telegram_mcp
 from telegram_mcp.adapters.version import get_version
 
 
-async def probe_client(client: Client, version: str, contract: dict[str, object]) -> None:
+async def probe_client(
+    client: Client, version: str, contract: dict[str, object], schema_mode: str
+) -> None:
     assert client.server_info is not None
     assert client.server_info.version == version
     definitions = {}
@@ -36,7 +38,16 @@ async def probe_client(client: Client, version: str, contract: dict[str, object]
                     assert definitions[name] == value
                 definitions[name] = value
         tools[tool.name] = entry
-    assert {"definitions": definitions, "tools": tools} == contract
+    if schema_mode == "full":
+        assert {"definitions": definitions, "tools": tools} == contract
+    else:
+        expected_tools, expected_definitions = contract["tools"], contract["definitions"]
+        assert isinstance(expected_tools, dict) and isinstance(expected_definitions, dict)
+        assert tools == {name: {**entry, "output": {}} for name, entry in expected_tools.items()}
+        # Compact discovery retains input definitions; output-only definitions
+        # are intentionally absent. Full discovery above checks the complete fixture.
+        for name, value in definitions.items():
+            assert value == expected_definitions[name]
     response = await client.call_tool("get_status", {})
     assert not response.is_error
     status = response.structured_content
@@ -50,6 +61,7 @@ async def probe_stdio(
     config: Path,
     version: str,
     contract: dict[str, object],
+    schema_mode: str,
     command: str = "serve",
 ) -> None:
     parameters = StdioServerParameters(
@@ -64,7 +76,7 @@ async def probe_stdio(
     )
     for mode in ("auto", "legacy"):
         async with Client(parameters, mode=mode, read_timeout_seconds=15) as client:
-            await probe_client(client, version, contract)
+            await probe_client(client, version, contract, schema_mode)
 
 
 async def probe_http(
@@ -74,6 +86,7 @@ async def probe_http(
     port: int,
     version: str,
     contract: dict[str, object],
+    schema_mode: str,
 ) -> None:
     url = f"http://127.0.0.1:{port}/mcp"
     async with httpx2.AsyncClient(timeout=1, trust_env=False) as anonymous:
@@ -94,11 +107,13 @@ async def probe_http(
             async with Client(
                 streamable_http_client(url, http_client=http), mode=mode, cache=None
             ) as client:
-                await probe_client(client, version, contract)
-    await probe_stdio(executable, config, version, contract, command="connect")
+                await probe_client(client, version, contract, schema_mode)
+    await probe_stdio(executable, config, version, contract, schema_mode, command="connect")
 
 
-def probe_shared_server(executable: Path, version: str, contract: dict[str, object]) -> None:
+def probe_shared_server(
+    executable: Path, version: str, contract: dict[str, object], schema_mode: str
+) -> None:
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
         port = listener.getsockname()[1]
@@ -106,7 +121,8 @@ def probe_shared_server(executable: Path, version: str, contract: dict[str, obje
     token = Path.cwd() / "mcp.token"
     config.write_text(
         f"http_port = {port}\nhttp_token_path = {json.dumps(str(token))}\n"
-        f"session_path = {json.dumps(str(Path.cwd() / 'unused.session'))}\n",
+        f"session_path = {json.dumps(str(Path.cwd() / 'unused.session'))}\n"
+        f"mcp_schema_mode = {json.dumps(schema_mode)}\n",
         encoding="utf-8",
     )
     process = subprocess.Popen(
@@ -114,7 +130,7 @@ def probe_shared_server(executable: Path, version: str, contract: dict[str, obje
         stdout=subprocess.DEVNULL,
     )
     try:
-        asyncio.run(probe_http(executable, config, token, port, version, contract))
+        asyncio.run(probe_http(executable, config, token, port, version, contract, schema_mode))
     finally:
         process.terminate()
         try:
@@ -140,10 +156,18 @@ def main() -> None:
     assert version.strip() == f"telegram-mcp {args.version}"
     subprocess.run([str(executable), "--help"], check=True, capture_output=True, timeout=15)
     contract = json.loads(Path(__file__).with_name("mcp_contract.json").read_text(encoding="utf-8"))
-    asyncio.run(probe_stdio(executable, Path.cwd() / "missing.toml", args.version, contract))
-    probe_shared_server(executable, args.version, contract)
+    for schema_mode in ("compact", "full"):
+        config = Path.cwd() / f"{schema_mode}.toml"
+        if schema_mode == "full":
+            config.write_text('mcp_schema_mode = "full"\n', encoding="utf-8")
+        # A missing configuration exercises the compact default.
+        asyncio.run(probe_stdio(executable, config, args.version, contract, schema_mode))
+        probe_shared_server(executable, args.version, contract, schema_mode)
     assert not list(Path.cwd().glob("*.session*"))
-    print(f"Installed package {args.version}: metadata, CLI, STDIO, HTTP, and bridge passed.")
+    print(
+        f"Installed package {args.version}: metadata, CLI, STDIO, HTTP, and bridge passed "
+        "with compact and full schemas."
+    )
 
 
 if __name__ == "__main__":
