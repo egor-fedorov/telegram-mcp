@@ -24,7 +24,7 @@ need a concrete contract before implementation; no delivery dates are assigned.
 | M4 | Complete for 0.4 | Durable checkpoints, recent revisions and source-linked JSONL/Markdown exports |
 | R4 | Complete for 0.4 | Bounded scope previews, early restricted search, reusable catalogs and concurrent calls |
 | R5 | Complete for 0.4 | Named subscriptions, protected positions, permanent selected files and compact discovery |
-| M5 | Proposed for 0.5 | Reusable monitoring prompts, source-linked digests and prompt support across transports |
+| M5 | Proposed for 0.5 | Bounded multi-source history, archived watch batches and usable monitoring prompts |
 
 The [0.4 changelog](CHANGELOG.md#040---2026-10-26), [migration guide](docs/migration-0.4.md)
 and [validation record](docs/validation-0.4.md) describe the complete release scope.
@@ -59,16 +59,20 @@ wheel/source installations.
 ## Proposed 0.5: monitoring workflows
 
 The [M5 proposal](docs/specs/m5-monitoring-workflows.md) is ready for review; it is not
-implemented or released. Make the existing subscriptions usable from a new agent
-session through prompts for pending changes, a period digest and vacancy selection.
-The calling agent performs analysis, preserves source links, reports partial coverage
-and acknowledges each batch only after processing it. Extend prompt discovery and
-retrieval through STDIO, native HTTP and `connect`.
+implemented or released. Extend history reading to selected chats/folders with early
+page results and explicit source/message budgets. Add opt-in archive copies of watch
+batches before acknowledgement, reusing the existing watch and archive mechanisms.
 
-Reuse the 0.4 watch positions, acknowledgement protocol and permanent archive.
-Do not add another folder-checkpoint API, server-side deduplication store, scheduler
-or built-in LLM. Known forwards can be grouped in a digest while retaining every
-publication reference. See the proposal for contracts and acceptance criteria.
+Expose two general prompts: pending watch changes and a period digest. Support relative
+periods, calendar dates with an explicit/configured timezone, folder names and local
+watch-name completion. Vacancy selection is a documented period-digest preset. Carry
+prompts and completion through STDIO, native HTTP and `connect`.
+
+Templates process pages into source-linked notes, report partial coverage and treat
+Telegram content as data rather than instructions. Archived batches support recovery
+after interruption; they do not guarantee delivery of an agent's generated report.
+Do not add another subscription API, server-side deduplication store, scheduler or
+built-in LLM. See the proposal for exact limits, compatibility and acceptance criteria.
 
 ## Distribution follow-ups
 
