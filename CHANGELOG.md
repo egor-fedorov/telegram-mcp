@@ -10,6 +10,17 @@ A version entry describes its target artifact. Verify publication on
 
 ### Added
 
+- `get_changes` for one explicitly selected chat: current-head baselines, new messages,
+  bounded recent revision checks, explicit unavailability and durable immutable checkpoints.
+  Checkpoints retain positions/fingerprints without message bodies, survive restart,
+  recheck access and preserve M4 FloodWait deadlines across retries and restarts.
+- `export_history` and file output from `get_changes`, with versioned JSONL and readable
+  Markdown, full original text/metadata and source links. History parts freeze their
+  upper date/ID and resume with checkpoints. Protected/expiring records are omitted explicitly.
+- Temporary UTF-8 export resources through STDIO, HTTP and `connect`, with SHA-256,
+  20 MiB parts, a separate 100 MiB / 32-file cache, 15-minute expiry and cleanup.
+  Existing 15 tool contracts remain unchanged; published 0.3.0 is unchanged.
+
 - Opt-in `download_attachment` for one selected file up to 20 MiB, with a private
   temporary local path, SHA-256, and an MCP resource available through STDIO, HTTP,
   and `connect`. Resource reads recheck access, source protection and media identity.

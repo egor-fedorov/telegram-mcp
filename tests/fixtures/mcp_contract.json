@@ -925,6 +925,86 @@
       ],
       "title": "MessageRef",
       "type": "object"
+    },
+    "Change": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "new",
+            "updated",
+            "unavailable"
+          ],
+          "type": "string"
+        },
+        "message": {
+          "$ref": "#/$defs/Message"
+        },
+        "message_ref": {
+          "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
+          "type": "string"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "message_ref",
+        "revision",
+        "observed_at"
+      ],
+      "type": "object"
+    },
+    "ExportFile": {
+      "additionalProperties": false,
+      "properties": {
+        "expires_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "format": {
+          "enum": [
+            "jsonl",
+            "markdown"
+          ],
+          "type": "string"
+        },
+        "local_path": {
+          "type": "string"
+        },
+        "mime_type": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "resource_uri": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "size": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "format",
+        "name",
+        "mime_type",
+        "size",
+        "sha256",
+        "local_path",
+        "resource_uri",
+        "expires_at"
+      ],
+      "type": "object"
     }
   },
   "tools": {
@@ -2463,6 +2543,291 @@
         "destructive_hint": null,
         "idempotent_hint": null,
         "open_world_hint": true
+      }
+    },
+    "export_history": {
+      "annotations": {
+        "destructive_hint": false,
+        "idempotent_hint": false,
+        "open_world_hint": true,
+        "read_only_hint": false,
+        "title": null
+      },
+      "input": {
+        "properties": {
+          "chat_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Chat Ref"
+          },
+          "checkpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Checkpoint"
+          },
+          "date_from": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Date From"
+          },
+          "date_to": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Date To"
+          },
+          "format": {
+            "default": "jsonl",
+            "enum": [
+              "jsonl",
+              "markdown"
+            ],
+            "title": "Format",
+            "type": "string"
+          }
+        },
+        "title": "export_historyArguments",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "chat_id": {
+            "pattern": "^-?[1-9]\\d*$",
+            "type": "string"
+          },
+          "checkpoint_expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "date_from": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "date_to": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "export": {
+            "$ref": "#/$defs/ExportFile"
+          },
+          "exported_count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/$defs/Issue"
+            },
+            "type": "array"
+          },
+          "next_checkpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "omitted_count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "upper_message_id": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "chat_id",
+          "exported_count",
+          "omitted_count",
+          "complete",
+          "date_to",
+          "next_checkpoint",
+          "issues"
+        ],
+        "type": "object"
+      }
+    },
+    "get_changes": {
+      "annotations": {
+        "destructive_hint": false,
+        "idempotent_hint": false,
+        "open_world_hint": true,
+        "read_only_hint": false,
+        "title": null
+      },
+      "input": {
+        "properties": {
+          "chat_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Chat Ref"
+          },
+          "checkpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Checkpoint"
+          },
+          "limit": {
+            "default": 30,
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "output": {
+            "default": "inline",
+            "enum": [
+              "inline",
+              "jsonl",
+              "markdown"
+            ],
+            "title": "Output",
+            "type": "string"
+          }
+        },
+        "title": "get_changesArguments",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "changes": {
+            "items": {
+              "$ref": "#/$defs/Change"
+            },
+            "type": "array"
+          },
+          "chat_id": {
+            "pattern": "^-?[1-9]\\d*$",
+            "type": "string"
+          },
+          "chats": {
+            "patternProperties": {
+              "^-?[1-9]\\d*$": {
+                "$ref": "#/$defs/ChatSummary"
+              }
+            },
+            "type": "object"
+          },
+          "checkpoint_expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "export": {
+            "$ref": "#/$defs/ExportFile"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/$defs/Issue"
+            },
+            "type": "array"
+          },
+          "next_checkpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "omitted_count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "recheck_limit": {
+            "const": 100,
+            "type": "integer"
+          },
+          "rechecked_message_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "returned_count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "tracked_count": {
+            "maximum": 100,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "upper_message_id": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "chats",
+          "chat_id",
+          "changes",
+          "returned_count",
+          "omitted_count",
+          "complete",
+          "recheck_limit",
+          "rechecked_message_ids",
+          "tracked_count",
+          "next_checkpoint",
+          "issues"
+        ],
+        "type": "object"
       }
     }
   }

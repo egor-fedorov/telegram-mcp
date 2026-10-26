@@ -10,10 +10,12 @@ from pathlib import Path
 from typing import Any, Never, Protocol
 from urllib.parse import parse_qs, urlparse
 
+from telegram_mcp.adapters.checkpoints import CheckpointStore
 from telegram_mcp.adapters.clock import SystemClock
 from telegram_mcp.adapters.config import ConfiguredPolicyProvider, Settings, load_settings
 from telegram_mcp.adapters.cursors import CursorStore
 from telegram_mcp.adapters.downloads import DownloadStore
+from telegram_mcp.adapters.exports import ExportStore
 from telegram_mcp.adapters.telegram import TelegramBackend
 from telegram_mcp.application.ports import Backend, ExecutionLimits, MessageOffset
 from telegram_mcp.application.requests import MessageRead
@@ -277,6 +279,8 @@ async def probe(
                 CursorStore(clock, maximum=32, max_bytes=1024 * 1024),
                 clock,
                 DownloadStore(restricted.session_path, clock),
+                CheckpointStore(restricted.session_path, clock),
+                ExportStore(restricted.session_path, clock),
             )
             await recorder.call("status", service.get_status())
             for index, chat in enumerate(selected.values()):

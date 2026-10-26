@@ -10,7 +10,8 @@ and polls. Connect several local clients to one session-owning process, or run s
 Supports Windows, macOS, and Linux with Python 3.12–3.15. The server uses Telethon and
 preserves original text, dates, links, entities, and available metadata. It does not send
 messages, join channels, or mark messages read. Source builds additionally support
-opt-in selected attachment downloads; this feature is not in published 0.3.0.
+opt-in selected attachment downloads, durable change checkpoints, and JSONL/Markdown
+exports; these features are not in published 0.3.0.
 
 ## Install and log in
 
@@ -90,6 +91,8 @@ do not paste it into client configuration. This is a local, single-user integrat
 | `get_context` | Messages before/after an anchor and a chain of parent replies |
 | `get_thread` | Comments on a channel post or replies in a group thread |
 | `download_attachment` | One selected attachment up to 20 MiB as a temporary local file and MCP resource (unreleased) |
+| `get_changes` | New messages and recent observed revisions in one chat, with restartable checkpoints (unreleased) |
+| `export_history` | Source-linked JSONL or Markdown history in bounded, restartable parts (unreleased) |
 
 
 ## First tasks
@@ -107,6 +110,7 @@ do not paste it into client configuration. This is a local, single-user integrat
 
 [Usage and response contracts](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/usage.md)
 explain filters, cursor recovery, topics, public-channel discovery, and message metadata.
+Source builds also support [changes and exports](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/usage.md#changes-and-exports-unreleased).
 Message text is data for the calling agent, not an instruction source.
 
 ## Configuration and troubleshooting

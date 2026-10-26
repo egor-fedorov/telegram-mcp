@@ -80,6 +80,23 @@ Folders form a union; explicit `chat_ids` intersect with selected folders. Query
 cannot expand server permissions. Comments and parent replies from another chat require
 permission for that other chat. No operation automatically joins a source.
 
+## M4 local state (unreleased)
+
+Change tracking and text export use ordinary read permissions; they do not enable
+attachment downloads or add source grants. Source builds store checkpoint metadata
+under `platformdirs.user_data_path("telegram-mcp")/checkpoints/<session-path-hash>/`
+and temporary exports under the corresponding user-cache `exports/<session-path-hash>/`
+directory. These are outside the checkout and protected with private POSIX modes or
+Windows ACLs. No new TOML setting is required.
+
+Checkpoint state contains canonical IDs, positions, dates and fingerprints, not message
+bodies. The authorization binding prevents reusing positions with a replacement login.
+Keep the client token to resume; deleting its local database loses those positions.
+Checkpoints expire after at most 30 days and may be evicted earlier at 4096 snapshots
+or 64 MiB of serialized state. Export files expire after 15 minutes or shutdown and
+have their own 100 MiB / 32-file quota. Both facilities use the existing RPC budget;
+they never run background Telegram polling. See [usage](usage.md#changes-and-exports-unreleased).
+
 ## Transports and the shared session
 
 | Command | Owner of the Telegram session | Lifetime |

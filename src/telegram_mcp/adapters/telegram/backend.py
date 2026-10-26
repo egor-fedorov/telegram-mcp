@@ -1,11 +1,14 @@
 """Compose Telegram gateways over one owned runtime and entity catalog."""
 
+from datetime import datetime
+
 from telegram_mcp.adapters.clock import SystemClock
 from telegram_mcp.adapters.config import Settings
 from telegram_mcp.adapters.telegram.attachments import AttachmentGateway
 from telegram_mcp.adapters.telegram.chats import ChatGateway
 from telegram_mcp.adapters.telegram.discovery import DiscoveryGateway
 from telegram_mcp.adapters.telegram.forums import ForumGateway
+from telegram_mcp.adapters.telegram.incremental import IncrementalGateway
 from telegram_mcp.adapters.telegram.messages import MessageGateway
 from telegram_mcp.adapters.telegram.runtime import TelegramRuntime
 from telegram_mcp.application.attachment_ports import (
@@ -13,6 +16,7 @@ from telegram_mcp.application.attachment_ports import (
     AttachmentSource,
     AttachmentWriter,
 )
+from telegram_mcp.application.change_ports import Observation, ObservationBatch
 from telegram_mcp.application.ports import (
     Batch,
     Clock,
@@ -49,6 +53,36 @@ class TelegramBackend:
         self.message_gateway = MessageGateway(self.runtime, self.chat_gateway)
         self.forum_gateway = ForumGateway(self.runtime, self.chat_gateway)
         self.attachment_gateway = AttachmentGateway(self.runtime)
+        self.incremental_gateway = IncrementalGateway(self.runtime, self.chat_gateway)
+
+    async def checkpoint_binding(self) -> str:
+        return await self.incremental_gateway.checkpoint_binding()
+
+    async def recent_observations(
+        self, chat_id: str, limit: int, *, before: datetime | None = None
+    ) -> list[Observation]:
+        return await self.incremental_gateway.recent_observations(chat_id, limit, before=before)
+
+    async def observe_messages(
+        self, chat_id: str, message_ids: list[int]
+    ) -> dict[int, Observation | None]:
+        return await self.incremental_gateway.observe_messages(chat_id, message_ids)
+
+    async def read_incremental(
+        self,
+        chat_id: str,
+        *,
+        after_id: int,
+        through_id: int,
+        limit: int,
+        date_from: datetime | None = None,
+    ) -> ObservationBatch:
+        return await self.incremental_gateway.read_incremental(
+            chat_id, after_id=after_id, through_id=through_id, limit=limit, date_from=date_from
+        )
+
+    async def check_export_source(self, chat_id: str) -> None:
+        await self.incremental_gateway.check_export_source(chat_id)
 
     async def status(self) -> dict[str, object]:
         return await self.runtime.status()

@@ -8,6 +8,7 @@ from telegram_mcp.application.attachment_ports import (
     AttachmentSource,
     AttachmentWriter,
 )
+from telegram_mcp.application.change_ports import Observation, ObservationBatch
 from telegram_mcp.application.ports import (
     Batch,
     DiscoveryBatch,
@@ -26,6 +27,7 @@ from telegram_mcp.application.requests import (
     ThreadRead,
     TopicRead,
 )
+from telegram_mcp.domain.changes import content_revision
 from telegram_mcp.domain.models import (
     Chat,
     ContentType,
@@ -109,6 +111,82 @@ class FakeBackend:
         self.history_windows: list[tuple[str, int, int, bool]] = []
         self.history_window_faults: dict[tuple[str, bool], ToolError] = {}
         self.history_window_batches: dict[tuple[str, bool], HistoryWindow] = {}
+        self.binding = "test-authorization"
+        self.protected_message_ids: set[int] = set()
+        self.export_source_error: ToolError | None = None
+
+    async def checkpoint_binding(self) -> str:
+        self.backend_calls.append("checkpoint_binding")
+        return self.binding
+
+    def observation(self, message: Message) -> Observation:
+        return Observation(
+            message,
+            content_revision(message),
+            message.message_ref.message_id not in self.protected_message_ids,
+        )
+
+    async def recent_observations(
+        self, chat_id: str, limit: int, *, before: datetime | None = None
+    ) -> list[Observation]:
+        self.backend_calls.append("recent_observations")
+        if chat_id in self.faults:
+            raise self.faults[chat_id]
+        messages = [
+            m
+            for m in self.stored_messages
+            if m.chat.id == chat_id
+            and (before is None or m.sent_at < before + timedelta(seconds=1))
+        ]
+        messages.sort(key=lambda m: m.message_ref.message_id, reverse=True)
+        return [self.observation(m) for m in messages[:limit]]
+
+    async def observe_messages(
+        self, chat_id: str, message_ids: list[int]
+    ) -> dict[int, Observation | None]:
+        self.backend_calls.append("observe_messages")
+        return {
+            mid: self.observation(message) if message is not None else None
+            for mid, message in (await self.messages(chat_id, message_ids)).items()
+        }
+
+    async def read_incremental(
+        self,
+        chat_id: str,
+        *,
+        after_id: int,
+        through_id: int,
+        limit: int,
+        date_from: datetime | None = None,
+    ) -> ObservationBatch:
+        self.backend_calls.append("read_incremental")
+        if chat_id in self.faults:
+            raise self.faults[chat_id]
+        messages = sorted(
+            (
+                m
+                for m in self.stored_messages
+                if m.chat.id == chat_id
+                and after_id < m.message_ref.message_id <= through_id
+                and (
+                    after_id != 0
+                    or date_from is None
+                    or m.sent_at >= date_from - timedelta(seconds=1)
+                )
+            ),
+            key=lambda m: m.message_ref.message_id,
+        )
+        selected = messages[:limit]
+        return ObservationBatch(
+            [self.observation(m) for m in selected],
+            selected[-1].message_ref.message_id if selected else after_id,
+            len(messages) <= limit,
+        )
+
+    async def check_export_source(self, chat_id: str) -> None:
+        self.backend_calls.append("check_export_source")
+        if self.export_source_error is not None:
+            raise self.export_source_error
 
     async def status(self) -> dict[str, object]:
         self.backend_calls.append("status")

@@ -1,11 +1,14 @@
 """Explicit composition root; application code never constructs adapters."""
 
+from telegram_mcp.adapters.checkpoints import CheckpointStore
 from telegram_mcp.adapters.clock import SystemClock
 from telegram_mcp.adapters.config import ConfiguredPolicyProvider, Settings
 from telegram_mcp.adapters.cursors import CursorStore
 from telegram_mcp.adapters.downloads import DownloadStore
+from telegram_mcp.adapters.exports import ExportStore
 from telegram_mcp.adapters.telegram import TelegramBackend
 from telegram_mcp.application.attachment_ports import DownloadStorePort
+from telegram_mcp.application.change_ports import CheckpointStorePort, ExportStorePort
 from telegram_mcp.application.ports import Backend, Clock, CursorPort, ExecutionLimits
 from telegram_mcp.application.service import Service
 
@@ -17,6 +20,8 @@ def build_service(
     clock: Clock | None = None,
     cursors: CursorPort | None = None,
     downloads: DownloadStorePort | None = None,
+    checkpoints: CheckpointStorePort | None = None,
+    exports: ExportStorePort | None = None,
 ) -> Service:
     clock = clock if clock is not None else SystemClock()
     limits = ExecutionLimits(
@@ -38,6 +43,10 @@ def build_service(
         downloads=downloads
         if downloads is not None
         else DownloadStore(settings.session_path, clock),
+        checkpoints=checkpoints
+        if checkpoints is not None
+        else CheckpointStore(settings.session_path, clock),
+        exports=exports if exports is not None else ExportStore(settings.session_path, clock),
     )
 
 

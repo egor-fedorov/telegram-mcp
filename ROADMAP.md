@@ -21,7 +21,7 @@ need a detailed contract before implementation; no delivery dates are assigned.
 | R2 | Done | Installable 0.2.0 package, Windows support, shared local HTTP process, client guides, and release automation |
 | R3 | Done | Recoverable connections, bounded catalogs/search, and compact typed 0.3 responses |
 | M3 | Implemented, unreleased | Selected attachment downloads with size limits and delivery to the calling client |
-| M4 | Planned after M3 | New messages and available changes, persistent checkpoints, and source-linked export |
+| M4 | Implemented, unreleased | New messages, bounded recent revisions, persistent checkpoints, and source-linked JSONL/Markdown export |
 
 The [historical completion records](docs/specs/README.md#historical-completion-records)
 include offline test results. They do not claim live Telegram validation.
@@ -65,14 +65,29 @@ Live attachment validation on explicitly selected photo/document sources is sepa
 and remains required before publishing this capability. No version tag or package
 publication is included in the implementation PR; published 0.3.0 is unchanged.
 
-## Next: M4 — Changes and export
+## M4 — Changes and export (unreleased)
 
-Define persistent checkpoints, retrieval of new messages and available changes, and
-export with original source links. Its detailed contract remains to be planned.
+Adds `get_changes` for one selected chat and `export_history` for frozen date ranges.
+Immutable checkpoints survive restart and preserve partial progress and FloodWait
+deadlines without storing message bodies. Rechecks cover the last 100 known messages;
+unavailability is not a deletion claim. Export parts retain original text, metadata
+and source links in JSONL or Markdown and use bounded temporary MCP resources.
+See the [M4 contract](docs/specs/m4-changes-export.md) and
+[usage](docs/usage.md#changes-and-exports-unreleased).
+
+Offline coverage includes restart/replay, retention, access revocation, recovery,
+protection omissions, Unicode, part limits and all three resource transports.
+`make check` passes: formatting, lint, types, and 1118 tests (2 platform-specific skips).
+Selected-source live validation remains separate. No tag or package is published here.
+
+## Next: validate and release
+
+Complete the selected-source live validation of M3/M4 before publishing these capabilities.
+Follow the release procedure separately; a merged implementation is not a published package.
 
 ## Later decisions
 
-M4 will define persistent checkpoints and explicit export coverage. Other directions
+Broader change journals and multi-source exports remain later decisions. Other directions
 remain proposals: saved searches and source collections, local text/semantic indexes,
 OCR or transcription, monitoring and notifications, optional writes or administration,
 and remote access or separately isolated account profiles.

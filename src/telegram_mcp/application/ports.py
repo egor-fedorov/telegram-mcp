@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Protocol
 
 from telegram_mcp.application.attachment_ports import AttachmentPort
+from telegram_mcp.application.change_ports import IncrementalPort
 from telegram_mcp.application.requests import MessageRead, SearchRead
 from telegram_mcp.domain.models import (
     Chat,
@@ -151,6 +152,13 @@ class MessagePort(Protocol):
 
 
 class Backend(
-    ChatPort, DiscoveryPort, ForumPort, MessagePort, AttachmentPort, RuntimePort, Protocol
+    ChatPort,
+    DiscoveryPort,
+    ForumPort,
+    MessagePort,
+    AttachmentPort,
+    IncrementalPort,
+    RuntimePort,
+    Protocol,
 ):
     """Aggregate accepted only at application assembly, not by individual use cases."""

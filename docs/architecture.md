@@ -59,7 +59,7 @@ snapshots; execution budgets are injected separately.
 
 ## Telegram readers and lifecycle
 
-`TelegramBackend` composes chat, discovery, message, forum and attachment gateways.
+`TelegramBackend` composes chat, discovery, message, forum, attachment and incremental gateways.
 They share one `TelegramRuntime` and chat/entity cache. Runtime owns the client,
 lifecycle lock, session lease, authorization probes, timeouts and sanitized errors.
 It restores disconnected clients under that lock while retaining the lease; generation
@@ -90,7 +90,8 @@ policy is absent.
 ## Transports and local resources
 
 Standalone STDIO owns its application/runtime. The foreground local HTTP process owns
-one facade, runtime, policy, cursor store and download store shared by its clients.
+one facade, runtime, policy, cursor store, checkpoint store and temporary file stores
+shared by its clients.
 The tool gate coordinates calls to shared state; disconnecting a client does not close
 the application. Server shutdown closes it through the facade.
 
@@ -111,6 +112,34 @@ of a stale file reference. Resource reads reauthorize the source and verify curr
 media identity and stored bytes. The MCP adapter exposes opaque resource URIs without
 a general HTTP file endpoint or persistent message database.
 
+## Durable reads and exports
+
+`ChangesService` observes new IDs and rechecks a rolling set of 100 known IDs.
+`HistoryExportService` traverses a frozen single-chat date/ID range in bounded parts.
+They use `IncrementalContext` for source authorization, session-wide persistent M4
+FloodWait deadlines, serialization and ownership of the two stores. `ReadBudget`
+counts head/recheck/history operations and bounds the page work. Access failures never
+release saved output or consume the caller's checkpoint.
+
+`IncrementalPort` supplies current observations, range reads and export-protection checks.
+Its Telegram gateway shares the existing runtime and entity cache, uses public history
+and message-batch APIs, and includes media identity in content fingerprints. Pure domain
+rules exclude volatile counters/reactions/poll votes. `ExportPart` writes complete UTF-8
+records with reserved summary space; clipping applies only to inline change responses.
+
+`CheckpointStorePort` holds versioned, immutable position snapshots and cooldown deadlines.
+The SQLite adapter stores no message bodies and never unpickles data. Snapshots are bound
+to the canonical session path and a digest of its authorization, with atomic writes,
+30-day expiry and oldest-first eviction under the state budget. A partial pass persists
+its phase and offset without saving message buffers; continuation rereads current data.
+
+`ExportStorePort` owns a separate bounded cache of generated JSONL/Markdown files.
+It reuses private-path protection, has a process lease, atomic publication, hashes,
+expiry and cleanup. Resource reads reauthorize the source before reading the stored
+snapshot. Existing attachment resource checks retain their stronger media-identity
+verification. The MCP resource dispatcher returns text exports and binary attachments
+over all transports without adding a file-serving HTTP route.
+
 ## Invariants and validation
 
 - Access and topic checks precede saved-buffer output; failed checks leave the original
@@ -123,7 +152,8 @@ a general HTTP file endpoint or persistent message database.
   scans do not infer exhaustion from sparse data. Text clipping and cursor advancement
   precede MCP projection; projection does not drop messages to fit a budget.
 - MCP emits the same compact JSON in text and structured content with self-contained
-  schemas. Cursors and resources are process-local; server restarts invalidate them.
+  schemas. Ordinary cursors and resources are process-local; server restarts invalidate
+  them. M4 checkpoints are distinct durable tokens, subject to retention and eviction.
 
 [Architecture tests](../tests/contracts/test_architecture.py) check imports and cycles.
 [Contract tests](../tests/contracts/test_mcp.py) compare both MCP modes with the versioned

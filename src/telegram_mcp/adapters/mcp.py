@@ -23,7 +23,9 @@ from pydantic import AnyUrl, AwareDatetime, Field, StringConstraints
 from telegram_mcp.adapters import wire
 from telegram_mcp.adapters.tool_gate import ToolCallGate
 from telegram_mcp.adapters.version import get_version
+from telegram_mcp.application.change_ports import EXPORT_RESOURCE_PREFIX
 from telegram_mcp.application.service import Service
+from telegram_mcp.domain.changes import ChangeOutput, ExportFormat
 from telegram_mcp.domain.models import ChatType, ContentType, MessageRef, ToolError
 
 Limit = Annotated[int, Field(ge=1, le=100)]
@@ -33,7 +35,7 @@ FolderIDs = Annotated[list[int], Field(min_length=1, max_length=100)]
 ChatIDs = Annotated[list[ChatID], Field(min_length=1, max_length=1000)]
 
 
-class AttachmentServer(MCPServer[None]):
+class ResourceServer(MCPServer[None]):
     """Read transient resources through public SDK hooks, preserving their actual MIME."""
 
     def __init__(self, service: Service, gate: ToolCallGate | None, **kwargs: Any) -> None:
@@ -50,13 +52,23 @@ class AttachmentServer(MCPServer[None]):
                     "Read a selected attachment returned by download_attachment before expires_at. "
                     "Access and source availability are checked again. No resource enumeration."
                 ),
-            )
+            ),
+            ResourceTemplate(
+                uri_template="telegram-export://files/{token}",
+                name="message_export",
+                description=(
+                    "Read a temporary JSONL or Markdown export before expires_at. "
+                    "Access is checked again; no resource enumeration."
+                ),
+            ),
         ]
 
     async def read_resource(
         self, uri: AnyUrl | str, context: Context[None, Any] | None = None
     ) -> list[ReadResourceContents]:
-        async def read() -> tuple[bytes, str]:
+        async def read() -> tuple[str | bytes, str]:
+            if str(uri).startswith(EXPORT_RESOURCE_PREFIX):
+                return await self.service.read_export_resource(str(uri))
             return await self.service.read_download_resource(str(uri))
 
         try:
@@ -65,14 +77,18 @@ class AttachmentServer(MCPServer[None]):
             )
         except ToolError as exc:
             issue = exc.issue().model_dump(mode="json", exclude_none=True)
-            code = INVALID_PARAMS if issue["code"] == "DOWNLOAD_UNAVAILABLE" else INTERNAL_ERROR
+            code = (
+                INVALID_PARAMS
+                if issue["code"] in ("DOWNLOAD_UNAVAILABLE", "EXPORT_UNAVAILABLE")
+                else INTERNAL_ERROR
+            )
             raise MCPError(
                 code, exc.issue().model_dump_json(exclude_none=True), data=issue
             ) from None
         except MCPError:
             raise
         except Exception:
-            raise ResourceError("Cannot read the downloaded attachment.") from None
+            raise ResourceError("Cannot read the requested resource.") from None
         return [ReadResourceContents(content=content, mime_type=mime_type)]
 
 
@@ -107,7 +123,7 @@ def create_server(
             if owns_service:
                 await service.close()
 
-    server: MCPServer[None] = AttachmentServer(
+    server: MCPServer[None] = ResourceServer(
         service,
         gate,
         name="Telegram Context",
@@ -152,10 +168,68 @@ def create_server(
             "Each call creates a temporary local file up to 20 MiB, available for 15 minutes; "
             "the local_path is on the server computer. Read the returned resource_uri explicitly "
             "for binary content. Access is checked again when reading the resource. "
-            "Downloaded copies cannot be revoked after delivery."
+            "Downloaded copies cannot be revoked after delivery. "
+            "get_changes establishes a baseline, then uses durable checkpoints for one chat. "
+            "Pass only checkpoint to continue; save the returned next_checkpoint. "
+            "complete covers the current pass, not every historical edit or deletion. "
+            "unavailable does not prove deletion. Old-token retries may repeat records; "
+            "deduplicate by message_ref and revision. Export history or changes as JSONL/Markdown "
+            "with original source references. Read export resources explicitly; inspect omissions."
         ),
     )
     readonly = ToolAnnotations(read_only_hint=True, open_world_hint=True)
+
+    persistent_read = ToolAnnotations(
+        read_only_hint=False, destructive_hint=False, idempotent_hint=False, open_world_hint=True
+    )
+
+    @server.tool(annotations=persistent_read)
+    @expose
+    async def get_changes(
+        chat_ref: str | None = None,
+        checkpoint: str | None = None,
+        limit: Limit = 30,
+        output: ChangeOutput = "inline",
+    ) -> Annotated[CallToolResult, wire.ChangesResult]:
+        """Poll one selected chat for new messages and available recent revisions.
+
+        Supply chat_ref only to establish a baseline at the current head, without old
+        history. Then supply checkpoint only. Rechecks the last 100 known messages;
+        intermediate edits and all historical deletions cannot be recovered. complete
+        means this pass finished; its next_checkpoint starts the next poll. Unavailable
+        does not prove deletion. Retry old tokens safely, allowing duplicate revisions.
+        Checkpoints survive restart, for up to 30 days subject to bounded-store eviction.
+        Inline text uses normal continuation offsets. output=jsonl/markdown returns a
+        temporary file/resource with full records instead of inline changes. No binary
+        attachment downloads. Respect retry_after_seconds and report omissions/issues.
+        """
+        return wire.encode(await service.get_changes(chat_ref, checkpoint, limit, output))
+
+    @server.tool(annotations=persistent_read)
+    @expose
+    async def export_history(
+        chat_ref: str | None = None,
+        date_from: AwareDatetime | None = None,
+        date_to: AwareDatetime | None = None,
+        checkpoint: str | None = None,
+        format: ExportFormat = "jsonl",
+    ) -> Annotated[CallToolResult, wire.ExportHistoryResult]:
+        """Export one selected chat's original history as JSONL or Markdown.
+
+        Start with chat_ref and optional dates (lower inclusive, upper exclusive),
+        then continue with checkpoint only and the desired format. Upper date and ID
+        are frozen; each part has at most 1000 records/20 MiB within RPC/time budgets.
+        Read the returned resource explicitly before its 15-minute expiry. Files are
+        local to the server, temporary, and include source references and full text;
+        attachments are metadata only. Protected/expiring records are omitted explicitly.
+        complete means the range was scanned; omitted_count and issues still matter.
+        A non-null next_checkpoint survives restart; an empty part can need continuation.
+        On temporary errors continue the returned token after any retry delay. On tool
+        errors the original token remains usable. No snapshot consistency across Telegram edits.
+        """
+        return wire.encode(
+            await service.export_history(chat_ref, date_from, date_to, checkpoint, format)
+        )
 
     @server.tool(
         annotations=ToolAnnotations(

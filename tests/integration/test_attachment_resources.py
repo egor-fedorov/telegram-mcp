@@ -115,7 +115,7 @@ async def test_http_and_connect_deliver_full_size_resource(
                             client, assert_compact_download(result, MAX_BYTES), MAX_BYTES
                         )
                         assert (await client.list_resources()).resources == []
-                        assert len((await client.list_resource_templates()).resource_templates) == 1
+                        assert len((await client.list_resource_templates()).resource_templates) == 2
             else:
                 config = tmp_path / "resource-config.toml"
                 save_settings(settings, config)
@@ -131,7 +131,7 @@ async def test_http_and_connect_deliver_full_size_resource(
                         client, assert_compact_download(result, MAX_BYTES), MAX_BYTES
                     )
                     assert (await client.list_resources()).resources == []
-                    assert len((await client.list_resource_templates()).resource_templates) == 1
+                    assert len((await client.list_resource_templates()).resource_templates) == 2
         assert service.download_calls == ["1:1:document"]
         assert service.read_calls == [URI]
         assert not service.closed

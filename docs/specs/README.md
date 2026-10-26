@@ -7,6 +7,7 @@ the implementation at each milestone; later changes are recorded in the
 - [M1: Public-channel discovery](m1-public-channel-discovery.md)
 - [M2: Message navigation and metadata](m2-message-navigation.md)
 - [M3: Selected attachment downloads (unreleased)](m3-attachment-downloads.md)
+- [M4: Changes and export (unreleased)](m4-changes-export.md)
 - [R2: Installation, local sharing, and release 0.2.0](r2-general-purpose.md)
 
 See [current layered architecture](../architecture.md) for the maintained design,

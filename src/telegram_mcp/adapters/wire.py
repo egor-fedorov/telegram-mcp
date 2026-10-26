@@ -13,7 +13,7 @@ from pydantic import AwareDatetime, ConfigDict, Field, with_config
 from pydantic_core import to_json
 from typing_extensions import TypedDict
 
-from telegram_mcp.domain import models
+from telegram_mcp.domain import changes, models
 
 
 def _remove_titles(schema: dict[str, Any]) -> None:
@@ -407,11 +407,66 @@ class ContextResult(TypedDict):
     issues: list[Issue]
 
 
+@with_config(_CONFIG)
+class ExportFile(TypedDict):
+    format: changes.ExportFormat
+    name: str
+    mime_type: str
+    size: Count
+    sha256: str
+    local_path: str
+    resource_uri: str
+    expires_at: AwareDatetime
+
+
+@with_config(_CONFIG)
+class Change(TypedDict):
+    kind: Literal["new", "updated", "unavailable"]
+    message_ref: MessageKey
+    revision: str
+    observed_at: AwareDatetime
+    message: NotRequired[Message]
+
+
+@with_config(_CONFIG)
+class ChangesResult(TypedDict):
+    chats: dict[ChatID, ChatSummary]
+    chat_id: ChatID
+    changes: list[Change]
+    returned_count: Count
+    omitted_count: Count
+    complete: bool
+    upper_message_id: NotRequired[Count]
+    recheck_limit: Literal[100]
+    rechecked_message_ids: list[int]
+    tracked_count: Annotated[int, Field(ge=0, le=100)]
+    next_checkpoint: str | None
+    checkpoint_expires_at: NotRequired[AwareDatetime]
+    issues: list[Issue]
+    export: NotRequired[ExportFile]
+
+
+@with_config(_CONFIG)
+class ExportHistoryResult(TypedDict):
+    chat_id: ChatID
+    exported_count: Count
+    omitted_count: Count
+    complete: bool
+    upper_message_id: NotRequired[Count]
+    date_from: NotRequired[AwareDatetime]
+    date_to: AwareDatetime
+    next_checkpoint: str | None
+    checkpoint_expires_at: NotRequired[AwareDatetime]
+    issues: list[Issue]
+    export: NotRequired[ExportFile]
+
+
 # These are protocol controls, not unknown optional metadata. Their null values
 # distinguish exhaustion, unavailable anchors and unverified authorization.
 _NULL_CONTROLS = {
     "authorized",
     "next_cursor",
+    "next_checkpoint",
     "next_text_offset",
     "anchor",
     "before_exhausted",
@@ -464,7 +519,14 @@ def encode(value: models.Model | dict[str, object] | list[models.Folder]) -> Cal
     chats: dict[str, Any] = {}
     payload = _project(value, chats)
     if isinstance(
-        value, (models.Page, models.MessageResult, models.AlbumResult, models.ContextResult)
+        value,
+        (
+            models.Page,
+            models.MessageResult,
+            models.AlbumResult,
+            models.ContextResult,
+            changes.ChangesResult,
+        ),
     ):
         payload = {"chats": chats, **payload}
     elif isinstance(value, list):
@@ -485,6 +547,21 @@ def encode(value: models.Model | dict[str, object] | list[models.Folder]) -> Cal
                 mime_type=value.mime_type,
                 size=value.size,
                 description="Temporary attachment; read before expires_at from the tool result.",
+            )
+        )
+    if (
+        isinstance(value, (changes.ChangesResult, changes.ExportHistoryResult))
+        and value.export is not None
+    ):
+        exported = value.export
+        result.content.append(
+            ResourceLink(
+                type="resource_link",
+                uri=exported.resource_uri,
+                name=exported.name,
+                mime_type=exported.mime_type,
+                size=exported.size,
+                description="Temporary source-linked export; read before expires_at.",
             )
         )
     return result

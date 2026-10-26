@@ -6,7 +6,10 @@ from pathlib import Path
 
 import uvicorn
 
+from telegram_mcp.adapters.checkpoints import CheckpointStore
+from telegram_mcp.adapters.clock import SystemClock
 from telegram_mcp.adapters.config import Settings
+from telegram_mcp.adapters.exports import ExportStore
 from telegram_mcp.adapters.http_token import load_token
 from telegram_mcp.adapters.transport import create_http_app
 from telegram_mcp.bootstrap import build_service
@@ -23,11 +26,21 @@ async def running_server(tmp_path: Path) -> AsyncGenerator[tuple[Settings, FakeB
         listener.bind(("127.0.0.1", 0))
         settings = Settings(
             allowed_chat_ids=["1"],
+            session_path=tmp_path / "account.session",
             http_port=listener.getsockname()[1],
             http_token_path=tmp_path / "mcp.token",
         )
         app = create_http_app(
-            build_service(backend, settings),
+            build_service(
+                backend,
+                settings,
+                checkpoints=CheckpointStore(
+                    settings.session_path, SystemClock(), root=tmp_path / "checkpoints"
+                ),
+                exports=ExportStore(
+                    settings.session_path, SystemClock(), root=tmp_path / "exports"
+                ),
+            ),
             load_token(settings.http_token_path, create=True),
             settings.http_port,
         )

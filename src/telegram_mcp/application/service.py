@@ -13,8 +13,12 @@ from telegram_mcp.application.attachment_ports import (
 )
 from telegram_mcp.application.attachments import AttachmentService
 from telegram_mcp.application.catalog import CatalogService
+from telegram_mcp.application.change_ports import CheckpointStorePort, ExportStorePort
+from telegram_mcp.application.changes import ChangesService
 from telegram_mcp.application.discovery import DiscoveryService
 from telegram_mcp.application.global_search import GlobalSearchPager
+from telegram_mcp.application.history_export import HistoryExportService
+from telegram_mcp.application.incremental import IncrementalContext
 from telegram_mcp.application.message_pager import MessagePager
 from telegram_mcp.application.messages import MessageReader
 from telegram_mcp.application.ports import (
@@ -28,6 +32,12 @@ from telegram_mcp.application.ports import (
 from telegram_mcp.application.queries import QueryService
 from telegram_mcp.application.query_preparation import QueryPreparation
 from telegram_mcp.application.topics import TopicPager, TopicService
+from telegram_mcp.domain.changes import (
+    ChangeOutput,
+    ChangesResult,
+    ExportFormat,
+    ExportHistoryResult,
+)
 from telegram_mcp.domain.models import (
     AlbumResult,
     ChatPage,
@@ -52,11 +62,18 @@ class Service:
         cursors: CursorPort,
         clock: Clock,
         downloads: DownloadStorePort,
+        checkpoints: CheckpointStorePort,
+        exports: ExportStorePort,
     ):
         self._runtime: RuntimePort = backend
         self._policies = policy_provider
         self._limits = limits
         access = AccessFactory(backend, policy_provider)
+        self._incremental = IncrementalContext(
+            backend, backend, access, checkpoints, exports, clock, limits
+        )
+        self._changes = ChangesService(self._incremental)
+        self._history_export = HistoryExportService(self._incremental)
         self._attachments = AttachmentService(backend, access, policy_provider, downloads, clock)
         self._catalog = CatalogService(backend, access, cursors, clock)
         self._discovery = DiscoveryService(backend, policy_provider)
@@ -75,7 +92,34 @@ class Service:
         try:
             await self._attachments.close()
         finally:
-            await self._runtime.close()
+            try:
+                await self._incremental.close()
+            finally:
+                await self._runtime.close()
+
+    async def get_changes(
+        self,
+        chat_ref: str | None = None,
+        checkpoint: str | None = None,
+        limit: int = 30,
+        output: ChangeOutput = "inline",
+    ) -> ChangesResult:
+        return await self._changes.get_changes(chat_ref, checkpoint, limit, output)
+
+    async def export_history(
+        self,
+        chat_ref: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        checkpoint: str | None = None,
+        format: ExportFormat = "jsonl",
+    ) -> ExportHistoryResult:
+        return await self._history_export.export_history(
+            chat_ref, date_from, date_to, checkpoint, format
+        )
+
+    async def read_export_resource(self, uri: str) -> tuple[str, str]:
+        return await self._incremental.read_resource(uri)
 
     async def download_attachment(self, attachment_id: str) -> DownloadResult:
         return await self._attachments.download(attachment_id)

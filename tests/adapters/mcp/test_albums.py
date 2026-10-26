@@ -35,7 +35,7 @@ async def test_album_mcp_schema_exposes_bounded_read_only_result(mode: str) -> N
     backend = FakeBackend()
     async with Client(create_server(Service(backend, Settings())), mode=mode) as client:
         tools = (await client.list_tools()).tools
-        assert len(tools) == 15
+        assert len(tools) == 17
         tool = next(tool for tool in tools if tool.name == "get_album")
         assert tool.annotations is not None and tool.annotations.read_only_hint
         assert tool.input_schema["required"] == ["ref"]

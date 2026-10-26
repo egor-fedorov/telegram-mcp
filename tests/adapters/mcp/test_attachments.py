@@ -42,7 +42,7 @@ async def test_download_tool_and_resource_contract(tmp_path: Path, mode: str) ->
         assert tool.output_schema["properties"]["message_ref"]["type"] == "string"
         assert (await client.list_resources()).resources == []
         templates = (await client.list_resource_templates()).resource_templates
-        assert len(templates) == 1
+        assert len(templates) == 2
         assert templates[0].uri_template == "telegram-attachment://downloads/{token}"
         assert templates[0].mime_type is None
         invalid = await client.call_tool("download_attachment", {"attachment_id": " "})

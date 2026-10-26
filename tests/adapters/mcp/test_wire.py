@@ -60,7 +60,19 @@ async def test_compact_full_wire_size_budgets_keep_every_text_character(mode: st
         assert payload["chats"]["1"] == {"title": "Chat 1", "type": "group"}
         assert all("chat" not in message for message in payload["messages"])
         result_bytes = len(result.model_dump_json(by_alias=True, exclude_unset=True).encode())
-        tools_bytes = len(listing.model_dump_json(by_alias=True, exclude_unset=True).encode())
+        # Preserve the original retrieval budget independently of additive M4 tools.
+        original_tools = listing.model_copy(
+            update={
+                "tools": [
+                    tool
+                    for tool in listing.tools
+                    if tool.name not in {"get_changes", "export_history"}
+                ]
+            }
+        )
+        tools_bytes = len(
+            original_tools.model_dump_json(by_alias=True, exclude_unset=True).encode()
+        )
         assert result_bytes <= BASELINE_RESULT_BYTES * 0.40, result_bytes
         assert tools_bytes <= BASELINE_TOOLS_BYTES * 0.75, tools_bytes
 
@@ -93,7 +105,7 @@ async def test_all_fourteen_tools_have_typed_self_contained_mirrored_responses(m
     }
     async with Client(server, mode=mode) as client:
         tools = (await client.list_tools()).tools
-        assert len(tools) == len(calls) + 1 == 15
+        assert len(tools) == len(calls) + 3 == 17
         for tool in tools:
             schema = tool.output_schema
             assert schema is not None
@@ -114,7 +126,7 @@ async def test_all_fourteen_tools_have_typed_self_contained_mirrored_responses(m
                         check_refs(child)
 
             check_refs(schema)
-            if tool.name == "download_attachment":
+            if tool.name in {"download_attachment", "get_changes", "export_history"}:
                 continue  # Success/resource parity is covered in test_attachments_mcp.
             payload = assert_mirrored(await client.call_tool(tool.name, calls[tool.name]))
             if tool.name == "list_folders":

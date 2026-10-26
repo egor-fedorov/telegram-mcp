@@ -4,6 +4,22 @@ import sys
 from pathlib import Path
 
 
+def prepare_private_directory(path: Path) -> None:
+    """Create private parents without following redirected storage paths."""
+    for candidate in (path, *path.parents):
+        if candidate.is_symlink() or candidate.is_junction():
+            raise OSError("Private storage cannot use redirected paths")
+    missing = []
+    parent = path
+    while not parent.exists():
+        missing.append(parent)
+        parent = parent.parent
+    for candidate in reversed(missing):
+        candidate.mkdir(mode=0o700, exist_ok=True)
+        protect_private_path(candidate, directory=True)
+    protect_private_path(path, directory=True)
+
+
 def protect_private_path(path: Path, *, directory: bool = False) -> None:
     if path.is_symlink() or path.is_junction():
         raise OSError("Private storage cannot use a symbolic link or junction")
