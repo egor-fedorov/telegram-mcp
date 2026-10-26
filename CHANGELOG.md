@@ -8,6 +8,31 @@ A version entry describes its target artifact. Verify publication on
 
 ## [Unreleased]
 
+### Added
+
+- `get_history` reads several selected chats (`chat_ids`) or folders (`folder_ids`) over
+  a fixed `[date_from, date_to)` period in one traversal. It defaults to early
+  `ordering="page"` results and cumulative `max_sources=20` / `max_messages=100` budgets;
+  a larger selection returns `SOURCE_LIMIT_EXCEEDED` before any history read, and a
+  typed `budget` object reports exhaustion while keeping the cursor resumable.
+- `get_watch_changes(save=true)` writes each pending batch to a permanent JSONL copy with
+  `metadata.json` (watch, batch and sources) before it can be acknowledged and returns
+  `saved_file`. Retries, lost responses, restarts and crashes reuse the same copy;
+  `WATCH_ARCHIVE_PENDING` and `ARCHIVE_COPY_INVALID` keep positions unchanged.
+- MCP prompts `watch_digest` and `period_digest` for source-linked digests, with
+  explicit trust rules for Telegram content, bounded workflows and a documented vacancy
+  preset; completion for `watch_digest.watch_name` from local storage only. Both are
+  forwarded by `connect`.
+- `timezone` configuration (IANA name, default `UTC`) for calendar dates in prompts.
+
+### Compatibility
+
+- All changes are additive: existing tool arguments, single-chat history responses
+  and `save=false` watches behave as in 0.4.0. Refresh client tool lists to see the new
+  `get_history` and `get_watch_changes` arguments.
+- Windows installations now include `tzdata`, because Windows has no system time-zone
+  database.
+
 ## [0.4.0] - 2026-10-26
 
 ### Added

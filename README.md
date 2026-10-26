@@ -88,7 +88,7 @@ do not paste it into client configuration. This is a local, single-user integrat
 | `search_public_channels` | Find public broadcast channels by query; metadata only |
 | `get_similar_channels` | Find similar public channels for one specified public source; metadata only |
 | `search_messages` | Search by keywords, chats, folders, dates, sender, media type, or links |
-| `get_history` | Chat or forum-topic history over a time range, in either order |
+| `get_history` | Chat or forum-topic history over a time range, in either order; bounded chat/folder periods *(unreleased)* |
 | `list_topics` | Forum topics with navigation references, optional title query, and pagination |
 | `get_pinned_messages` | Chat-wide or forum-topic pinned messages, newest first |
 | `get_messages` | Messages by links/IDs with authors, dates, attachments, counters, reactions, and polls |
@@ -98,10 +98,15 @@ do not paste it into client configuration. This is a local, single-user integrat
 | `download_attachment` | One selected attachment up to 20 MiB as a temporary local file and MCP resource |
 | `get_changes` | New messages and recent observed revisions in one chat, with restartable checkpoints |
 | `create_watch` / `list_watches` | Save and discover named chat/folder subscriptions |
-| `get_watch_changes` / `ack_watch_changes` | Poll and acknowledge a durable batch without per-chat tokens |
+| `get_watch_changes` / `ack_watch_changes` | Poll and acknowledge a durable batch without per-chat tokens; optionally save it first *(unreleased)* |
 | `delete_watch` | Explicitly discard a subscription and its pending batch |
 | `export_history` | Source-linked JSONL or Markdown history in bounded, restartable parts |
 
+*(Unreleased.)* Two prompts package these tools for monitoring: `watch_digest` turns
+a named watch into a source-linked digest, saving each batch before acknowledging it;
+`period_digest` reads one chat or folder over a fixed period with explicit budgets.
+They do not add permissions. See
+[monitoring prompts](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/usage.md#monitoring-prompts-unreleased).
 
 ## First tasks
 

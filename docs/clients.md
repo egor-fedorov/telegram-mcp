@@ -209,6 +209,22 @@ optional output schemas are omitted, and typed server-side validation stays enab
 Set `"full"` in the server configuration if your client needs advertised output schemas.
 Refresh the client's tools after restarting the server. Both modes return identical JSON.
 
+## Prompts and completion
+
+*(Unreleased.)* The server offers two user-selected prompts, `watch_digest` and
+`period_digest`, and completion for `watch_digest`'s `watch_name` from local
+subscription storage. `connect` forwards both and advertises them only when the shared
+server supports them. Clients decide how prompts are shown; documentation for
+[Claude Code](https://code.claude.com/docs/en/mcp) and
+[VS Code](https://code.visualstudio.com/docs/agent-customization/mcp-servers) describes
+MCP prompts as chat commands. This project has not verified prompt or completion UI in
+any client. Offline tests use the Python MCP SDK over STDIO, HTTP and `connect`.
+
+Without prompt support, use the
+[copyable recipes](usage.md#monitoring-prompts-unreleased): the same tool calls, budgets
+and trust rules typed as an ordinary request. Prompts do not add permissions; tools,
+access policy and acknowledgements behave exactly as when called directly.
+
 ## Executable paths and custom configuration
 
 Graphical applications may not inherit your terminal's `PATH`. Find `uvx` with

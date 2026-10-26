@@ -24,7 +24,7 @@ need a concrete contract before implementation; no delivery dates are assigned.
 | M4 | Complete for 0.4 | Durable checkpoints, recent revisions and source-linked JSONL/Markdown exports |
 | R4 | Complete for 0.4 | Bounded scope previews, early restricted search, reusable catalogs and concurrent calls |
 | R5 | Complete for 0.4 | Named subscriptions, protected positions, permanent selected files and compact discovery |
-| M5 | Proposed for 0.5 | Bounded multi-source history, archived watch batches and usable monitoring prompts |
+| M5 | Implemented, unreleased | Bounded multi-source history, archived watch batches and usable monitoring prompts |
 
 The [0.4 changelog](CHANGELOG.md#040---2026-10-26), [migration guide](docs/migration-0.4.md)
 and [validation record](docs/validation-0.4.md) describe the complete release scope.
@@ -56,23 +56,25 @@ Telegram readers and shared explicit fixtures. Dependency and development-tool u
 receive manual review; CI checks supported Python/platform combinations and fresh
 wheel/source installations.
 
-## Proposed 0.5: monitoring workflows
+## 0.5: monitoring workflows (implemented, unreleased)
 
-The [M5 proposal](docs/specs/m5-monitoring-workflows.md) is ready for review; it is not
-implemented or released. Extend history reading to selected chats/folders with early
-page results and explicit source/message budgets. Add opt-in archive copies of watch
-batches before acknowledgement, reusing the existing watch and archive mechanisms.
+[M5](docs/specs/m5-monitoring-workflows.md) is implemented in source and not released.
 
-Expose two general prompts: pending watch changes and a period digest. Support relative
-periods, calendar dates with an explicit/configured timezone, folder names and local
-watch-name completion. Vacancy selection is a documented period-digest preset. Carry
-prompts and completion through STDIO, native HTTP and `connect`.
+- `get_history` reads selected `chat_ids`/`folder_ids` over a fixed period in one
+  traversal, with early `ordering="page"` results, `max_sources`/`max_messages` budgets
+  (defaults 20/100), `SOURCE_LIMIT_EXCEEDED` before any read and resumable exhaustion.
+- `get_watch_changes(save=true)` publishes each pending batch as a permanent JSONL copy
+  before either acknowledgement path can commit it; retries, restarts and crashes reuse
+  the same copy, and missing copies are rebuilt from the pending batch.
+- `watch_digest` and `period_digest` prompts, with relative periods, calendar dates in a
+  prompt or configured IANA `timezone`, exact folder titles and local watch-name
+  completion, forwarded through STDIO, HTTP and `connect`. Templates treat Telegram
+  content as data and bound each workflow. The vacancy digest is a documented preset.
 
-Templates process pages into source-linked notes, report partial coverage and treat
-Telegram content as data rather than instructions. Archived batches support recovery
-after interruption; they do not guarantee delivery of an agent's generated report.
-Do not add another subscription API, server-side deduplication store, scheduler or
-built-in LLM. See the proposal for exact limits, compatibility and acceptance criteria.
+Offline `make check` passes: Ruff, ty and 1338 tests (two platform-specific skips). Before publication,
+acceptance criterion 6 requires a bounded live check of prompt/completion discovery and
+a workflow in a real client on selected sources, including interruption after archiving
+and recovery from retained files. No live Telegram or client validation has been done.
 
 ## Distribution follow-ups
 

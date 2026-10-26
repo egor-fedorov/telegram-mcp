@@ -23,6 +23,8 @@ allow_attachment_downloads = false
 # Compact tool advertisements omit output schemas; results remain typed and validated.
 # Set "full" for clients that need advertised output schemas, then restart the server.
 mcp_schema_mode = "compact"
+# IANA time zone for calendar dates in the period_digest prompt.
+timezone = "UTC"
 rpc_timeout_seconds = 20
 max_dialogs = 10000
 # Reuse dialog metadata for five minutes, then refresh on demand in the background.

@@ -6,7 +6,7 @@ describe delivery at each milestone; later changes are recorded in the
 
 ## Proposed
 
-- [M5: Monitoring workflows (0.5)](m5-monitoring-workflows.md)
+- [M5: Monitoring workflows (0.5)](m5-monitoring-workflows.md) — implemented in source; live client validation pending
 
 ## Completed
 

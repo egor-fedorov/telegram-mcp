@@ -169,6 +169,28 @@ arguments differ from the existing name; use that existing subscription or anoth
 Source failures preserve positions and appear in issues. If permissions are revoked,
 the entire pending response is withheld; it stays available if access is restored.
 
+### Saved watch batches (unreleased)
+
+`WATCH_ARCHIVE_PENDING` means `save=true` was requested for the pending batch but its
+copy is not recorded yet; repeat `get_watch_changes(name, save=true)` before
+acknowledging. `ARCHIVE_COPY_INVALID` means the recorded copy is missing or changed;
+the same call rebuilds it from the still-pending batch. Neither error advances
+positions. Use `grep` on `metadata.json` files under `archive_directory` to find a batch
+by `watch_name` or `batch_id` after an interrupted session.
+
+## Multi-source periods and prompts (unreleased)
+
+`SOURCE_LIMIT_EXCEEDED` reports the permitted source count and `max_sources` before any
+history read. Narrow the chats/folders or pass a larger `max_sources` (up to 1000)
+deliberately. `budget.exhausted=true` is partial coverage, not an empty period: continue
+the same cursor with a larger `max_messages`, or report what was covered.
+
+Prompt errors are MCP parameter errors: check `days` versus `date_from`/`date_to`,
+calendar dates versus aware timestamps, the IANA `timezone`, and exactly one source
+argument. `FOLDER_NOT_FOUND` and `FOLDER_AMBIGUOUS` from `folder_name` list matching IDs
+when ambiguous; pass `folder_id` instead. Network or authorization failures while
+resolving a folder title keep their usual codes and retry delays.
+
 ## File resources and permanent copies
 
 A `resource_link` does not itself transfer bytes. The client must read the exact returned

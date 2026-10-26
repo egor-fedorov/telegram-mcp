@@ -124,10 +124,28 @@ The ordinary 20 MiB per-file limit remains; there is no total archive quota. Man
 space and delete unwanted copies yourself. Configuring the directory does not enable
 downloads or expand source access. `get_status.archive_enabled` reports its availability.
 
+`get_watch_changes(save=true)` *(unreleased)* uses the same directory for each pending
+watch batch: one JSONL copy plus `metadata.json` naming the watch, batch and sources,
+written before acknowledgement and reused on retries. See
+[saving watch batches](usage.md#save-watch-batches-before-acknowledging-unreleased).
+
 `mcp_schema_mode="compact"` omits optional output schemas from `tools/list`; `"full"`
 advertises them. Both preserve input schemas, typed server-side output validation,
 and identical response JSON. Restart the server and refresh client tools after changing
 this setting. `configure` preserves these TOML fields; it does not prompt for them.
+
+## Prompt time zone (unreleased)
+
+```toml
+timezone = "Europe/Moscow"  # IANA name; default "UTC"
+```
+
+The `period_digest` prompt interprets calendar dates (`YYYY-MM-DD`) as midnight in its
+`timezone` argument, falling back to this setting, and shows rolling periods in that zone.
+Only IANA zone names are accepted; unknown names are configuration errors. Skipped or
+repeated local midnights are rejected instead of guessed. Aware timestamps keep their own
+offsets. Windows installations include the `tzdata` package because Windows has no system
+zone database. Restart the server after changing it; `configure` preserves the field.
 
 ## Transports and the shared session
 

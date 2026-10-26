@@ -1,6 +1,7 @@
 # M5: Bounded monitoring workflows (0.5)
 
-Status: proposed for review; not implemented. M5 combines bounded multi-source history,
+Status: implemented in source, unreleased; acceptance criterion 6 (live client
+validation) remains before publication. M5 combines bounded multi-source history,
 recoverable watch delivery and two general-purpose MCP prompts. The calling agent
 performs analysis; the server supplies original content, progress and workflow templates.
 
@@ -241,3 +242,15 @@ after acceptance and use the existing release process. Distribution remains inde
 [MCPB #41](https://github.com/egor-fedorov/telegram-mcp/issues/41).
 Extraction, OCR, transcription, Telegram writes, notifications and a full message archive
 remain outside M5. See the [roadmap](../../ROADMAP.md) and [released usage](../usage.md).
+
+## Implementation notes
+
+- Windows has no system IANA zone database, so the package depends on `tzdata` on
+  Windows only. No other dependency changed.
+- Watch-name completion reads the authorization binding only from an already opened
+  Telegram client. Before the first Telegram call in a process it returns no
+  suggestions instead of connecting.
+- `period_digest` with `folder_id` does not read the folder title; the template
+  identifies the folder by ID and `get_history` validates it.
+- Offline measurements for the proposed defaults are recorded in the
+  [usage guide](../usage.md#read-a-period-across-chats-or-folders-unreleased).

@@ -43,8 +43,10 @@ The aggregate backend protocol is confined to assembly and local command wiring.
 - `QueryService` creates typed history, search, pins, topic and thread requests.
   `QueryPreparation` resolves sources, checks access/topic state and selects per-chat
   or unrestricted global search once for the cursor's lifetime.
-- `ProgressiveSearchPager` visits permitted sources round-robin, stops fetching once
-  the page is full, and sorts within that page. `MessagePager` supplies the opt-in
+- `ProgressivePager` visits permitted sources round-robin for searches and
+  multi-source history, stops fetching once the page is full, and sorts within that
+  page. A cursor may carry a cumulative `TraversalBudget` (sources and messages);
+  `QueryPreparation` rejects an oversized selection before any history read. `MessagePager` supplies the opt-in
   global ordering guarantee by priming all streams before merging by date, numeric
   chat ID and message ID. They share batch validation, retry and response assembly.
   `GlobalSearchPager` owns the unrestricted native search offset and preserves Telegram's
@@ -159,6 +161,10 @@ protection. There is no background poller, TTL or eviction. Per-name locks prote
 read/ack sequence; independent consumers share budgets and the durable M4 cooldown.
 Folder membership refreshes between sweeps. New members start from the previous
 completed sweep boundary; returning members keep their saved position.
+With `save=true`, the pending batch records a reserved archive key before any file is
+written; `ArchivePort` publishes the deterministic batch JSONL under that key, and only
+then is the receipt persisted. A republished key is verified and reused, so crashes and
+retries never duplicate copies; both acknowledgement paths require a verified receipt.
 
 `ExportStorePort` owns a separate bounded cache of generated JSONL/Markdown files.
 It reuses private-path protection, has a process lease, atomic publication, hashes,
@@ -171,6 +177,18 @@ over all transports without adding a file-serving HTTP route.
 with generated paths, size/checksum checks and atomic publication. It never accepts
 a destination from a tool or automatically deletes successful copies. Failed publication
 rolls back only files and unpublished receipts created by that call.
+
+## Prompts and completion
+
+The MCP adapter's `PromptCatalog` holds static `watch_digest` and `period_digest`
+templates and parses their string arguments. Pure `domain.periods` rules resolve
+relative periods, calendar dates in IANA zones and aware timestamps against a clock
+captured once per rendering. Rendering performs no post reads or state changes; only
+`folder_name` uses the narrow `CatalogService.find_folder` operation, which reads fresh
+folder definitions without a dialog scan. Watch-name completion uses
+`WatchService.name_suggestions`, which needs a locally known authorization binding and
+reads names only from an existing store. `connect` forwards prompts and completion when
+the shared server advertises them.
 
 ## Invariants and validation
 
