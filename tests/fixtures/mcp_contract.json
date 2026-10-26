@@ -878,6 +878,9 @@
         "local_path": {
           "type": "string"
         },
+        "metadata_path": {
+          "type": "string"
+        },
         "saved_at": {
           "format": "date-time",
           "type": "string"
@@ -892,6 +895,7 @@
       },
       "required": [
         "local_path",
+        "metadata_path",
         "size",
         "sha256",
         "saved_at"
@@ -1208,7 +1212,7 @@
                 "items": {
                   "type": "string"
                 },
-                "maxItems": 1000,
+                "maxItems": 20,
                 "minItems": 1,
                 "type": "array"
               },
@@ -2700,6 +2704,18 @@
       },
       "input": {
         "properties": {
+          "ack_batch_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ack Batch Id"
+          },
           "limit": {
             "default": 30,
             "maximum": 100,

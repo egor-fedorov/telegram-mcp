@@ -56,7 +56,7 @@ class CheckpointStore:
         try:
             connection = open_private_database(self.path)
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1, 2):
+            if version not in (0, 1, 2, 3):
                 raise ToolError("CHECKPOINT_INCOMPATIBLE", "Unknown checkpoint database version.")
             if version == 0:
                 if connection.execute("SELECT name FROM sqlite_master").fetchone():
@@ -98,6 +98,30 @@ class CheckpointStore:
                     )
                     connection.execute("CREATE INDEX checkpoint_parents ON checkpoints(parent)")
                     connection.execute("PRAGMA user_version = 2")
+            if version < 3:
+                with connection:
+                    # Legacy roots may have been continued without changing their
+                    # token. Never guess that such a consumer was abandoned.
+                    connection.execute(
+                        "ALTER TABLE checkpoints ADD COLUMN baseline INTEGER NOT NULL DEFAULT 0"
+                    )
+                    connection.execute("ALTER TABLE checkpoints ADD COLUMN chat_id TEXT")
+                    connection.execute("ALTER TABLE checkpoints ADD COLUMN replacement TEXT")
+                    for token, payload in connection.execute(
+                        "SELECT token, payload FROM checkpoints"
+                    ).fetchall():
+                        try:
+                            source = CheckpointState.model_validate_json(payload).chat_id
+                        except ValidationError:
+                            continue
+                        connection.execute(
+                            "UPDATE checkpoints SET chat_id = ? WHERE token = ?", (source, token)
+                        )
+                    connection.execute(
+                        "CREATE INDEX checkpoint_baselines "
+                        "ON checkpoints(binding, chat_id, baseline)"
+                    )
+                    connection.execute("PRAGMA user_version = 3")
             self._connection = connection
             return connection
         except (OSError, sqlite3.Error):
@@ -173,12 +197,32 @@ class CheckpointStore:
             with db:
                 db.execute("DELETE FROM checkpoints WHERE expires <= ?", (now.timestamp(),))
                 db.execute("DELETE FROM cooldowns WHERE until <= ?", (now.timestamp(),))
-                if retain is not None:
-                    previous = self.get(retain, binding, state.kind)
+                replacement = None
+                previous = None
+                candidate = retain
+                if retain is None and state.kind == "changes":
+                    row = db.execute(
+                        "SELECT token FROM checkpoints WHERE binding = ? AND chat_id = ? "
+                        "AND kind = 'changes' AND baseline = 1 AND head = 1 AND published = 1 "
+                        "AND token NOT IN (SELECT replacement FROM checkpoints "
+                        "WHERE published = 0 AND replacement IS NOT NULL) "
+                        "AND token NOT IN (SELECT parent FROM checkpoints "
+                        "WHERE published = 0 AND parent IS NOT NULL) ORDER BY rowid DESC LIMIT 1",
+                        (binding, state.chat_id),
+                    ).fetchone()
+                    if row is not None:
+                        candidate = replacement = row[0]
+                if candidate is not None:
+                    previous = self.get(candidate, binding, state.kind)
                     if previous.chat_id != state.chat_id:
                         raise ToolError("CHECKPOINT_MISMATCH", "Checkpoint source has changed.")
+                if retain is not None:
+                    # A caller has used this position. Keep it protected even if
+                    # a later file publication fails and the caller must retry.
+                    db.execute("UPDATE checkpoints SET baseline = 0 WHERE token = ?", (retain,))
+                if candidate is not None and previous is not None:
                     is_head = db.execute(
-                        "SELECT head FROM checkpoints WHERE token = ?", (retain,)
+                        "SELECT head FROM checkpoints WHERE token = ?", (candidate,)
                     ).fetchone()[0]
                     excluded = (
                         {"date_to"} if state.kind == "changes" and state.phase == "idle" else set()
@@ -188,29 +232,42 @@ class CheckpointStore:
                     ):
                         db.execute(
                             "UPDATE checkpoints SET expires = ? WHERE token = ?",
-                            (expires.timestamp(), retain),
+                            (expires.timestamp(), candidate),
                         )
-                        return CheckpointReceipt(retain, expires)
+                        return CheckpointReceipt(candidate, expires)
                 count, used = db.execute(
-                    "SELECT COUNT(*), COALESCE(SUM(size), 0) FROM checkpoints"
+                    "SELECT COUNT(*), COALESCE(SUM(size), 0) FROM checkpoints "
+                    "WHERE token NOT IN (SELECT replacement FROM checkpoints "
+                    "WHERE published = 0 AND replacement IS NOT NULL)"
                 ).fetchone()
+                # An unused root can reserve its replacement without destroying
+                # the old token before files are published. Each reservation has
+                # one exclusive victim; failed confirmation restores the old head.
+                if replacement is not None:
+                    count -= 1
+                    used -= db.execute(
+                        "SELECT size FROM checkpoints WHERE token = ?", (replacement,)
+                    ).fetchone()[0]
                 while count >= self.maximum or used + size > self.max_bytes:
                     oldest = db.execute(
                         "SELECT token, size FROM checkpoints WHERE token != ? AND head = 0 "
                         "AND token NOT IN (SELECT parent FROM checkpoints "
                         "WHERE published = 0 AND parent IS NOT NULL) "
+                        "AND token NOT IN (SELECT replacement FROM checkpoints "
+                        "WHERE published = 0 AND replacement IS NOT NULL) "
                         "ORDER BY rowid LIMIT 1",
                         (retain or "",),
                     ).fetchone()
                     if oldest is None:
                         raise ToolError(
                             "CHECKPOINT_STORAGE_FULL",
-                            "Storage contains protected checkpoints; no position was discarded.",
+                            "Storage contains protected checkpoints; no position was discarded. "
+                            "Inspect 'telegram-mcp checkpoints status' for local cleanup.",
                         )
                     db.execute("DELETE FROM checkpoints WHERE token = ?", (oldest[0],))
                     count, used = count - 1, used - oldest[1]
                 db.execute(
-                    "INSERT INTO checkpoints VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)",
+                    "INSERT INTO checkpoints VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)",
                     (
                         token,
                         binding,
@@ -220,10 +277,16 @@ class CheckpointStore:
                         size,
                         retain,
                         int(not pending),
+                        int(retain is None and state.kind == "changes"),
+                        state.chat_id,
+                        replacement,
                     ),
                 )
                 if not pending and retain is not None:
                     db.execute("UPDATE checkpoints SET head = 0 WHERE token = ?", (retain,))
+                if not pending:
+                    self._publish_baseline(db, token)
+                    self._trim(db)
         except sqlite3.Error:
             raise _storage_error() from None
         return CheckpointReceipt(token, expires)
@@ -241,8 +304,47 @@ class CheckpointStore:
                 if not row[1]:
                     db.execute("UPDATE checkpoints SET head = 0 WHERE token = ?", (row[0],))
                     db.execute("UPDATE checkpoints SET published = 1 WHERE token = ?", (token,))
+                    self._publish_baseline(db, token)
+                    self._trim(db)
         except sqlite3.Error:
             raise _storage_error() from None
+
+    @staticmethod
+    def _publish_baseline(db: sqlite3.Connection, token: str) -> None:
+        row = db.execute(
+            "SELECT binding, chat_id, baseline FROM checkpoints WHERE token = ?", (token,)
+        ).fetchone()
+        if row is not None and row[2]:
+            db.execute(
+                "UPDATE checkpoints SET head = 0 WHERE binding = ? AND chat_id = ? "
+                "AND baseline = 1 AND published = 1 AND token != ?",
+                (row[0], row[1], token),
+            )
+        db.execute("UPDATE checkpoints SET replacement = NULL WHERE token = ?", (token,))
+
+    def _trim(self, db: sqlite3.Connection) -> None:
+        # Other in-flight root replacements have their own exclusive reservations.
+        count, used = db.execute(
+            "SELECT COUNT(*), COALESCE(SUM(size), 0) FROM checkpoints "
+            "WHERE token NOT IN (SELECT replacement FROM checkpoints "
+            "WHERE published = 0 AND replacement IS NOT NULL)"
+        ).fetchone()
+        while count > self.maximum or used > self.max_bytes:
+            row = db.execute(
+                "SELECT token, size FROM checkpoints WHERE head = 0 AND published = 1 "
+                "AND token NOT IN (SELECT parent FROM checkpoints "
+                "WHERE published = 0 AND parent IS NOT NULL) "
+                "AND token NOT IN (SELECT replacement FROM checkpoints "
+                "WHERE published = 0 AND replacement IS NOT NULL) ORDER BY rowid LIMIT 1"
+            ).fetchone()
+            if row is None:
+                raise ToolError(
+                    "CHECKPOINT_STORAGE_FULL",
+                    "Storage contains protected checkpoints; "
+                    "inspect 'telegram-mcp checkpoints status'.",
+                )
+            db.execute("DELETE FROM checkpoints WHERE token = ?", (row[0],))
+            count, used = count - 1, used - row[1]
 
     def discard(self, token: str) -> None:
         """Discard an unpublished receipt without touching the caller's input."""
@@ -250,6 +352,51 @@ class CheckpointStore:
             db = self._db()
             with db:
                 db.execute("DELETE FROM checkpoints WHERE token = ? AND published = 0", (token,))
+        except sqlite3.Error:
+            raise _storage_error() from None
+
+    def status(self) -> dict[str, object]:
+        """Local metadata only; callers must own the session lease for maintenance."""
+        try:
+            rows = (
+                self._db()
+                .execute(
+                    "SELECT chat_id, kind, COUNT(*), SUM(size), SUM(head), SUM(baseline), "
+                    "SUM(expires <= ?) FROM checkpoints "
+                    "GROUP BY chat_id, kind ORDER BY chat_id, kind",
+                    (self.clock.utc_now().timestamp(),),
+                )
+                .fetchall()
+            )
+            keys = ("chat_id", "kind", "count", "bytes", "protected", "unused_baselines", "expired")
+            return {
+                "count": sum(row[2] for row in rows),
+                "bytes": sum(row[3] for row in rows),
+                "maximum": self.maximum,
+                "max_bytes": self.max_bytes,
+                "sources": [dict(zip(keys, row, strict=True)) for row in rows],
+            }
+        except sqlite3.Error:
+            raise _storage_error() from None
+
+    def prune(
+        self, *, chat_id: str | None = None, include_protected: bool = False, apply: bool = False
+    ) -> dict[str, object]:
+        """Preview or explicitly delete selected snapshots, never watches or cooldowns."""
+        try:
+            db = self._db()
+            condition = (
+                "(? IS NULL OR chat_id = ?) AND (? OR head = 0 OR expires <= ? OR published = 0)"
+            )
+            args = (chat_id, chat_id, include_protected, self.clock.utc_now().timestamp())
+            with db:
+                count, size = db.execute(
+                    f"SELECT COUNT(*), COALESCE(SUM(size), 0) FROM checkpoints WHERE {condition}",
+                    args,
+                ).fetchone()
+                if apply:
+                    db.execute(f"DELETE FROM checkpoints WHERE {condition}", args)
+            return {"applied": apply, "selected_count": count, "selected_bytes": size}
         except sqlite3.Error:
             raise _storage_error() from None
 

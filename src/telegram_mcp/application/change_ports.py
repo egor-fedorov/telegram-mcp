@@ -6,6 +6,7 @@ from typing import Protocol
 
 from telegram_mcp.domain.changes import CheckpointState, ExportFile, ExportFormat
 from telegram_mcp.domain.models import Message
+from telegram_mcp.domain.watches import PeerRevision
 
 RECHECK_LIMIT = 100
 CHECKPOINT_TTL_SECONDS = 30 * 24 * 60 * 60
@@ -34,12 +35,19 @@ class ObservationBatch:
 
 
 @dataclass(frozen=True)
+class PeerState:
+    revision: PeerRevision
+    exportable: bool
+
+
+@dataclass(frozen=True)
 class CheckpointReceipt:
     token: str
     expires_at: datetime
 
 
 class IncrementalPort(Protocol):
+    async def peer_states(self, chat_ids: list[str]) -> dict[str, PeerState]: ...
     async def checkpoint_binding(self) -> str: ...
     async def recent_observations(
         self, chat_id: str, limit: int, *, before: datetime | None = None

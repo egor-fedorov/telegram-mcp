@@ -9,8 +9,17 @@ from telegram_mcp.domain.changes import Change, CheckpointState, SeenMessage
 from telegram_mcp.domain.models import Issue, MessageRef, ToolError
 
 
-def remember(state: CheckpointState, mid: int, revision: str, available: bool = True) -> None:
-    state.seen[mid] = SeenMessage(revision=revision, available=available)
+def remember(
+    state: CheckpointState,
+    mid: int,
+    revision: str,
+    available: bool = True,
+    *,
+    requires_recheck: bool = True,
+) -> None:
+    state.seen[mid] = SeenMessage(
+        revision=revision, available=available, requires_recheck=requires_recheck
+    )
     while len(state.seen) > RECHECK_LIMIT:
         del state.seen[min(state.seen)]
 
@@ -47,7 +56,12 @@ async def advance_changes(
             state.date_to = ctx.clock.utc_now()
             if state.date_from is None:
                 for item in recent:
-                    remember(state, item.message.message_ref.message_id, item.revision)
+                    remember(
+                        state,
+                        item.message.message_ref.message_id,
+                        item.revision,
+                        requires_recheck=item.message.poll is not None,
+                    )
                 state.position = state.upper_id
                 state.phase = "idle"
                 scan.baseline_created = True
@@ -98,6 +112,9 @@ async def advance_changes(
                     mid,
                     observed.revision if observed else old.revision,
                     observed is not None,
+                    requires_recheck=(
+                        observed.message.poll is not None if observed else old.requires_recheck
+                    ),
                 )
                 state.recheck_index += 1
                 scan.rechecked.append(mid)
@@ -133,7 +150,12 @@ async def advance_changes(
                     if not emit(change, observed):
                         return scan
                     scan.returned += 1
-                    remember(state, message.message_ref.message_id, observed.revision)
+                    remember(
+                        state,
+                        message.message_ref.message_id,
+                        observed.revision,
+                        requires_recheck=message.poll is not None,
+                    )
                 state.position = message.message_ref.message_id
             if batch.exhausted:
                 state.position = state.upper_id

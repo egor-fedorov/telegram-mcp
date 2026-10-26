@@ -1,6 +1,8 @@
 import asyncio
 import hashlib
+import json
 import os
+import threading
 from datetime import timedelta
 from pathlib import Path
 
@@ -8,10 +10,32 @@ import pytest
 
 from telegram_mcp.adapters.archive import ArchiveStore
 from telegram_mcp.adapters.config import Settings
+from telegram_mcp.domain.archiving import ArchiveSource
 from telegram_mcp.domain.models import ToolError
 from tests.support.downloads import setup_downloads
 from tests.support.fakes import FakeClock, msg
 from tests.support.incremental import incremental_fixture
+
+SOURCE = ArchiveSource(tool="download_attachment", chat_id="1")
+
+
+@pytest.fixture
+async def archive_store(tmp_path):
+    store = ArchiveStore(tmp_path / "archive", FakeClock())
+    try:
+        yield store
+    finally:
+        await store.close()
+
+
+async def save_file(store, data=b"selected bytes", name="../../original.bin"):
+    return await store.save(
+        data,
+        name,
+        hashlib.sha256(data).hexdigest(),
+        mime_type="application/octet-stream",
+        source=SOURCE,
+    )
 
 
 async def test_archive_is_disabled_by_default_before_telegram_work(tmp_path):
@@ -98,9 +122,10 @@ async def test_failed_permanent_export_does_not_retire_input_checkpoint(tmp_path
             )
         # Put quota pressure on the failed request's original position.
         env.checkpoints.maximum = 2
-        await env.service.get_changes(chat_ref="1")
-        with pytest.raises(ToolError, match="CHECKPOINT_STORAGE_FULL"):
+        fresh = await env.service.get_changes(chat_ref="1")
+        assert (
             await env.service.get_changes(chat_ref="1")
+        ).next_checkpoint == fresh.next_checkpoint
         env.checkpoints.maximum = 3
         monkeypatch.setattr(env.service._archive, "save", original)
         result = await env.service.get_changes(
@@ -110,13 +135,14 @@ async def test_failed_permanent_export_does_not_retire_input_checkpoint(tmp_path
         assert result.returned_count == 1 and result.export.saved_file is not None
 
 
-async def test_archive_atomic_write_does_not_overwrite_and_cleans_failure(tmp_path, monkeypatch):
+async def test_archive_atomic_write_does_not_overwrite_and_cleans_failure(
+    tmp_path, monkeypatch, archive_store
+):
     root = tmp_path / "archive"
-    store = ArchiveStore(root, FakeClock())
+    store = archive_store
     data = b"selected bytes"
-    digest = hashlib.sha256(data).hexdigest()
-    first = await store.save(data, "../../original.bin", digest)
-    second = await store.save(data, "../../original.bin", digest)
+    first = await save_file(store, data)
+    second = await save_file(store, data)
     assert first.local_path != second.local_path
     assert Path(first.local_path).parent.parent == root
     before = set(root.iterdir())
@@ -126,19 +152,64 @@ async def test_archive_atomic_write_does_not_overwrite_and_cleans_failure(tmp_pa
 
     monkeypatch.setattr("telegram_mcp.adapters.archive.os.fsync", fail)
     with pytest.raises(ToolError, match="ARCHIVE_STORAGE_ERROR"):
-        await store.save(data, "file.bin", digest)
+        await save_file(store, data)
     assert set(root.iterdir()) == before
     assert (await asyncio.to_thread(Path(first.local_path).read_bytes)) == data
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX modes and symlinks")
-async def test_archive_permissions_and_redirected_root(tmp_path):
+async def test_archive_permissions_and_redirected_root(tmp_path, archive_store):
     root = tmp_path / "archive"
-    store = ArchiveStore(root, FakeClock())
-    result = await store.save(b"private", "file.txt", hashlib.sha256(b"private").hexdigest())
+    store = archive_store
+    result = await save_file(store, b"private", "file.txt")
     assert root.stat().st_mode & 0o777 == 0o700
     assert (await asyncio.to_thread(Path(result.local_path).stat)).st_mode & 0o777 == 0o600
     alias = tmp_path / "alias"
     alias.symlink_to(root, target_is_directory=True)
-    with pytest.raises(ToolError, match="ARCHIVE_STORAGE_ERROR"):
-        await ArchiveStore(alias, FakeClock()).save(b"private", "file.txt", result.sha256)
+    redirected = ArchiveStore(alias, FakeClock())
+    try:
+        with pytest.raises(ToolError, match="ARCHIVE_STORAGE_ERROR"):
+            await save_file(redirected, b"private", "file.txt")
+    finally:
+        await redirected.close()
+
+
+async def test_archive_manifest_preserves_provenance_and_original_unicode_name(archive_store):
+    name = "../../Вакансия 😀.pdf"
+    saved = await save_file(archive_store, name=name)
+    metadata = json.loads(
+        await asyncio.to_thread(Path(saved.metadata_path).read_text, encoding="utf-8")
+    )
+    assert metadata["schema_version"] == 1
+    assert metadata["original_name"] == name
+    assert metadata["source"] == {"tool": "download_attachment", "chat_id": "1"}
+    assert metadata["sha256"] == saved.sha256 and metadata["size"] == saved.size
+    assert metadata["file"] == "file.pdf"
+    await archive_store.discard(saved)
+    assert not Path(saved.local_path).parent.exists()
+
+
+async def test_archive_fsync_keeps_event_loop_responsive_and_cancel_removes_bundle(
+    archive_store, monkeypatch
+):
+    entered, release = threading.Event(), threading.Event()
+    original = os.fsync
+
+    def held(fd):
+        entered.set()
+        assert release.wait(5)
+        original(fd)
+
+    monkeypatch.setattr("telegram_mcp.adapters.archive.os.fsync", held)
+    task = asyncio.create_task(save_file(archive_store, b"x" * (20 * 1024 * 1024)))
+    try:
+        assert await asyncio.wait_for(asyncio.to_thread(entered.wait, 3), 4)
+        assert await asyncio.wait_for(asyncio.sleep(0, result="responsive"), 0.5) == "responsive"
+        task.cancel()
+        await asyncio.sleep(0)
+        assert not task.done()
+    finally:
+        release.set()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert list(archive_store.root.iterdir()) == []

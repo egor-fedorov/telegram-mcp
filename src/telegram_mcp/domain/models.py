@@ -183,6 +183,7 @@ class Attachment(Model):
 
 class SavedFile(Model):
     local_path: str
+    metadata_path: str
     size: int = Field(ge=0)
     sha256: str
     saved_at: AwareDatetime

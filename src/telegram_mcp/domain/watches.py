@@ -29,6 +29,11 @@ class WatchChangesResult(Model):
     issue_count: int = Field(default=0, ge=0)
 
 
+class PeerRevision(Model):
+    top_message_id: int = Field(ge=0)
+    pts: int = Field(ge=0)
+
+
 class WatchPosition(Model):
     sources: dict[str, CheckpointState] = Field(default_factory=dict)
     members: list[str] = Field(default_factory=list)
@@ -36,6 +41,9 @@ class WatchPosition(Model):
     cycle_started_at: AwareDatetime | None = None
     completed_at: AwareDatetime | None = None
     errors: dict[str, Issue] = Field(default_factory=dict)
+    revisions: dict[str, PeerRevision] = Field(default_factory=dict)
+    probes: dict[str, PeerRevision] = Field(default_factory=dict)
+    probe_fallback: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def consistent_sources(self) -> Self:
@@ -49,6 +57,11 @@ class WatchPosition(Model):
             key != state.chat_id or state.kind != "changes" for key, state in self.sources.items()
         ):
             raise ValueError("Invalid watch position")
+        if (
+            not (self.revisions.keys() | self.probes.keys() | set(self.probe_fallback))
+            <= self.sources.keys()
+        ):
+            raise ValueError("Invalid watch revision source")
         return self
 
 

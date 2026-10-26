@@ -1,4 +1,5 @@
 import asyncio
+import json
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -70,15 +71,26 @@ async def exercise(kind, path, mode, schema_mode, settings=None):
         assert found.structured_content["watches"][0]["pending_batch_id"] == batch["batch_id"]
         replay = await client.call_tool("get_watch_changes", {"name": "jobs"})
         assert replay.structured_content == batch
+        second = await client.call_tool(
+            "get_watch_changes", {"name": "jobs", "limit": 1, "ack_batch_id": batch["batch_id"]}
+        )
+        assert not second.is_error
+        assert second.structured_content["changes"][0]["message_ref"] == "1:2"
+        retry = await client.call_tool(
+            "get_watch_changes", {"name": "jobs", "ack_batch_id": batch["batch_id"]}
+        )
+        assert retry.structured_content == second.structured_content
         ack = await client.call_tool(
-            "ack_watch_changes", {"name": "jobs", "batch_id": batch["batch_id"]}
+            "ack_watch_changes", {"name": "jobs", "batch_id": second.structured_content["batch_id"]}
         )
         assert not ack.is_error
-        second = await client.call_tool("get_watch_changes", {"name": "jobs", "limit": 1})
-        assert second.structured_content["changes"][0]["message_ref"] == "1:2"
         exported = await client.call_tool("export_history", {"chat_ref": "1", "save": True})
         assert not exported.is_error
         saved = Path(exported.structured_content["export"]["saved_file"]["local_path"])
+        metadata_path = Path(exported.structured_content["export"]["saved_file"]["metadata_path"])
+        metadata = json.loads(await asyncio.to_thread(metadata_path.read_text, encoding="utf-8"))
+        assert metadata["source"]["chat_id"] == "1"
+        assert metadata["source"]["tool"] == "export_history"
     return saved
 
 

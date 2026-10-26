@@ -42,6 +42,7 @@ def content_revision(message: Message, media_identity: str = "") -> str:
 class SeenMessage(Model):
     revision: str = Field(pattern=r"^[0-9a-f]{64}$")
     available: bool = True
+    requires_recheck: bool = True
 
 
 class CheckpointState(Model):

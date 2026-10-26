@@ -111,6 +111,10 @@ pressure until its **30-day expiry**. Unchanged state reuses its token and renew
 expiry. Superseded versions can be evicted within the **4096-snapshot / 64 MiB** budget.
 If only protected states remain, `CHECKPOINT_STORAGE_FULL` preserves them instead of
 discarding a source. Replaying an old version starts an independent branch.
+Calls with `chat_ref` protect only the latest **unused baseline** for that source and
+authorization; older unused baselines become eligible for eviction. Once a token is
+used for continuation, its chain has independent protection, including unchanged polls
+and retries after file-publication failure. Use named watches for consumers without token storage.
 Checkpoints contain only positions/fingerprints and are bound to the session path and
 Telegram authorization. Username changes cannot redirect them. For an expired token,
 recover the missing period with `get_history` or `export_history`; a new baseline
@@ -172,11 +176,16 @@ usable for ordinary retrieval. See [local state and permissions](configuration.m
 Create a named subscription once, then find it again with `list_watches` in any later
 agent session. Select exactly one of `chat_refs` or `folder_ids`; existing access rules
 still apply. Names use 1–64 lowercase letters, digits, hyphens or underscores.
+Explicit `chat_refs` are limited to 20 entries, with equivalent usernames/links resolved
+once. Use folders for larger selections. Creation has a 35-second deadline and leaves
+no partial watch on failure; respect any returned FloodWait before retrying.
 
 ```text
 create_watch(name="jobs", folder_ids=[3])
 get_watch_changes(name="jobs", limit=30)
 ack_watch_changes(name="jobs", batch_id="<processed batch_id>")
+# Or acknowledge the processed batch and retrieve the next one in the same call:
+get_watch_changes(name="jobs", ack_batch_id="<processed batch_id>", limit=30)
 ```
 
 By default coverage starts at creation time, including messages arriving before the
@@ -193,6 +202,9 @@ Process the returned changes and omissions **before acknowledging**, including w
 `limit` applies to new batches only. Acknowledgement atomically advances positions;
 duplicate acknowledgements cannot confirm a newer batch. Delivery can repeat; this is
 not exactly-once processing. Independent consumers need different subscription names.
+With `ack_batch_id`, acknowledgement is committed before the next read. If that read
+fails or its response is lost, retry the same argument: it cannot acknowledge a newer
+batch. The separate acknowledgement tool remains available for the final batch.
 
 When `batch_id=null`, no confirmation is needed. Empty progress is saved automatically.
 Continue an incomplete pass by name, respecting issues and retry delays. Per-call RPC,
@@ -203,6 +215,15 @@ not a repeated full list of source IDs. A failed source keeps its position while
 sources continue in later passes. `complete=true` requires a finished pass without
 unresolved source errors; also inspect omissions. Issue previews contain at most 20
 entries; `issue_count` is the exact count.
+
+For known channels/supergroups, heads and event counters (`pts`) are fetched in batches
+of at most 100 selected sources. An unchanged completed source needs no history or
+revision request. Edits are detected by the event counter even when the last message
+ID stays the same. Initial passes, incomplete scans, missing counters and unsupported
+sources use ordinary reads; observed polls retain revision checks. Fresh metadata
+checks saving restrictions. No global account search or update stream is used.
+Offline warm fixtures take one peer RPC for 100 unchanged channels and ten for 1000,
+plus shared authorization/folder checks. Active sources and cold catalogs cost more.
 
 Subscriptions retain positions and one unacknowledged batch, including returned text,
 in private local storage until `delete_watch(name="jobs")`. There is no automatic expiry
@@ -227,10 +248,16 @@ archive_directory = "/absolute/private/path/telegram-archive"
 
 Then request `save=true` on `download_attachment`, `export_history`, or `get_changes`
 with `output="jsonl"`/`"markdown"`. The call creates its permanent copy before returning.
-The file metadata includes `saved_file.local_path`, `size`, `sha256` and `saved_at`.
+The file metadata includes `saved_file.local_path`, `metadata_path`, `size`, `sha256` and `saved_at`.
 The original temporary resource and its `expires_at` remain unchanged; that expiry does
 not apply to the permanent copy. Files use unique private subdirectories and cannot
 overwrite a previous copy. The tool accepts no destination path.
+Each new copy has an adjacent UTF-8 `metadata.json` (schema version 1) containing its
+tool, canonical source, message reference/link when available, original filename, MIME,
+size, checksum and save time. Exports also record their format and date/ID boundaries.
+Names are metadata, never destination paths. Existing copies are not rewritten.
+File and description are published together; hashing, writes, fsync and rollback use
+two worker threads so a slow disk does not block other calls on the event loop.
 
 Permanent copies survive shutdown and have **no automatic deletion or total archive
 quota**; manage disk usage yourself. The existing 20 MiB per-file bound and content
@@ -238,6 +265,26 @@ protection rules still apply. Failed saving leaves the input checkpoint reusable
 `ARCHIVE_DISABLED` means the directory is unset; `ARCHIVE_STORAGE_ERROR` reports a write
 or integrity failure. Files are on the server computer, not automatically uploaded to
 the client. See [resource compatibility](clients.md#reading-files-and-resources-unreleased).
+
+### Inspect or clean checkpoints (unreleased)
+
+Stop the process owning the Telegram session before running these offline commands:
+
+```sh
+telegram-mcp checkpoints status
+telegram-mcp checkpoints prune                         # Preview expired/superseded records
+telegram-mcp checkpoints prune --apply                 # Apply that cleanup
+telegram-mcp checkpoints prune --chat-id=-1001234567890 --include-protected
+# Only after inspecting the preview; selected active tokens will stop working:
+telegram-mcp checkpoints prune --chat-id=-1001234567890 --include-protected --apply
+```
+
+Use `--all` instead of `--chat-id` to explicitly select every source for protected
+cleanup. Ordinary pruning preserves live protected positions. Old version-2 roots
+are conservatively retained because their prior use cannot be reconstructed; protected
+cleanup is the recovery path if those roots have already filled storage. No Telegram
+login or connection is needed. Commands preserve named watches, archives, session data
+and FloodWait deadlines; an active server returns `SESSION_IN_USE`.
 
 ### Discover, select, and read
 

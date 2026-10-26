@@ -10,6 +10,16 @@ A version entry describes its target artifact. Verify publication on
 
 ### Added
 
+- `get_watch_changes(ack_batch_id=...)` acknowledges an already processed batch and
+  polls in the same call. Duplicate acknowledgement retries replay the next pending batch.
+- Offline `telegram-mcp checkpoints status/prune` commands, with preview by default,
+  explicit deletion flags and the normal exclusive session lease.
+- Permanent copies include a versioned `metadata.json` with source provenance,
+  original filename, MIME type, checksum and export boundaries; `saved_file.metadata_path`
+  points to it. File and metadata publication and rollback run in bounded worker threads.
+- Opt-in `scripts/probe_telegram.py --monitoring` for up to 40 explicitly selected
+  references, bounded username resolution, peer metadata batches and watch creation.
+
 - Named subscriptions via `create_watch`, `list_watches`, `get_watch_changes`,
   `ack_watch_changes`, and `delete_watch`. Chat/folder consumers retain positions and
   one unacknowledged batch across agent/server restarts, require explicit acknowledgement,
@@ -40,6 +50,18 @@ A version entry describes its target artifact. Verify publication on
   file-reference recovery, and FloodWait cooldowns. Published 0.3.0 is unchanged.
 
 ### Changed
+
+- Named watches batch selected channel/supergroup heads and `pts` in groups of 100.
+  Completed unchanged sources skip history/revision RPCs; missing markers, unsupported
+  sources and observed polls retain ordinary checks. Budgets and access checks still apply.
+- Fresh `get_changes(chat_ref=...)` calls protect one unused baseline per source and
+  authorization. Repeated equivalent baselines reuse tokens; superseded unused roots
+  can be evicted. Consumed positions and independent branches remain protected.
+  Version 3 migration conservatively protects ambiguous legacy roots; local cleanup
+  can recover an already full store without removing watches or FloodWait deadlines.
+- `create_watch` accepts at most 20 explicit references, deduplicates equivalent selectors
+  before resolution, and has a 35-second work deadline. Use folders for larger selections;
+  existing larger watches remain readable.
 
 - Current checkpoint heads are protected from capacity eviction for 30 days. Unchanged
   heads reuse their token and renew expiry; independent branches keep separate heads.

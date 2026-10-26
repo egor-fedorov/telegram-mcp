@@ -18,6 +18,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from scripts.probe_artifacts import check_attachment, check_changes_and_exports
+from scripts.probe_monitoring import check_monitoring
 from telegram_mcp.adapters.archive import ArchiveStore
 from telegram_mcp.adapters.checkpoints import CheckpointStore
 from telegram_mcp.adapters.clock import SystemClock
@@ -89,6 +90,11 @@ KNOWN_CODES = frozenset(
         "EXPORT_STORAGE_FULL",
         "EXPORT_RECORD_TOO_LARGE",
         "ARCHIVE_STORAGE_ERROR",
+        "WATCH_NOT_FOUND",
+        "WATCH_CONFLICT",
+        "WATCH_STORAGE_FULL",
+        "WATCH_STORAGE_ERROR",
+        "WATCH_BATCH_MISMATCH",
         "VALIDATION_MISMATCH",
     }
 )
@@ -154,6 +160,15 @@ class LiveBackend(TelegramBackend):
     ) -> Any:
         self.require_incremental(chat_id, limit)
         return await self.bounded_read(super().recent_observations(chat_id, limit, before=before))
+
+    async def peer_states(self, chat_ids: list[str]) -> Any:
+        if not 1 <= len(chat_ids) <= 40:
+            raise ToolError(
+                "VALIDATION_SCOPE_DENIED", "Select at most 40 peers for metadata checks."
+            )
+        for cid in chat_ids:
+            self.require_incremental(cid)
+        return await self.bounded_read(super().peer_states(chat_ids))
 
     async def observe_messages(self, chat_id: str, message_ids: list[int]) -> Any:
         self.require_incremental(chat_id, len(message_ids))
@@ -324,9 +339,14 @@ class Recorder:
         return result
 
 
-def validate_selectors(chats: list[str], refs: list[str], query: str) -> None:
-    if not 1 <= len(chats) <= MAX_SELECTORS or len(refs) > MAX_SELECTORS:
-        raise ToolError("INVALID_ARGUMENT", "Select one to three chats and at most three messages.")
+def validate_selectors(
+    chats: list[str], refs: list[str], query: str, *, monitoring: bool = False
+) -> None:
+    maximum = 40 if monitoring else MAX_SELECTORS
+    if not 1 <= len(chats) <= maximum or len(refs) > MAX_SELECTORS:
+        raise ToolError(
+            "INVALID_ARGUMENT", f"Select one to {maximum} chats and at most three messages."
+        )
     if any(not value.strip() for value in [*chats, *refs]) or not 1 <= len(query.strip()) <= 64:
         raise ToolError(
             "INVALID_ARGUMENT", "Selectors must be nonempty; query must be 1–64 characters."
@@ -347,11 +367,14 @@ async def probe(
     topics: bool = False,
     attachment_id: str | None = None,
     m4: bool = False,
+    monitoring: bool = False,
     backend_factory: Callable[[Settings], ProbeBackend] = LiveBackend,
     emit: Callable[[Check], None] = lambda _: None,
 ) -> list[Check]:
     """Run only selected reads; temporary probe data is removed on every exit path."""
-    validate_selectors(chats, message_refs, query)
+    validate_selectors(chats, message_refs, query, monitoring=monitoring)
+    if monitoring and (message_refs or topics or attachment_id or m4):
+        raise ToolError("INVALID_ARGUMENT", "--monitoring is a separate metadata-only probe.")
     restricted = settings.model_copy(
         deep=True,
         update={
@@ -386,7 +409,7 @@ async def probe(
                     raise ToolError(
                         "VALIDATION_SCOPE_DENIED", "Attachment source must be selected explicitly."
                     )
-            backend.select(set(selected), attachment_id=attachment_id, m4=m4)
+            backend.select(set(selected), attachment_id=attachment_id, m4=m4 or monitoring)
             recorder.add("selected_sources", len(selected))
             clock = SystemClock()
             service = Service(
@@ -404,6 +427,9 @@ async def probe(
                 ArchiveStore(root / "archive", clock),
             )
             await recorder.call("status", service.get_status())
+            if monitoring:
+                await check_monitoring(service, backend, list(selected), recorder)
+                return recorder.checks
             for index, chat in enumerate(selected.values()):
                 cursor = None
                 for number in range(MAX_PAGES):
@@ -544,7 +570,7 @@ def parser() -> argparse.ArgumentParser:
         "--chat",
         action="append",
         required=True,
-        help="Explicit chat ID, username or link; repeat up to three times.",
+        help="Explicit chat ID, username or link; up to three references, or 40 with --monitoring.",
     )
     result.add_argument(
         "--message-ref",
@@ -569,6 +595,12 @@ def parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Check durable changes and two bounded one-day export parts per selected source.",
     )
+    result.add_argument(
+        "--monitoring",
+        action="store_true",
+        help="Separate metadata-only check: up to 40 selected --chat references, "
+        "two peer batches and bounded watch creation.",
+    )
     return result
 
 
@@ -581,7 +613,7 @@ def main(argv: list[str] | None = None) -> int:
     logging.disable(logging.CRITICAL)
     try:
         args = parser().parse_args(argv)
-        validate_selectors(args.chat, args.message_ref, args.query)
+        validate_selectors(args.chat, args.message_ref, args.query, monitoring=args.monitoring)
         checks = asyncio.run(
             probe(
                 load_settings(args.config),
@@ -591,6 +623,7 @@ def main(argv: list[str] | None = None) -> int:
                 topics=args.topics,
                 attachment_id=args.attachment_id,
                 m4=args.m4,
+                monitoring=args.monitoring,
                 emit=print_check,
             )
         )

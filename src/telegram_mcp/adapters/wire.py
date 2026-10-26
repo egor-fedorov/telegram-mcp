@@ -296,6 +296,7 @@ class Attachment(TypedDict):
 @with_config(_CONFIG)
 class SavedFile(TypedDict):
     local_path: str
+    metadata_path: str
     size: Count
     sha256: str
     saved_at: AwareDatetime

@@ -8,7 +8,7 @@ from telegram_mcp.application.attachment_ports import (
     AttachmentSource,
     AttachmentWriter,
 )
-from telegram_mcp.application.change_ports import Observation, ObservationBatch
+from telegram_mcp.application.change_ports import Observation, ObservationBatch, PeerState
 from telegram_mcp.application.ports import (
     Batch,
     DiscoveryBatch,
@@ -37,6 +37,7 @@ from telegram_mcp.domain.models import (
     MessageRef,
     ToolError,
 )
+from telegram_mcp.domain.watches import PeerRevision
 
 BASE = datetime(2026, 9, 1, tzinfo=UTC)
 
@@ -114,6 +115,28 @@ class FakeBackend:
         self.binding = "test-authorization"
         self.protected_message_ids: set[int] = set()
         self.export_source_error: ToolError | None = None
+        self.peer_pts: dict[str, int] = {}
+        self.peer_requests: list[list[str]] = []
+
+    async def peer_states(self, chat_ids: list[str]) -> dict[str, PeerState]:
+        self.backend_calls.append("peer_states")
+        self.peer_requests.append(list(chat_ids))
+        if self.export_source_error:
+            raise self.export_source_error
+        result = {}
+        for cid in chat_ids:
+            if cid in self.faults:
+                raise self.faults[cid]
+            messages = [m for m in self.stored_messages if m.message_ref.chat_id == cid]
+            digest = "".join(content_revision(m) for m in messages)
+            result[cid] = PeerState(
+                PeerRevision(
+                    top_message_id=max((m.message_ref.message_id for m in messages), default=0),
+                    pts=self.peer_pts.get(cid, abs(hash(digest))),
+                ),
+                True,
+            )
+        return result
 
     async def checkpoint_binding(self) -> str:
         self.backend_calls.append("checkpoint_binding")

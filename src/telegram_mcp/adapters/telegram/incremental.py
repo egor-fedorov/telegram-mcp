@@ -4,14 +4,15 @@ import hashlib
 from datetime import datetime, timedelta
 from typing import Any
 
-from telethon import types, utils
+from telethon import functions, types, utils
 
 from telegram_mcp.adapters.telegram.chats import ChatGateway
-from telegram_mcp.adapters.telegram.mapping import normalize_message
+from telegram_mcp.adapters.telegram.mapping import chat_from_entity, normalize_message
 from telegram_mcp.adapters.telegram.runtime import TelegramRuntime
-from telegram_mcp.application.change_ports import Observation, ObservationBatch
+from telegram_mcp.application.change_ports import Observation, ObservationBatch, PeerState
 from telegram_mcp.domain.changes import content_revision
 from telegram_mcp.domain.models import Chat, ToolError
+from telegram_mcp.domain.watches import PeerRevision
 
 
 def observation(raw: Any, chat: Chat) -> Observation:
@@ -36,6 +37,51 @@ def observation(raw: Any, chat: Chat) -> Observation:
 class IncrementalGateway:
     def __init__(self, runtime: TelegramRuntime, chats: ChatGateway):
         self.runtime, self.chats = runtime, chats
+
+    async def peer_states(self, chat_ids: list[str]) -> dict[str, PeerState]:
+        if not 1 <= len(chat_ids) <= 100:
+            raise ToolError("INVALID_ARGUMENT", "Use 1..100 selected peers per batch.")
+        client = await self.runtime.ensure()
+        selected = set(chat_ids)
+        peers: list[types.TypeInputDialogPeer] = []
+        for cid in dict.fromkeys(chat_ids):
+            try:
+                # Unlike client.get_input_entity, this public session API never
+                # falls through to a separate network lookup for a missing peer.
+                peer = client.session.get_input_entity(int(cid))
+            except ValueError:
+                continue
+            if isinstance(peer, types.InputPeerChannel) and str(utils.get_peer_id(peer)) == cid:
+                peers.append(types.InputDialogPeer(peer))
+        if not peers:
+            return {}
+        response = await self.runtime.call(client(functions.messages.GetPeerDialogsRequest(peers)))
+        entities = {
+            str(utils.get_peer_id(entity)): entity
+            for entity in response.chats
+            if isinstance(entity, types.Channel)
+            and not entity.min
+            and str(utils.get_peer_id(entity)) in selected
+        }
+        result = {}
+        for dialog in response.dialogs:
+            if not isinstance(dialog, types.Dialog):
+                continue
+            cid = str(utils.get_peer_id(dialog.peer))
+            entity = entities.get(cid)
+            if (
+                entity is None
+                or type(dialog.pts) is not int
+                or dialog.pts < 0
+                or dialog.top_message < 0
+            ):
+                continue
+            self.chats.cache[cid] = chat_from_entity(entity, now=self.chats.clock.utc_now())
+            result[cid] = PeerState(
+                PeerRevision(top_message_id=dialog.top_message, pts=dialog.pts),
+                not bool(entity.noforwards),
+            )
+        return result
 
     async def checkpoint_binding(self) -> str:
         client = await self.runtime.ensure()

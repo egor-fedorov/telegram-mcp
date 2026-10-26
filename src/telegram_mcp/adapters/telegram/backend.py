@@ -16,7 +16,7 @@ from telegram_mcp.application.attachment_ports import (
     AttachmentSource,
     AttachmentWriter,
 )
-from telegram_mcp.application.change_ports import Observation, ObservationBatch
+from telegram_mcp.application.change_ports import Observation, ObservationBatch, PeerState
 from telegram_mcp.application.ports import (
     Batch,
     Clock,
@@ -58,6 +58,9 @@ class TelegramBackend:
 
     async def checkpoint_binding(self) -> str:
         return await self.incremental_gateway.checkpoint_binding()
+
+    async def peer_states(self, chat_ids: list[str]) -> dict[str, PeerState]:
+        return await self.incremental_gateway.peer_states(chat_ids)
 
     async def recent_observations(
         self, chat_id: str, limit: int, *, before: datetime | None = None

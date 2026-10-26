@@ -125,6 +125,29 @@ its bounds, redaction and cleanup are verified offline. See [usage](docs/usage.m
 [migration](docs/migration-0.4.md) and [live validation](docs/live-validation.md).
 Dependencies and source version remain unchanged; no live run, tag or publication is included.
 
+## Monitoring resource fixes (unreleased)
+
+Known channel/supergroup subscriptions now compare selected peer heads and `pts` in
+batches of 100, preserving ordinary revision checks for unsupported cases and observed
+polls. Warm offline fixtures need one peer RPC for 100 unchanged channels and ten for
+1000, plus shared authorization/folder checks. `ack_batch_id` combines explicit
+acknowledgement with the next poll. Creation accepts 20 explicit references, deduplicates
+aliases and has a 35-second deadline; folders cover larger selections.
+
+One unused baseline per source remains protected; consumed chains retain independent
+30-day protection. Version-3 checkpoint migration preserves ambiguous legacy roots,
+with offline preview/cleanup commands to recover an already full store. Permanent
+copies include source metadata and publish through two worker threads with cancellation
+cleanup. The monitoring live-probe mode accepts up to 40 explicitly approved selectors;
+offline coverage verifies its bounds and redaction. Live validation remains separate.
+
+`make check` passes with 1255 tests and two platform-specific skips on Linux. Coverage
+includes 4200 fresh baselines, migration/cleanup, one-RPC budgets, edits without a new
+head, FloodWait, lost acknowledgements and archive cancellation. Compact/full contracts
+and combined acknowledgement/source metadata are exercised over all three transports.
+Dependencies and the development version are unchanged; no Telegram live run or release
+is included in this fix.
+
 ## Next: validate and release
 
 Complete the selected-source live validation of M3/M4 and the 0.4 retrieval changes before publication.

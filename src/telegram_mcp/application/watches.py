@@ -14,9 +14,11 @@ from telegram_mcp.application.change_ports import Observation
 from telegram_mcp.application.change_reader import advance_changes
 from telegram_mcp.application.incremental import BudgetExhausted, IncrementalContext
 from telegram_mcp.application.watch_ports import WatchStorePort
+from telegram_mcp.application.watch_probe import WatchProbe
 from telegram_mcp.domain.changes import Change, CheckpointState
 from telegram_mcp.domain.folders import select_chats
 from telegram_mcp.domain.models import Issue, ToolError
+from telegram_mcp.domain.references import chat_target
 from telegram_mcp.domain.text import clip
 from telegram_mcp.domain.watches import (
     PendingDelivery,
@@ -81,9 +83,12 @@ class WatchService:
                 "INVALID_ARGUMENT", "Supply exactly one nonempty chat_refs or folder_ids selector."
             )
         if chat_refs is not None and (
-            len(chat_refs) > 1000 or any(not ref.strip() for ref in chat_refs)
+            len(chat_refs) > 20 or any(not ref.strip() for ref in chat_refs)
         ):
-            raise ToolError("INVALID_ARGUMENT", "Use 1..1000 nonempty chat references.")
+            raise ToolError(
+                "INVALID_ARGUMENT",
+                "Use 1..20 nonempty chat references; use folders for larger selections.",
+            )
         if folder_ids is not None and (
             len(folder_ids) > 100 or any(type(fid) is not int or fid < 0 for fid in folder_ids)
         ):
@@ -94,44 +99,62 @@ class WatchService:
             raise ToolError(
                 "INVALID_ARGUMENT", "date_from must have a timezone and must not be in the future."
             )
+        refs = list(
+            dict.fromkeys(str(chat_target(ref)).lstrip("@").lower() for ref in chat_refs or [])
+        )
         async with self._request(name):
-            ctx = self.context
-            access = await ctx.access.load(explicit=folder_ids is None)
-            binding = await ctx.backend.checkpoint_binding()
-            ids: set[str] = set()
-            for ref in chat_refs or []:
-                ctx.check_cooldown()
-                chat = await ctx.chats.resolve_chat(ref, refresh=True)
-                await access.allow_explicit(chat.id)
-                ids.add(chat.id)
-            folders = sorted(set(folder_ids or []))
-            if folders:
-                select_chats(access.chats, access.folders, access.allowed, folder_ids=folders)
-            previous = self.store.get(name, binding)
-            if previous:
-                if (previous.chat_ids, previous.folder_ids, previous.requested_from) != (
-                    sorted(ids),
-                    folders,
-                    date_from,
-                ):
-                    raise ToolError(
-                        "WATCH_CONFLICT",
-                        "This name already has a different selector or start date; "
-                        "its position was preserved.",
-                    )
-                return watch_info(previous)
-            state = WatchState(
-                name=name,
-                chat_ids=sorted(ids),
-                folder_ids=folders,
-                requested_from=date_from,
-                # Telegram timestamps have whole-second resolution. Overlap the
-                # current second so a post arriving just after creation is included.
-                started_at=date_from or ctx.clock.utc_now().replace(microsecond=0),
-            )
-            self._start_cycle(state, access)
-            self.store.save(state, binding)
-            return watch_info(state)
+            try:
+                async with asyncio.timeout(self.context.limits.page_deadline_seconds):
+                    return await self._create(name, refs, folder_ids, date_from)
+            except TimeoutError:
+                raise ToolError(
+                    "CONNECTION_ERROR", "Watch creation timed out; no partial watch was saved."
+                ) from None
+
+    async def _create(
+        self,
+        name: str,
+        chat_refs: list[str],
+        folder_ids: list[int] | None,
+        date_from: datetime | None,
+    ) -> WatchInfo:
+        ctx = self.context
+        access = await ctx.access.load(explicit=folder_ids is None)
+        binding = await ctx.backend.checkpoint_binding()
+        ids: set[str] = set()
+        for ref in chat_refs or []:
+            ctx.check_cooldown()
+            chat = await ctx.chats.resolve_chat(ref, refresh=True)
+            await access.allow_explicit(chat.id)
+            ids.add(chat.id)
+        folders = sorted(set(folder_ids or []))
+        if folders:
+            select_chats(access.chats, access.folders, access.allowed, folder_ids=folders)
+        previous = self.store.get(name, binding)
+        if previous:
+            if (previous.chat_ids, previous.folder_ids, previous.requested_from) != (
+                sorted(ids),
+                folders,
+                date_from,
+            ):
+                raise ToolError(
+                    "WATCH_CONFLICT",
+                    "This name already has a different selector or start date; "
+                    "its position was preserved.",
+                )
+            return watch_info(previous)
+        state = WatchState(
+            name=name,
+            chat_ids=sorted(ids),
+            folder_ids=folders,
+            requested_from=date_from,
+            # Telegram timestamps have whole-second resolution. Overlap the
+            # current second so a post arriving just after creation is included.
+            started_at=date_from or ctx.clock.utc_now().replace(microsecond=0),
+        )
+        self._start_cycle(state, access)
+        self.store.save(state, binding)
+        return watch_info(state)
 
     def _start_cycle(self, state: WatchState, access: AccessContext) -> None:
         position = state.position
@@ -156,6 +179,7 @@ class WatchService:
                 )
         position.remaining = list(position.members)
         position.errors = {}
+        position.probe_fallback = []
         position.cycle_started_at = self.context.clock.utc_now().replace(microsecond=0)
 
     async def _authorize(self, state: WatchState, access: AccessContext, chat_id: str) -> None:
@@ -165,14 +189,20 @@ class WatchService:
         else:
             access.require_access(chat_id)
 
-    async def changes(self, name: str, limit: int = 30) -> WatchChangesResult:
+    async def changes(
+        self, name: str, limit: int = 30, ack_batch_id: str | None = None
+    ) -> WatchChangesResult:
         if type(limit) is not int or not 1 <= limit <= 100:
             raise ToolError("INVALID_ARGUMENT", "Use limit 1..100.")
+        if ack_batch_id is not None:
+            self._validate_batch(ack_batch_id)
         async with self._request(name):
             ctx = self.context
             binding = await ctx.backend.checkpoint_binding()
             state = self._get(name, binding)
             access = await ctx.access.load(explicit=not state.folder_ids)
+            if ack_batch_id is not None:
+                self._acknowledge(state, binding, ack_batch_id)
             if state.pending is not None:
                 replay_budget = ctx.budget()
                 try:
@@ -191,10 +221,11 @@ class WatchService:
             candidate = state.position.model_copy(deep=True)
             result = WatchChangesResult(name=name)
             budget = ctx.budget()
+            probe = WatchProbe(ctx, candidate, budget, partial(self._authorize, state, access))
             text_left = ctx.limits.text_budget
             delivered: set[str] = set()
             issues: list[Issue] = []
-            attempted = 0
+            attempted: set[str] = set()
 
             def emit(change: Change, observed: Observation | None) -> bool:
                 nonlocal text_left
@@ -222,6 +253,8 @@ class WatchService:
             # Visit a source at most once in this call. A partial source rotates
             # behind its peers; a failed source is retried in the next sweep.
             for cid in list(candidate.remaining):
+                if cid not in candidate.remaining:
+                    continue
                 if (
                     result.returned_count >= limit
                     or text_left <= 0
@@ -229,14 +262,17 @@ class WatchService:
                     or ctx.clock.monotonic() >= budget.deadline
                 ):
                     break
-                candidate.remaining.remove(cid)
-                candidate.errors.pop(cid, None)
-                attempted += 1
                 try:
+                    await probe.prepare(cid)
+                    if cid not in candidate.remaining:
+                        continue
+                    candidate.remaining.remove(cid)
+                    candidate.errors.pop(cid, None)
+                    attempted.add(cid)
                     await self._authorize(state, access, cid)
                     # Metadata shares the deadline, but cannot consume the only
                     # data page when rpc_pages_per_call is configured to one.
-                    await budget.call(partial(ctx.backend.check_export_source, cid), page=False)
+                    await probe.check_source(cid)
                     scan = await advance_changes(
                         ctx,
                         candidate.sources[cid],
@@ -249,17 +285,24 @@ class WatchService:
                         candidate.errors[cid] = scan.issues[0]
                     elif candidate.sources[cid].phase != "idle":
                         candidate.remaining.append(cid)
+                    else:
+                        probe.complete(cid)
                 except BudgetExhausted:
-                    candidate.remaining.insert(0, cid)
+                    if cid not in candidate.remaining:
+                        candidate.remaining.insert(0, cid)
                     break
                 except ToolError as exc:
                     if exc.retryable:
                         candidate.errors[cid] = ctx.temporary_issue(exc, cid)
                     else:
                         candidate.errors[cid] = exc.issue(cid)
+                    if exc.retryable and cid in candidate.remaining:
+                        # A batch probe failed before this source was consumed.
+                        break
                 # An account-wide FloodWait must stop subsequent requests now.
                 if cid in candidate.errors and candidate.errors[cid].code == "RATE_LIMITED":
-                    candidate.remaining.insert(0, cid)
+                    if cid not in candidate.remaining:
+                        candidate.remaining.insert(0, cid)
                     break
             result.complete = not candidate.remaining and not candidate.errors
             if result.complete:
@@ -269,7 +312,7 @@ class WatchService:
             result.progress = WatchProgress(
                 source_count=len(candidate.members),
                 pending_source_count=len(set(candidate.remaining) | candidate.errors.keys()),
-                sources_this_call=attempted,
+                sources_this_call=len(attempted | probe.visited),
                 rpc_pages_this_call=budget.calls,
             )
             if result.returned_count:
@@ -283,24 +326,31 @@ class WatchService:
             return result
 
     async def acknowledge(self, name: str, batch_id: str) -> WatchAcknowledgement:
-        if not re.fullmatch(r"[A-Za-z0-9_-]{43}", batch_id):
-            raise ToolError("INVALID_ARGUMENT", "Use the batch_id returned by get_watch_changes.")
+        self._validate_batch(batch_id)
         async with self._request(name):
             await self.context.chats.check_authorization()
             binding = await self.context.backend.checkpoint_binding()
             state = self._get(name, binding)
-            if state.last_acknowledged == batch_id:
-                return WatchAcknowledgement(name=name, batch_id=batch_id)
-            if state.pending is None or state.pending.result.batch_id != batch_id:
-                raise ToolError(
-                    "WATCH_BATCH_MISMATCH",
-                    "This batch is not awaiting acknowledgement; no position changed.",
-                )
-            state.position = state.pending.position
-            state.pending = None
-            state.last_acknowledged = batch_id
-            self.store.save(state, binding)
-            return WatchAcknowledgement(name=name, batch_id=batch_id)
+            return self._acknowledge(state, binding, batch_id)
+
+    @staticmethod
+    def _validate_batch(batch_id: str) -> None:
+        if not re.fullmatch(r"[A-Za-z0-9_-]{43}", batch_id):
+            raise ToolError("INVALID_ARGUMENT", "Use the batch_id returned by get_watch_changes.")
+
+    def _acknowledge(self, state: WatchState, binding: str, batch_id: str) -> WatchAcknowledgement:
+        if state.last_acknowledged == batch_id:
+            return WatchAcknowledgement(name=state.name, batch_id=batch_id)
+        if state.pending is None or state.pending.result.batch_id != batch_id:
+            raise ToolError(
+                "WATCH_BATCH_MISMATCH",
+                "This batch is not awaiting acknowledgement; no position changed.",
+            )
+        state.position = state.pending.position
+        state.pending = None
+        state.last_acknowledged = batch_id
+        self.store.save(state, binding)
+        return WatchAcknowledgement(name=state.name, batch_id=batch_id)
 
     async def list(self) -> WatchList:
         async with self.context.request():

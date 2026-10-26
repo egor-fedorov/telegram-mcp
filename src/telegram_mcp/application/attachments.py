@@ -18,6 +18,7 @@ from telegram_mcp.application.attachment_ports import (
 )
 from telegram_mcp.application.ports import Clock, PolicyProvider
 from telegram_mcp.application.retry import RetryState
+from telegram_mcp.domain.archiving import ArchiveSource
 from telegram_mcp.domain.models import DownloadResult, MessageRef, ToolError
 
 logger = logging.getLogger(__name__)
@@ -121,7 +122,20 @@ class AttachmentService:
                         stored.result.resource_uri.removeprefix(RESOURCE_PREFIX)
                     )
                     stored.result.saved_file = await self.archive.save(
-                        data, stored.result.name, stored.result.sha256
+                        data,
+                        stored.result.name,
+                        stored.result.sha256,
+                        mime_type=stored.result.mime_type,
+                        source=ArchiveSource(
+                            tool="download_attachment",
+                            chat_id=ref.chat_id,
+                            message_ref=ref,
+                            url=(
+                                f"https://t.me/c/{-int(ref.chat_id) - 10**12}/{ref.message_id}"
+                                if int(ref.chat_id) < -(10**12)
+                                else None
+                            ),
+                        ),
                     )
                 delivered = True
                 return stored.result

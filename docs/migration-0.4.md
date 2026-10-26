@@ -66,13 +66,21 @@ reads can overlap, while operations on the same named subscription serialize.
 
 ## Durable monitoring and selected files
 
-Checkpoint database version 2 migrates existing tokens in place. With no legacy
-ancestry to inspect, migration protects the newest valid token per authorization,
-tool and canonical chat. Current heads are then protected from capacity eviction
+Checkpoint database version 3 migrates existing tokens in place. For version-1 data
+without ancestry, migration protects the newest valid token per authorization,
+tool and canonical chat. Current heads are protected from capacity eviction
 for 30 days; unchanged heads reuse their token and renew expiry. Superseded versions
 remain readable until expiry or capacity eviction. Resuming an older token creates
 an independent branch. `CHECKPOINT_STORAGE_FULL` preserves existing positions rather
 than evicting a protected head. Do not downgrade a migrated database to the old writer.
+
+New unused baselines have one protected head per authorization and chat; fresh
+equivalent starts reuse a token. Continuing a token protects that independent chain.
+Version-2 roots may already have been continued without changing their token, so the
+version-3 migration conservatively keeps them protected. If storage is already full,
+use the [offline preview and cleanup commands](usage.md#inspect-or-clean-checkpoints-unreleased)
+after stopping the session owner. Protected cleanup explicitly invalidates selected
+tokens; it never resets named watches or stored FloodWait deadlines.
 
 `get_changes` now reports `baseline_created`. `CHECKPOINT_EXPIRED` never silently
 starts another baseline: recover the missing date range with history/export before
@@ -82,10 +90,17 @@ Use the five named-watch tools for monitoring without retaining per-chat tokens.
 Subscriptions persist positions and one unacknowledged response, including text, in a
 separate private store. Acknowledge each `batch_id` only after processing it. They have
 no automatic expiration or eviction. See [the polling contract](usage.md#monitor-a-folder-or-selected-sources-unreleased).
+`get_watch_changes` also accepts `ack_batch_id` for acknowledgement followed by polling.
+Channel/supergroup event markers skip unchanged completed reads; existing watches
+establish their markers through normal bounded passes. Creation now accepts at most
+20 explicit references per call; use folders for larger selections. Existing larger
+watches retain their selectors and positions.
 
 `save=true` adds a permanent copy to selected downloads or file exports when
 `archive_directory` is configured. The new optional `saved_file` includes its path,
-size, hash and timestamp; ordinary resources retain their 15-minute expiry.
+size, hash, timestamp and `metadata_path`; ordinary resources retain their 15-minute expiry.
+New copies include versioned source metadata alongside their generated filename.
+Old permanent files are left intact without inventing missing provenance.
 Permanent copies are managed by the user, not the cache cleaner.
 
 ## Compact tool discovery

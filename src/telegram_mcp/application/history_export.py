@@ -4,6 +4,7 @@ from datetime import datetime
 
 from telegram_mcp.application.change_ports import MAX_EXPORT_BYTES, MAX_EXPORT_RECORDS
 from telegram_mcp.application.incremental import BudgetExhausted, IncrementalContext
+from telegram_mcp.domain.archiving import ArchiveSource
 from telegram_mcp.domain.changes import ExportFormat, ExportHistoryResult
 from telegram_mcp.domain.exporting import ExportPart
 from telegram_mcp.domain.models import Issue, ToolError
@@ -135,7 +136,20 @@ class HistoryExportService:
                     )
                     if save:
                         result.export.saved_file = await ctx.archive.save(
-                            data, result.export.name, result.export.sha256
+                            data,
+                            result.export.name,
+                            result.export.sha256,
+                            mime_type=result.export.mime_type,
+                            source=ArchiveSource(
+                                tool="export_history",
+                                chat_id=state.chat_id,
+                                title=prepared.chat.title,
+                                username=prepared.chat.username,
+                                format=format,
+                                date_from=state.date_from,
+                                date_to=state.date_to,
+                                upper_message_id=state.upper_id,
+                            ),
                         )
                 if receipt is not None:
                     ctx.checkpoints.confirm(receipt.token)

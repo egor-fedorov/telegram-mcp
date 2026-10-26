@@ -3,6 +3,7 @@
 from telegram_mcp.application.change_ports import MAX_EXPORT_BYTES, Observation
 from telegram_mcp.application.change_reader import advance_changes
 from telegram_mcp.application.incremental import IncrementalContext
+from telegram_mcp.domain.archiving import ArchiveSource
 from telegram_mcp.domain.changes import (
     Change,
     ChangeOutput,
@@ -120,7 +121,19 @@ class ChangesService:
                     )
                     if save:
                         result.export.saved_file = await ctx.archive.save(
-                            data, result.export.name, result.export.sha256
+                            data,
+                            result.export.name,
+                            result.export.sha256,
+                            mime_type=result.export.mime_type,
+                            source=ArchiveSource(
+                                tool="get_changes",
+                                chat_id=state.chat_id,
+                                title=prepared.chat.title,
+                                username=prepared.chat.username,
+                                format=part.format,
+                                date_to=state.date_to,
+                                upper_message_id=state.upper_id,
+                            ),
                         )
                 ctx.checkpoints.confirm(receipt.token)
             except BaseException:

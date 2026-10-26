@@ -14,6 +14,7 @@ from pathlib import Path
 
 from pydantic import SecretStr, ValidationError
 
+from telegram_mcp.adapters import checkpoint_cli
 from telegram_mcp.adapters.config import (
     Settings,
     config_path,
@@ -188,19 +189,24 @@ def main(dependencies: CliDependencies) -> None:
     parser.add_argument("--version", action="version", version=f"%(prog)s {get_version()}")
     parser.add_argument("--config", type=Path, help="Configuration TOML path")
     parser.add_argument(
-        "command", choices=["serve", "connect", "login", "configure", "status", "catalog"]
+        "command",
+        choices=["serve", "connect", "login", "configure", "status", "catalog", "checkpoints"],
     )
     parser.add_argument(
         "--transport", choices=["stdio", "http"], help="Transport for serve (default: stdio)"
     )
+    checkpoint_cli.add_arguments(parser)
     args = parser.parse_args()
+    checkpoint_cli.validate_arguments(parser, args)
     if args.transport is not None and args.command != "serve":
         parser.error("--transport is supported only with serve")
     logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
     try:
         path = (args.config or config_path()).expanduser()
         settings = load_settings(path)
-        if args.command == "serve":
+        if args.command == "checkpoints":
+            checkpoint_cli.run(settings, args)
+        elif args.command == "serve":
             service = dependencies.service_factory(dependencies.backend_factory(settings), settings)
             if args.transport == "http":
                 dependencies.serve_http(service, settings)

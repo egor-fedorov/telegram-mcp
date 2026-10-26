@@ -116,7 +116,10 @@ class Service:
                 try:
                     self._watches.store.close()
                 finally:
-                    await self._runtime.close()
+                    try:
+                        await self._archive.close()
+                    finally:
+                        await self._runtime.close()
 
     async def create_watch(
         self,
@@ -130,8 +133,10 @@ class Service:
     async def list_watches(self) -> WatchList:
         return await self._watches.list()
 
-    async def get_watch_changes(self, name: str, limit: int = 30) -> WatchChangesResult:
-        return await self._watches.changes(name, limit)
+    async def get_watch_changes(
+        self, name: str, limit: int = 30, ack_batch_id: str | None = None
+    ) -> WatchChangesResult:
+        return await self._watches.changes(name, limit, ack_batch_id)
 
     async def ack_watch_changes(self, name: str, batch_id: str) -> WatchAcknowledgement:
         return await self._watches.acknowledge(name, batch_id)

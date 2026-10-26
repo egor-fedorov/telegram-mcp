@@ -9,6 +9,28 @@ Global search is excluded from live validation. The harness also excludes dialog
 catalogs, folders, discovery, similar channels, linked discussions, and reply-chain
 traversal. Global search behavior remains covered by offline tests.
 
+## Selected monitoring metadata
+
+`--monitoring` is a separate opt-in mode for one to 40 explicitly approved `--chat`
+references. It resolves those references, requests two selected peer metadata batches,
+and creates/retries/deletes disposable watches in groups of at most 20 canonical IDs.
+It does not perform history sweeps, search, attachment downloads or catalog reads;
+Telegram's peer-dialog response itself may include the selected peers' top messages.
+It cannot be combined with message, topic, attachment or M4 checks.
+
+```sh
+uv run --locked python scripts/probe_telegram.py --monitoring \
+  --chat @approved_channel_one --chat @approved_channel_two
+```
+
+Use repeated flags for an explicitly authorized list of a few dozen usernames when
+validating resolution cost. The same 180-second overall timeout, immediate stop on
+FloodWait, source-redacted report and disposable-state cleanup apply. There is no
+automatic wait/retry and no claim of a universal safe username resolution rate.
+Known channel markers are counted in `selected_peer_batch_*`; private/nonmember peers
+or unavailable markers may not be returned, so counts are not proof of full coverage.
+This mode does not replace content/attachment validation required for release.
+
 ## Run a bounded probe
 
 Run `make check` first. Stop the process that owns the configured session before

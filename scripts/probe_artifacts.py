@@ -34,6 +34,14 @@ async def check_attachment(service: Service, attachment_id: str) -> int:
         raise ToolError("VALIDATION_MISMATCH", "Artifact delivery metadata differs.")
     saved = await asyncio.to_thread(Path(result.saved_file.local_path).read_bytes)
     verify_bytes(saved, result.size, result.sha256)
+    metadata = json.loads(
+        await asyncio.to_thread(Path(result.saved_file.metadata_path).read_text, encoding="utf-8")
+    )
+    if (
+        metadata["source"]["message_ref"] != result.message_ref.model_dump()
+        or metadata["sha256"] != result.sha256
+    ):
+        raise ToolError("VALIDATION_MISMATCH", "Archive source metadata differs.")
     return result.size
 
 
@@ -47,6 +55,11 @@ async def check_export(service: Service, result: ExportHistoryResult) -> int:
         raise ToolError("VALIDATION_MISMATCH", "Export delivery metadata differs.")
     saved = await asyncio.to_thread(Path(exported.saved_file.local_path).read_bytes)
     verify_bytes(saved, exported.size, exported.sha256)
+    metadata = json.loads(
+        await asyncio.to_thread(Path(exported.saved_file.metadata_path).read_text, encoding="utf-8")
+    )
+    if metadata["source"]["chat_id"] != result.chat_id or metadata["sha256"] != exported.sha256:
+        raise ToolError("VALIDATION_MISMATCH", "Archive source metadata differs.")
     if exported.format == "jsonl":
         rows = [json.loads(line) for line in text.splitlines()]
         if not rows or rows[0].get("record") != "manifest" or rows[-1].get("record") != "summary":
