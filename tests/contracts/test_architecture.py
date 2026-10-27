@@ -50,12 +50,27 @@ def permitted(source: str, target: str) -> bool:
         if dependency not in {"domain", "application", "adapters"}:
             return False
         ingress = {f"{PACKAGE}.adapters.{name}" for name in ("cli", "mcp", "transport", "bridge")}
-        if source not in ingress and any(
-            target == name or target.startswith(name + ".") for name in ingress
-        ):
+
+        def within(module: str) -> bool:
+            return any(module == name or module.startswith(name + ".") for name in ingress)
+
+        if not within(source) and within(target):
             return False
-        return True
+        return feature_independent(source, target)
     return False
+
+
+def feature_independent(source: str, target: str) -> bool:
+    """MCP tool modules depend on shared MCP helpers, never on each other or the server."""
+    tools = f"{PACKAGE}.adapters.mcp.tools."
+    if not source.startswith(tools):
+        return True
+    feature = source.removeprefix(tools).split(".")[0]
+    if target.startswith(tools):
+        return target.removeprefix(tools).split(".")[0] == feature
+    return not (
+        target == f"{PACKAGE}.adapters.mcp" or target.startswith(f"{PACKAGE}.adapters.mcp.server")
+    )
 
 
 def find_cycle(graph: dict[str, set[str]]) -> list[str] | None:
@@ -149,6 +164,16 @@ def test_test_modules_share_support_without_importing_other_tests() -> None:
             "telegram_mcp.adapters.telegram.runtime",
             "from ..mcp import create_server",
             "telegram_mcp.adapters.mcp",
+        ),
+        (
+            "telegram_mcp.adapters.mcp.tools.watches",
+            "from .messages import register",
+            "telegram_mcp.adapters.mcp.tools.messages",
+        ),
+        (
+            "telegram_mcp.adapters.mcp.tools.watches",
+            "from ..server import create_server",
+            "telegram_mcp.adapters.mcp.server",
         ),
     ],
 )

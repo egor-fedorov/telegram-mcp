@@ -18,6 +18,13 @@ Outbound adapters cannot import the MCP, CLI or transport entry adapters. The st
 `telegram_mcp.cli` entry point delegates to bootstrap. Domain and application code do
 not import Telethon, the MCP SDK, concrete adapters or local configuration I/O.
 
+The `adapters.mcp` package assembles the server in `server.py` (instructions, prompts,
+completion and transient resources) from feature modules in `adapters/mcp/tools/`:
+watches, changes, attachments, status, discovery, catalog and messages. Each module
+registers its tools on the server; the registration sequence fixes the advertised
+tool order. Tool modules share parameter types and annotations from `params.py` and
+error mapping from `errors.py`. They do not import each other or the server assembly.
+
 Domain models deliberately use Pydantic. The MCP adapter owns separate compact wire
 models because its public contract shares chat summaries, encodes canonical references
 and omits unknown optional metadata. Scope projection limits ID previews to 20 each

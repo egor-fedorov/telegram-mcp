@@ -49,6 +49,8 @@ Completed steps:
   pytest-xdist runs (`make check` from about 4.5 to 1.2 minutes on four cores), a `slow`
   marker with `make test-fast`, and fixtures pinning tool order and descriptions, wire/domain
   field parity and 0.5 persisted state.
+- MCP tools by feature: `adapters.mcp` is a package whose server assembly registers seven
+  feature modules in the advertised order; tool modules cannot import each other.
 
 ## 0.4 completion
 
