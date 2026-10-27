@@ -1,5 +1,6 @@
 """Compare the self-contained public schemas against the versioned MCP contract."""
 
+import inspect
 import json
 
 import pytest
@@ -39,14 +40,21 @@ async def test_mcp_contract_matches_versioned_fixture(mode: str) -> None:
 
 
 async def advertised_listing(mode: str) -> dict[str, object]:
-    """Ordered names and descriptions that the schema contract does not cover."""
+    """Ordered names and descriptions that the schema contract does not cover.
+
+    Python 3.13 strips docstring indentation at compile time, so descriptions are
+    compared after the same cleanup on every supported version.
+    """
     async with Client(create_server(Service(FakeBackend(), Settings())), mode=mode) as client:
         tools = (await client.list_tools()).tools
         prompts = (await client.list_prompts()).prompts
         templates = (await client.list_resource_templates()).resource_templates
         return {
             "instructions": client.instructions,
-            "tools": [{"name": tool.name, "description": tool.description} for tool in tools],
+            "tools": [
+                {"name": tool.name, "description": inspect.cleandoc(tool.description or "")}
+                for tool in tools
+            ],
             "prompts": [prompt.model_dump(mode="json", exclude_none=True) for prompt in prompts],
             "resource_templates": [
                 template.model_dump(mode="json", exclude_none=True) for template in templates
