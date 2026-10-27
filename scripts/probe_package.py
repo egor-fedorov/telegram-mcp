@@ -63,10 +63,11 @@ async def probe_stdio(
     contract: dict[str, object],
     schema_mode: str,
     command: str = "serve",
+    package_arguments: list[str] | None = None,
 ) -> None:
     parameters = StdioServerParameters(
         command=str(executable),
-        args=["--config", str(config), command],
+        args=["--config", str(config), *(package_arguments or [command])],
         env={
             "TELEGRAM_API_ID": "",
             "TELEGRAM_API_HASH": "",
@@ -149,6 +150,13 @@ def main() -> None:
     metadata = distribution("telegram-context-mcp")
     assert metadata.version == get_version() == args.version
     assert metadata.metadata["License-Expression"] == "MIT"
+    server = json.loads(Path("server.json").read_text(encoding="utf-8"))
+    package = server["packages"][0]
+    assert server["version"] == package["version"] == args.version
+    assert package["identifier"] == metadata.metadata["Name"]
+    description = metadata.metadata["Description"]
+    assert isinstance(description, str)
+    assert f"mcp-name: {server['name']}" in description
     executable = Path(sys.executable).parent / (
         "telegram-mcp.exe" if os.name == "nt" else "telegram-mcp"
     )
@@ -156,6 +164,24 @@ def main() -> None:
     assert version.strip() == f"telegram-mcp {args.version}"
     subprocess.run([str(executable), "--help"], check=True, capture_output=True, timeout=15)
     contract = json.loads(Path(__file__).with_name("mcp_contract.json").read_text(encoding="utf-8"))
+    registry_executable = executable.with_name(
+        package["identifier"] + (".exe" if os.name == "nt" else "")
+    )
+    registry_version = subprocess.check_output(
+        [str(registry_executable), "--version"], text=True, timeout=15
+    )
+    assert registry_version == version
+    assert all(argument["type"] == "positional" for argument in package["packageArguments"])
+    asyncio.run(
+        probe_stdio(
+            registry_executable,
+            Path.cwd() / "registry.toml",
+            args.version,
+            contract,
+            "compact",
+            package_arguments=[argument["value"] for argument in package["packageArguments"]],
+        )
+    )
     for schema_mode in ("compact", "full"):
         config = Path.cwd() / f"{schema_mode}.toml"
         if schema_mode == "full":
@@ -165,8 +191,8 @@ def main() -> None:
         probe_shared_server(executable, args.version, contract, schema_mode)
     assert not list(Path.cwd().glob("*.session*"))
     print(
-        f"Installed package {args.version}: metadata, CLI, STDIO, HTTP, and bridge passed "
-        "with compact and full schemas."
+        f"Installed package {args.version}: Registry launch, metadata, CLI, STDIO, HTTP, "
+        "and bridge passed with compact and full schemas."
     )
 
 

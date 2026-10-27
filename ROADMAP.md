@@ -82,6 +82,11 @@ Telegram or client validation has been done.
 These can ship independently and do not gate M5:
 
 1. [Publish the PyPI package to the MCP Registry (#39)](https://github.com/egor-fedorov/telegram-mcp/issues/39).
+   Metadata, ownership marker, package-named CLI alias, offline checks and an
+   independently retryable OIDC publication workflow are implemented. Publication
+   remains pending the first package release containing these changes; 0.4.0 lacks
+   the required PyPI ownership marker. Clean-install CI exercises the declared STDIO
+   entry point without a Telegram account. See the [release procedure](docs/releasing.md#mcp-registry-publication).
 2. [Support opt-in shared HTTP server autostart (#40)](https://github.com/egor-fedorov/telegram-mcp/issues/40), starting with a tested user-level systemd service.
 3. [Ship a validated MCPB bundle (#41)](https://github.com/egor-fedorov/telegram-mcp/issues/41), after the setup and session-ownership model is settled.
 

@@ -1,5 +1,7 @@
 # Telegram Context MCP
 
+<!-- mcp-name: io.github.egor-fedorov/telegram-mcp -->
+
 [![CI](https://github.com/egor-fedorov/telegram-mcp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/egor-fedorov/telegram-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/egor-fedorov/telegram-mcp/blob/main/LICENSE)
 
@@ -50,6 +52,16 @@ You can also run a pinned version without installing a persistent command:
 ```sh
 uvx --python 3.12 --from telegram-context-mcp==0.4.0 telegram-mcp --version
 ```
+
+The next release will also publish installation metadata to the
+[official MCP Registry](https://registry.modelcontextprotocol.io/) as
+`io.github.egor-fedorov/telegram-mcp`. That entry launches a local STDIO server through
+`uvx`; it does not supply a hosted Telegram service. Complete `login` and `configure`
+locally before connecting a client. Registry publication is pending the first release
+containing this integration; 0.4.0 predates it. See the
+[release procedure](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/releasing.md#mcp-registry-publication)
+for verification and the [client guide](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/clients.md)
+for sharing one session between clients.
 
 ## Connect your clients
 
