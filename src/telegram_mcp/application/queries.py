@@ -73,54 +73,20 @@ class QueryService:
         max_sources: int | None = None,
         max_messages: int | None = None,
     ) -> Page:
-        selectors = [chat_id, chat_ref, chat_ids, folder_ids]
-        if sum(selector is not None for selector in selectors) != 1:
-            raise ToolError(
-                "INVALID_ARGUMENT",
-                "Provide exactly one of chat_id, chat_ref, chat_ids or folder_ids.",
-            )
-        if chat_ids == [] or folder_ids == []:
-            raise ToolError("INVALID_ARGUMENT", "chat_ids and folder_ids must not be empty.")
-        check_limit(limit)
-        check_topic_id(topic_id)
-        if ordering not in (None, "page", "global"):
-            raise ToolError("INVALID_ARGUMENT", "Use ordering page or global.")
-        for value in (max_sources, max_messages):
-            if value is not None and (type(value) is not int or not 1 <= value <= 1000):
-                raise ToolError("INVALID_ARGUMENT", "max_sources and max_messages must be 1..1000.")
-        plural = chat_ids is not None or folder_ids is not None
-        if plural:
-            if topic_id is not None:
-                raise ToolError(
-                    "INVALID_ARGUMENT", "topic_id requires a single chat_id or chat_ref."
-                )
-            if date_from is None or date_to is None:
-                raise ToolError(
-                    "INVALID_ARGUMENT",
-                    "chat_ids and folder_ids require explicit date_from and date_to.",
-                )
-        budget = (
-            BudgetRequest(max_sources or DEFAULT_MAX_SOURCES, max_messages)
-            if plural or max_sources is not None or max_messages is not None
-            else None
-        )
-        filters = ReadFilters(
-            date_from=date_from, date_to=date_to, oldest_first=order == "oldest_first"
-        )
-        read: MessageRead = (
-            HistoryRead(filters, ordering or ("page" if plural else "global"))
-            if topic_id is None
-            else TopicRead(topic_id, filters)
-        )
         return await self.execute(
-            QuerySpec(
-                read,
-                SourceSelection(
-                    chat_ids=[chat_id] if chat_id is not None else chat_ids,
-                    folder_ids=folder_ids,
-                    source_ref=chat_ref,
-                ),
-                budget,
+            history_spec(
+                chat_id=chat_id,
+                date_from=date_from,
+                date_to=date_to,
+                order=order,
+                limit=limit,
+                chat_ref=chat_ref,
+                topic_id=topic_id,
+                chat_ids=chat_ids,
+                folder_ids=folder_ids,
+                ordering=ordering,
+                max_sources=max_sources,
+                max_messages=max_messages,
             ),
             limit,
             cursor,
@@ -184,4 +150,84 @@ class QueryService:
     async def thread(self, chat_id: str, thread_id: int, limit: int, cursor: str | None) -> Page:
         return await self.execute(
             QuerySpec(ThreadRead(thread_id), SourceSelection(chat_ids=[chat_id])), limit, cursor
+        )
+
+
+def history_spec(
+    *,
+    chat_id: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    order: Literal["newest_first", "oldest_first"] = "newest_first",
+    limit: int = 30,
+    chat_ref: str | None = None,
+    topic_id: int | None = None,
+    chat_ids: list[str] | None = None,
+    folder_ids: list[int] | None = None,
+    ordering: Literal["page", "global"] | None = None,
+    max_sources: int | None = None,
+    max_messages: int | None = None,
+) -> QuerySpec:
+    """Validate get_history arguments, in their documented order, before any read."""
+    check_one_selector(chat_id, chat_ref, chat_ids, folder_ids)
+    check_limit(limit)
+    check_topic_id(topic_id)
+    if ordering not in (None, "page", "global"):
+        raise ToolError("INVALID_ARGUMENT", "Use ordering page or global.")
+    check_budget_values(max_sources, max_messages)
+    plural = chat_ids is not None or folder_ids is not None
+    if plural:
+        check_plural_history(topic_id, date_from, date_to)
+    budget = (
+        BudgetRequest(max_sources or DEFAULT_MAX_SOURCES, max_messages)
+        if plural or max_sources is not None or max_messages is not None
+        else None
+    )
+    filters = ReadFilters(
+        date_from=date_from, date_to=date_to, oldest_first=order == "oldest_first"
+    )
+    read: MessageRead = (
+        HistoryRead(filters, ordering or ("page" if plural else "global"))
+        if topic_id is None
+        else TopicRead(topic_id, filters)
+    )
+    selection = SourceSelection(
+        chat_ids=[chat_id] if chat_id is not None else chat_ids,
+        folder_ids=folder_ids,
+        source_ref=chat_ref,
+    )
+    return QuerySpec(read, selection, budget)
+
+
+def check_one_selector(
+    chat_id: str | None,
+    chat_ref: str | None,
+    chat_ids: list[str] | None,
+    folder_ids: list[int] | None,
+) -> None:
+    selectors = [chat_id, chat_ref, chat_ids, folder_ids]
+    if sum(selector is not None for selector in selectors) != 1:
+        raise ToolError(
+            "INVALID_ARGUMENT",
+            "Provide exactly one of chat_id, chat_ref, chat_ids or folder_ids.",
+        )
+    if chat_ids == [] or folder_ids == []:
+        raise ToolError("INVALID_ARGUMENT", "chat_ids and folder_ids must not be empty.")
+
+
+def check_budget_values(max_sources: int | None, max_messages: int | None) -> None:
+    for value in (max_sources, max_messages):
+        if value is not None and (type(value) is not int or not 1 <= value <= 1000):
+            raise ToolError("INVALID_ARGUMENT", "max_sources and max_messages must be 1..1000.")
+
+
+def check_plural_history(
+    topic_id: int | None, date_from: datetime | None, date_to: datetime | None
+) -> None:
+    if topic_id is not None:
+        raise ToolError("INVALID_ARGUMENT", "topic_id requires a single chat_id or chat_ref.")
+    if date_from is None or date_to is None:
+        raise ToolError(
+            "INVALID_ARGUMENT",
+            "chat_ids and folder_ids require explicit date_from and date_to.",
         )

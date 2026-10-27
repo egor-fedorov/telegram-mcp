@@ -53,6 +53,9 @@ Completed steps:
   feature modules in the advertised order; tool modules cannot import each other.
 - Wire DTOs by feature: `adapters.wire` is a package with the same feature modules, shared
   `common` types and a split projection in `encoding`; schemas are unchanged.
+- Query preparation: `QueryPreparation.prepare` runs named steps (source resolution, cursor
+  resumption, topic check, first-page selection) and `history_spec` validates `get_history`
+  arguments as a pure, separately tested function.
 
 ## 0.4 completion
 
