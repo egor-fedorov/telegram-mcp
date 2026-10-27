@@ -1,6 +1,6 @@
 # M5: Bounded monitoring workflows (0.5)
 
-Status: implemented and validated, unreleased. The [validation record](../validation-0.5.md)
+Status: released in 0.5.0 on 2026-10-27. The [validation record](../validation-0.5.md)
 documents the selected-source live checks and Claude Code workflow. M5 combines
 bounded multi-source history, recoverable watch delivery and two general-purpose MCP prompts. The calling agent
 performs analysis; the server supplies original content, progress and workflow templates.
@@ -236,8 +236,8 @@ follow the separate release process.
 ## Delivery boundary
 
 M5 was implemented in [PR #43](https://github.com/egor-fedorov/telegram-mcp/pull/43).
-Implementation and bounded live validation are complete; publication uses the existing
-release process. Distribution remains independent:
+Implementation, bounded live validation and 0.5.0 publication are complete.
+Distribution work remains separate:
 [Registry #39](https://github.com/egor-fedorov/telegram-mcp/issues/39),
 [autostart #40](https://github.com/egor-fedorov/telegram-mcp/issues/40),
 [MCPB #41](https://github.com/egor-fedorov/telegram-mcp/issues/41).

@@ -10,7 +10,7 @@ describe delivery at each milestone; later changes are recorded in the
 - [M2: Message navigation and metadata](m2-message-navigation.md)
 - [M3: Selected attachment downloads](m3-attachment-downloads.md)
 - [M4: Changes and export](m4-changes-export.md)
-- [M5: Monitoring workflows (0.5)](m5-monitoring-workflows.md) — validated, unreleased; see the [validation record](../validation-0.5.md)
+- [M5: Monitoring workflows (0.5)](m5-monitoring-workflows.md) — released in 0.5.0; see the [validation record](../validation-0.5.md)
 - [R2: Installation, local sharing, and release 0.2.0](r2-general-purpose.md)
 
 See [current layered architecture](../architecture.md) for the maintained design,

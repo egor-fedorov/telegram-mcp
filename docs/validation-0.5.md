@@ -1,13 +1,27 @@
-# 0.5 validation record
+# 0.5.0 validation record
 
-This record covers the 0.5.0 release candidate on 2026-10-27 (UTC). M5 was validated against
+This record covers the 0.5.0 release on 2026-10-27 (UTC). M5 was validated against
 source revision
 `ca8fbe2e70ce5ea68698792860bc8d6359cb79f8`, after [PR #43](https://github.com/egor-fedorov/telegram-mcp/pull/43)
 was merged. The release changes package metadata and documentation; application code
-is unchanged from that live-tested revision. Publication follows the
-[release procedure](releasing.md); verify the version on
+is unchanged from that live-tested revision. Publication was verified on
 [PyPI](https://pypi.org/project/telegram-context-mcp/0.5.0/) and
 [GitHub Releases](https://github.com/egor-fedorov/telegram-mcp/releases/tag/v0.5.0).
+
+## Publication verification
+
+The [release workflow](https://github.com/egor-fedorov/telegram-mcp/actions/runs/40502637370)
+passed all validation and publication jobs. The downloaded PyPI wheel (157,295 bytes)
+and source archive (410,998 bytes) matched the locally tested artifacts byte for byte;
+their SHA-256 values also matched the GitHub Release asset digests. Fresh installation
+from the primary PyPI index reported `telegram-mcp 0.5.0`; the package-named
+`uvx --python 3.12 telegram-context-mcp@0.5.0 --version` entry point passed too.
+
+The [Registry version](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.egor-fedorov%2Ftelegram-mcp/versions/0.5.0)
+is active and exactly matches the tagged `server.json`, including the package version,
+repository and STDIO launch metadata. `scripts/check_registry.py --tag v0.5.0
+--check-pypi --require-published` passed. Package/Registry publication and clean
+installation were checked without a Telegram login or account content.
 
 ## Offline verification
 

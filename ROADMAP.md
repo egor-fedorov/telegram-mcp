@@ -24,14 +24,16 @@ need a concrete contract before implementation; no delivery dates are assigned.
 | M4 | Complete for 0.4 | Durable checkpoints, recent revisions and source-linked JSONL/Markdown exports |
 | R4 | Complete for 0.4 | Bounded scope previews, early restricted search, reusable catalogs and concurrent calls |
 | R5 | Complete for 0.4 | Named subscriptions, protected positions, permanent selected files and compact discovery |
-| M5 | Complete, unreleased | Bounded multi-source history, archived watch batches and usable monitoring prompts |
+| M5 | Complete for 0.5 | Bounded multi-source history, archived watch batches and usable monitoring prompts |
 
-The [0.4 changelog](CHANGELOG.md#040---2026-10-26), [migration guide](docs/migration-0.4.md)
-and [validation record](docs/validation-0.4.md) describe the complete release scope.
-A merged PR is not proof of publication: verify the version on
-[PyPI](https://pypi.org/project/telegram-context-mcp/0.4.0/) and
-[GitHub Releases](https://github.com/egor-fedorov/telegram-mcp/releases/tag/v0.4.0).
-The [0.3 validation record](docs/validation-0.3.md) retains earlier measurements.
+The [0.5 changelog](CHANGELOG.md#050---2026-10-27) and
+[validation record](docs/validation-0.5.md) describe the current release scope.
+Publication of 0.5.0 was verified on
+[PyPI](https://pypi.org/project/telegram-context-mcp/0.5.0/),
+[GitHub Releases](https://github.com/egor-fedorov/telegram-mcp/releases/tag/v0.5.0), and the
+[MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.egor-fedorov%2Ftelegram-mcp/versions/0.5.0).
+The [0.4 migration guide](docs/migration-0.4.md) applies to upgrades from 0.3;
+[0.4](docs/validation-0.4.md) and [0.3](docs/validation-0.3.md) retain earlier validation.
 
 ## 0.4 completion
 
@@ -56,9 +58,9 @@ Telegram readers and shared explicit fixtures. Dependency and development-tool u
 receive manual review; CI checks supported Python/platform combinations and fresh
 wheel/source installations.
 
-## 0.5: monitoring workflows (complete, unreleased)
+## 0.5: monitoring workflows (released)
 
-[M5](docs/specs/m5-monitoring-workflows.md) is implemented and validated, but not released.
+[M5](docs/specs/m5-monitoring-workflows.md) was released in 0.5.0 on 2026-10-27.
 
 - `get_history` reads selected `chat_ids`/`folder_ids` over a fixed period in one
   traversal, with early `ordering="page"` results, `max_sources`/`max_messages` budgets
@@ -77,22 +79,22 @@ prompt/completion discovery, archive replay across server restarts and recovery 
 acknowledgement. The maintainer confirmed a bounded `watch_digest` workflow and
 watch-name completion in Claude Code 2.1.310; archive integrity and persisted
 acknowledgement were checked independently. The [0.5 validation record](docs/validation-0.5.md)
-records environments, evidence and coverage limits. Release preparation targets 0.5.0;
-package and Registry publication remain pending verification under the
+records environments, evidence and coverage limits. The release workflow passed its
+full matrix, published both package artifacts and registered the matching MCP metadata.
+Fresh PyPI installation and both CLI names were verified under the
 [release procedure](docs/releasing.md).
 
-## Distribution follow-ups
+## Distribution
 
-These can ship independently and do not gate M5:
+The [MCP Registry integration (#39)](https://github.com/egor-fedorov/telegram-mcp/issues/39)
+is complete with 0.5.0: the active entry points to the verified PyPI artifacts and
+the package-named STDIO executable. The OIDC publication workflow remains independently
+retryable; see the [release procedure](docs/releasing.md#mcp-registry-publication).
 
-1. [Publish the PyPI package to the MCP Registry (#39)](https://github.com/egor-fedorov/telegram-mcp/issues/39).
-   Metadata, ownership marker, package-named CLI alias, offline checks and an
-   independently retryable OIDC publication workflow are implemented. Publication
-   remains pending the first package release containing these changes; 0.4.0 lacks
-   the required PyPI ownership marker. Clean-install CI exercises the declared STDIO
-   entry point without a Telegram account. See the [release procedure](docs/releasing.md#mcp-registry-publication).
-2. [Support opt-in shared HTTP server autostart (#40)](https://github.com/egor-fedorov/telegram-mcp/issues/40), starting with a tested user-level systemd service.
-3. [Ship a validated MCPB bundle (#41)](https://github.com/egor-fedorov/telegram-mcp/issues/41), after the setup and session-ownership model is settled.
+Remaining distribution work can ship independently:
+
+1. [Support opt-in shared HTTP server autostart (#40)](https://github.com/egor-fedorov/telegram-mcp/issues/40), starting with a tested user-level systemd service.
+2. [Ship a validated MCPB bundle (#41)](https://github.com/egor-fedorov/telegram-mcp/issues/41), after the setup and session-ownership model is settled.
 
 ## Later decisions
 
@@ -109,7 +111,7 @@ before implementation. No 0.7 scope is committed.
 
 Broader change journals, multi-source exports, saved searches, local text/semantic
 indexes, scheduled monitoring, administration and isolated account profiles also
-remain later decisions. Prioritize concrete usage and bug reports from 0.4.
+remain later decisions. Prioritize concrete usage and bug reports from 0.5.
 
 Preserve original content and links; summaries must not replace them. Basic retrieval
 should require neither a built-in LLM nor a persistent message database. Features
