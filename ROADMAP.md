@@ -56,6 +56,9 @@ Completed steps:
 - Query preparation: `QueryPreparation.prepare` runs named steps (source resolution, cursor
   resumption, topic check, first-page selection) and `history_spec` validates `get_history`
   arguments as a pure, separately tested function.
+- Incremental pipeline: changes and history export share one forward reader and one
+  publication transaction (export, permanent copy, checkpoint confirmation with rollback);
+  protected-record omissions come from one domain helper.
 
 ## 0.4 completion
 

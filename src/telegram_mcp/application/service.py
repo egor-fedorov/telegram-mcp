@@ -86,7 +86,14 @@ class Service:
         self._archive = archive
         access = AccessFactory(backend, policy_provider)
         self._incremental = IncrementalContext(
-            backend, backend, access, checkpoints, exports, clock, limits, archive
+            backend=backend,
+            chats=backend,
+            access=access,
+            checkpoints=checkpoints,
+            exports=exports,
+            clock=clock,
+            limits=limits,
+            archive=archive,
         )
         self._changes = ChangesService(self._incremental)
         self._watches = WatchService(self._incremental, watches)
@@ -109,6 +116,7 @@ class Service:
         self._messages = MessageReader(backend, backend, access, self._queries, limits)
 
     async def close(self) -> None:
+        # Nested finally blocks close everything in order and chain every failure.
         try:
             await self._attachments.close()
         finally:

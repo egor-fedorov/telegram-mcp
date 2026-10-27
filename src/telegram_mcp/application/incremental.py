@@ -11,12 +11,15 @@ from typing import Literal
 from telegram_mcp.application.access import AccessFactory
 from telegram_mcp.application.archive_ports import ArchivePort
 from telegram_mcp.application.change_ports import (
+    CheckpointReceipt,
     CheckpointStorePort,
     ExportStorePort,
     IncrementalPort,
 )
 from telegram_mcp.application.ports import ChatPort, Clock, ExecutionLimits
-from telegram_mcp.domain.changes import CheckpointState
+from telegram_mcp.domain.archiving import ArchiveSource
+from telegram_mcp.domain.changes import ChangesResult, CheckpointState, ExportHistoryResult
+from telegram_mcp.domain.exporting import ExportPart
 from telegram_mcp.domain.models import Chat, Issue, ToolError
 
 
@@ -58,6 +61,7 @@ class PreparedRead:
 class IncrementalContext:
     def __init__(
         self,
+        *,
         backend: IncrementalPort,
         chats: ChatPort,
         access: AccessFactory,
@@ -167,6 +171,46 @@ class IncrementalContext:
                 "session", self.clock.utc_now() + timedelta(seconds=error.retry_after)
             )
         return error.issue(chat_id)
+
+    async def publish(
+        self,
+        result: ChangesResult | ExportHistoryResult,
+        prepared: PreparedRead,
+        *,
+        receipt: CheckpointReceipt | None,
+        part: ExportPart | None,
+        exclude: set[str],
+        archive_source: ArchiveSource | None,
+    ) -> None:
+        """Publish an export part, its permanent copy and the checkpoint as one unit.
+
+        On any failure, discard what this invocation created; the previous
+        checkpoint remains the retry point.
+        """
+        try:
+            if part is not None:
+                data = part.finish(result.model_dump(mode="json", exclude=exclude))
+                result.export = await self.exports.save(
+                    data, part.format, prepared.state.chat_id, prepared.binding
+                )
+                if archive_source is not None:
+                    result.export.saved_file = await self.archive.save(
+                        data,
+                        result.export.name,
+                        result.export.sha256,
+                        mime_type=result.export.mime_type,
+                        source=archive_source,
+                    )
+            if receipt is not None:
+                self.checkpoints.confirm(receipt.token)
+        except BaseException:
+            if receipt is not None:
+                self.checkpoints.discard(receipt.token)
+            if result.export is not None:
+                if result.export.saved_file is not None:
+                    await self.archive.discard(result.export.saved_file)
+                await self.exports.discard(result.export.resource_uri)
+            raise
 
     async def read_resource(self, uri: str) -> tuple[str, str]:
         async with self.request():

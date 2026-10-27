@@ -6,8 +6,22 @@ from datetime import datetime
 from urllib.parse import quote, urlsplit
 
 from telegram_mcp.domain.changes import Change, ExportFormat
-from telegram_mcp.domain.models import Chat, Issue, Message, ToolError
+from telegram_mcp.domain.models import Chat, Issue, Message, MessageRef, ToolError
 from telegram_mcp.domain.text import clip
+
+
+def protected_record(ref: MessageRef, *, pending_batch: bool = False) -> Issue:
+    """An explicit omission for a message Telegram does not allow saving."""
+    where = " in a pending batch" if pending_batch else ""
+    return Issue(
+        code="EXPORT_PROTECTED",
+        message=f"Telegram restricts saving this message{where}.",
+        message_ref=ref,
+    )
+
+
+def omitted_summary(count: int) -> Issue:
+    return Issue(code="EXPORT_PROTECTED", message=f"{count} protected records omitted; see export.")
 
 
 def _json(value: object) -> bytes:

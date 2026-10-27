@@ -469,3 +469,30 @@ async def test_unicode_message_chunks_use_character_offsets_and_reconstruct_exac
         assert message.next_text_offset == offset + 5
         offset = message.next_text_offset
     assert "".join(pieces) == original
+
+
+async def test_close_runs_every_closer_in_order_despite_failures(monkeypatch) -> None:
+    backend = FakeBackend([])
+    service = build_service(backend, Settings())
+    calls: list[str] = []
+
+    def closer(name: str, *, fail: bool = False, sync: bool = False):
+        def close() -> None:
+            calls.append(name)
+            if fail:
+                raise RuntimeError(name)
+
+        async def aclose() -> None:
+            close()
+
+        return close if sync else aclose
+
+    monkeypatch.setattr(service._attachments, "close", closer("attachments", fail=True))
+    monkeypatch.setattr(service._incremental, "close", closer("incremental"))
+    monkeypatch.setattr(service._watches.store, "close", closer("watches", fail=True, sync=True))
+    monkeypatch.setattr(service._archive, "close", closer("archive"))
+    monkeypatch.setattr(backend, "close", closer("runtime"))
+    with pytest.raises(RuntimeError, match="watches") as caught:
+        await service.close()
+    assert calls == ["attachments", "incremental", "watches", "archive", "runtime"]
+    assert str(caught.value.__context__) == "attachments"

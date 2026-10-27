@@ -18,6 +18,7 @@ from telegram_mcp.application.watch_ports import WatchStorePort
 from telegram_mcp.application.watch_probe import WatchProbe
 from telegram_mcp.domain.archiving import ArchiveSource
 from telegram_mcp.domain.changes import Change, CheckpointState
+from telegram_mcp.domain.exporting import protected_record
 from telegram_mcp.domain.folders import select_chats
 from telegram_mcp.domain.models import Issue, ToolError
 from telegram_mcp.domain.references import chat_target
@@ -237,13 +238,7 @@ class WatchService:
                 delivered.add(change.message_ref.chat_id)
                 if observed is not None and not observed.exportable:
                     result.omitted_count += 1
-                    issues.append(
-                        Issue(
-                            code="EXPORT_PROTECTED",
-                            message="Telegram restricts saving this message in a pending batch.",
-                            message_ref=change.message_ref,
-                        )
-                    )
+                    issues.append(protected_record(change.message_ref, pending_batch=True))
                 else:
                     if change.message is not None:
                         message = clip(change.message, min(text_left, ctx.limits.text_limit))
