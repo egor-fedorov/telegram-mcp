@@ -176,6 +176,16 @@ written; `ArchivePort` publishes the deterministic batch JSONL under that key, a
 then is the receipt persisted. A republished key is verified and reused, so crashes and
 retries never duplicate copies; both acknowledgement paths require a verified receipt.
 
+`WatchSweep` performs one bounded pass over the remaining sources into a private
+candidate position. `WatchDelivery` owns the pending batch afterwards. The batch's
+archive status is derived from its stored fields, not stored separately:
+
+| Archive status | Stored form | Acknowledgement |
+| --- | --- | --- |
+| `not_requested` | No archive record | Allowed |
+| `reserved` | Key without receipt | `WATCH_ARCHIVE_PENDING`; repeat with `save=true` |
+| `saved` | Key and receipt | Allowed while the copy verifies, otherwise `ARCHIVE_COPY_INVALID` |
+
 `ExportStorePort` owns a separate bounded cache of generated JSONL/Markdown files.
 It reuses private-path protection, has a process lease, atomic publication, hashes,
 expiry and cleanup. Resource reads reauthorize the source before reading the stored

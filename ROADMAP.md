@@ -59,6 +59,9 @@ Completed steps:
 - Incremental pipeline: changes and history export share one forward reader and one
   publication transaction (export, permanent copy, checkpoint confirmation with rollback);
   protected-record omissions come from one domain helper.
+- Watches: `WatchSweep` runs one bounded pass, `WatchDelivery` owns replay, archiving and
+  acknowledgement of the pending batch, and its archive status is derived without changing
+  stored state.
 
 ## 0.4 completion
 

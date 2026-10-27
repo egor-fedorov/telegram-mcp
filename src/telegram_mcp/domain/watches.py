@@ -80,6 +80,17 @@ class PendingDelivery(Model):
     source_ids: list[str]
     archive: BatchArchive | None = None
 
+    @property
+    def archive_status(self) -> Literal["not_requested", "reserved", "saved"]:
+        """A requested copy is reserved by key before writing and saved after publication."""
+        if self.archive is None:
+            return "not_requested"
+        return "reserved" if self.archive.saved_file is None else "saved"
+
+    @property
+    def saved_copy(self) -> SavedFile | None:
+        return self.archive.saved_file if self.archive is not None else None
+
     @model_validator(mode="after")
     def consistent_sources(self) -> Self:
         for change in self.result.changes:

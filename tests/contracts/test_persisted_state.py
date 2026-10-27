@@ -4,7 +4,7 @@ import hashlib
 import shutil
 
 from telegram_mcp.adapters.archive import ArchiveStore
-from telegram_mcp.application.watches import batch_source
+from telegram_mcp.application.watch_delivery import batch_source
 from telegram_mcp.domain.changes import CheckpointState
 from telegram_mcp.domain.watches import BatchArchive, PendingDelivery, WatchState, batch_jsonl
 from tests.support.fakes import FakeClock

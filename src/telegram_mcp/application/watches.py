@@ -1,7 +1,6 @@
 """On-demand named consumers with durable, explicitly acknowledged delivery."""
 
 import asyncio
-import hashlib
 import re
 import secrets
 from collections.abc import AsyncGenerator
@@ -11,18 +10,14 @@ from datetime import datetime
 from functools import partial
 
 from telegram_mcp.application.access import AccessContext
-from telegram_mcp.application.change_ports import Observation
-from telegram_mcp.application.change_reader import advance_changes
-from telegram_mcp.application.incremental import BudgetExhausted, IncrementalContext
+from telegram_mcp.application.incremental import IncrementalContext
+from telegram_mcp.application.watch_delivery import WatchDelivery
 from telegram_mcp.application.watch_ports import WatchStorePort
-from telegram_mcp.application.watch_probe import WatchProbe
-from telegram_mcp.domain.archiving import ArchiveSource
-from telegram_mcp.domain.changes import Change, CheckpointState
-from telegram_mcp.domain.exporting import protected_record
+from telegram_mcp.application.watch_sweep import WatchSweep
+from telegram_mcp.domain.changes import CheckpointState
 from telegram_mcp.domain.folders import select_chats
-from telegram_mcp.domain.models import Issue, ToolError
+from telegram_mcp.domain.models import ToolError
 from telegram_mcp.domain.references import chat_target
-from telegram_mcp.domain.text import clip
 from telegram_mcp.domain.watches import (
     BatchArchive,
     PendingDelivery,
@@ -31,9 +26,7 @@ from telegram_mcp.domain.watches import (
     WatchDeletion,
     WatchInfo,
     WatchList,
-    WatchProgress,
     WatchState,
-    batch_jsonl,
     watch_info,
 )
 
@@ -47,6 +40,7 @@ class WatchLock:
 class WatchService:
     def __init__(self, context: IncrementalContext, store: WatchStorePort):
         self.context, self.store = context, store
+        self.delivery = WatchDelivery(context, store)
         self._locks: dict[str, WatchLock] = {}
 
     @asynccontextmanager
@@ -194,7 +188,7 @@ class WatchService:
         else:
             access.require_access(chat_id)
 
-    async def changes(  # noqa: C901
+    async def changes(
         self, name: str, limit: int = 30, ack_batch_id: str | None = None, save: bool = False
     ) -> WatchChangesResult:
         if type(limit) is not int or not 1 <= limit <= 100:
@@ -209,202 +203,40 @@ class WatchService:
             binding = await ctx.backend.checkpoint_binding()
             state = self._get(name, binding)
             access = await ctx.access.load(explicit=not state.folder_ids)
+            authorize = partial(self._authorize, state, access)
             if ack_batch_id is not None:
                 pending = state.pending
                 if save and pending is not None and pending.result.batch_id == ack_batch_id:
-                    await self._check_pending(state, access)
-                    await self._ensure_archive(state, binding)
-                await self._acknowledge(state, binding, ack_batch_id)
+                    await self.delivery.check_pending(state, authorize)
+                    await self.delivery.ensure_archive(state, binding)
+                await self.delivery.acknowledge(state, binding, ack_batch_id)
             if state.pending is not None:
-                await self._check_pending(state, access)
+                await self.delivery.check_pending(state, authorize)
                 if save:
-                    await self._ensure_archive(state, binding)
-                return await self._delivered(state, verified=save)
+                    await self.delivery.ensure_archive(state, binding)
+                return await self.delivery.delivered(state, verified=save)
             if not state.position.remaining:
                 self._start_cycle(state, access)
             candidate = state.position.model_copy(deep=True)
-            result = WatchChangesResult(name=name)
-            budget = ctx.budget()
-            probe = WatchProbe(ctx, candidate, budget, partial(self._authorize, state, access))
-            text_left = ctx.limits.text_budget
-            delivered: set[str] = set()
-            issues: list[Issue] = []
-            attempted: set[str] = set()
-
-            def emit(change: Change, observed: Observation | None) -> bool:
-                nonlocal text_left
-                if result.returned_count >= limit or text_left <= 0:
-                    return False
-                delivered.add(change.message_ref.chat_id)
-                if observed is not None and not observed.exportable:
-                    result.omitted_count += 1
-                    issues.append(protected_record(change.message_ref, pending_batch=True))
-                else:
-                    if change.message is not None:
-                        message = clip(change.message, min(text_left, ctx.limits.text_limit))
-                        text_left -= len(message.text)
-                        change = change.model_copy(update={"message": message})
-                    result.changes.append(change)
-                result.returned_count += 1
-                return True
-
-            # Visit a source at most once in this call. A partial source rotates
-            # behind its peers; a failed source is retried in the next sweep.
-            for cid in list(candidate.remaining):
-                if cid not in candidate.remaining:
-                    continue
-                if (
-                    result.returned_count >= limit
-                    or text_left <= 0
-                    or budget.calls >= ctx.limits.rpc_pages_per_call
-                    or ctx.clock.monotonic() >= budget.deadline
-                ):
-                    break
-                try:
-                    await probe.prepare(cid)
-                    if cid not in candidate.remaining:
-                        continue
-                    candidate.remaining.remove(cid)
-                    candidate.errors.pop(cid, None)
-                    attempted.add(cid)
-                    await self._authorize(state, access, cid)
-                    # Metadata shares the deadline, but cannot consume the only
-                    # data page when rpc_pages_per_call is configured to one.
-                    await probe.check_source(cid)
-                    scan = await advance_changes(
-                        ctx,
-                        candidate.sources[cid],
-                        budget,
-                        emit,
-                        limit=limit - result.returned_count,
-                        isolate_errors=True,
-                    )
-                    if scan.issues:
-                        candidate.errors[cid] = scan.issues[0]
-                    elif candidate.sources[cid].phase != "idle":
-                        candidate.remaining.append(cid)
-                    else:
-                        probe.complete(cid)
-                except BudgetExhausted:
-                    if cid not in candidate.remaining:
-                        candidate.remaining.insert(0, cid)
-                    break
-                except ToolError as exc:
-                    if exc.retryable:
-                        candidate.errors[cid] = ctx.temporary_issue(exc, cid)
-                    else:
-                        candidate.errors[cid] = exc.issue(cid)
-                    if exc.retryable and cid in candidate.remaining:
-                        # A batch probe failed before this source was consumed.
-                        break
-                # An account-wide FloodWait must stop subsequent requests now.
-                if cid in candidate.errors and candidate.errors[cid].code == "RATE_LIMITED":
-                    if cid not in candidate.remaining:
-                        candidate.remaining.insert(0, cid)
-                    break
-            result.complete = not candidate.remaining and not candidate.errors
-            if result.complete:
-                candidate.completed_at = candidate.cycle_started_at
-            issues.extend(candidate.errors.values())
-            result.issues, result.issue_count = issues[:20], len(issues)
-            result.progress = WatchProgress(
-                source_count=len(candidate.members),
-                pending_source_count=len(set(candidate.remaining) | candidate.errors.keys()),
-                sources_this_call=len(attempted | probe.visited),
-                rpc_pages_this_call=budget.calls,
-            )
-            if result.returned_count:
-                result.batch_id = secrets.token_urlsafe(32)
-                state.pending = PendingDelivery(
-                    result=result,
-                    position=candidate,
-                    source_ids=sorted(delivered),
-                    archive=BatchArchive(key=secrets.token_urlsafe(32)) if save else None,
-                )
-                # Persist the batch and its reserved copy before writing the file, so a
-                # failed or interrupted save leaves a replayable, unacknowledged batch.
+            sweep = WatchSweep(ctx, name, candidate, limit, authorize)
+            result = await sweep.run()
+            if not result.returned_count:
+                state.position = candidate
                 self.store.save(state, binding)
-                if save:
-                    await self._ensure_archive(state, binding)
-                return await self._delivered(state, verified=save)
-            state.position = candidate
-            self.store.save(state, binding)
-            return result
-
-    async def _check_pending(self, state: WatchState, access: AccessContext) -> None:
-        """Recheck access and saving restrictions before replaying or saving a batch."""
-        assert state.pending is not None
-        budget = self.context.budget()
-        try:
-            for cid in state.pending.source_ids:
-                await self._authorize(state, access, cid)
-                await budget.call(
-                    partial(self.context.backend.check_export_source, cid), page=False
-                )
-        except BudgetExhausted:
-            raise ToolError(
-                "CONNECTION_ERROR", "Pending batch checks timed out; retry this watch."
-            ) from None
-
-    async def _delivered(self, state: WatchState, *, verified: bool) -> WatchChangesResult:
-        """Return the pending batch; never present an unverified copy as saved."""
-        pending = state.pending
-        assert pending is not None
-        saved = pending.archive.saved_file if pending.archive is not None else None
-        result = pending.result.model_copy(update={"saved_file": saved})
-        if saved is None or verified:
-            return result
-        if await self.context.archive.verify(saved, batch_source(state.name, pending)):
-            return result
-        issue = Issue(
-            code="ARCHIVE_COPY_INVALID",
-            message="This batch's permanent copy is missing or damaged. Repeat "
-            "get_watch_changes with save=true to rebuild it before acknowledging.",
-        )
-        return result.model_copy(
-            update={
-                "saved_file": None,
-                "issues": [issue, *result.issues][:20],
-                "issue_count": result.issue_count + 1,
-            }
-        )
-
-    async def _ensure_archive(self, state: WatchState, binding: str) -> None:
-        """Publish one permanent copy of the pending batch and record its receipt."""
-        pending, archive = state.pending, self.context.archive
-        assert pending is not None
-        source = batch_source(state.name, pending)
-        if pending.archive is not None and pending.archive.saved_file is not None:
-            if await archive.verify(pending.archive.saved_file, source):
-                return
-            pending.archive = None  # Rebuild a missing or damaged copy from the batch.
-        if pending.archive is None:
-            pending.archive = BatchArchive(key=secrets.token_urlsafe(32))
-            self.store.save(state, binding)
-        data = batch_jsonl(state.name, pending)
-        digest = hashlib.sha256(data).hexdigest()
-
-        async def publish(key: str):
-            return await archive.save(
-                data,
-                f"{state.name}.jsonl",
-                digest,
-                mime_type="application/x-ndjson",
-                source=source,
-                key=key,
+                return result
+            result.batch_id = secrets.token_urlsafe(32)
+            state.pending = PendingDelivery(
+                result=result,
+                position=candidate,
+                source_ids=sorted(sweep.delivered),
+                archive=BatchArchive(key=secrets.token_urlsafe(32)) if save else None,
             )
-
-        try:
-            saved = await publish(pending.archive.key)
-        except ToolError as exc:
-            if exc.code != "ARCHIVE_COPY_INVALID":
-                raise
-            # Never reuse a reserved location that holds different data.
-            pending.archive = BatchArchive(key=secrets.token_urlsafe(32))
+            # Persist the batch and its reserved copy before writing the file, so a
+            # failed or interrupted save leaves a replayable, unacknowledged batch.
             self.store.save(state, binding)
-            saved = await publish(pending.archive.key)
-        pending.archive.saved_file = saved
-        self.store.save(state, binding)
+            if save:
+                await self.delivery.ensure_archive(state, binding)
+            return await self.delivery.delivered(state, verified=save)
 
     async def acknowledge(self, name: str, batch_id: str) -> WatchAcknowledgement:
         self._validate_batch(batch_id)
@@ -412,43 +244,12 @@ class WatchService:
             await self.context.chats.check_authorization()
             binding = await self.context.backend.checkpoint_binding()
             state = self._get(name, binding)
-            return await self._acknowledge(state, binding, batch_id)
+            return await self.delivery.acknowledge(state, binding, batch_id)
 
     @staticmethod
     def _validate_batch(batch_id: str) -> None:
         if not re.fullmatch(r"[A-Za-z0-9_-]{43}", batch_id):
             raise ToolError("INVALID_ARGUMENT", "Use the batch_id returned by get_watch_changes.")
-
-    async def _acknowledge(
-        self, state: WatchState, binding: str, batch_id: str
-    ) -> WatchAcknowledgement:
-        if state.last_acknowledged == batch_id:
-            return WatchAcknowledgement(name=state.name, batch_id=batch_id)
-        if state.pending is None or state.pending.result.batch_id != batch_id:
-            raise ToolError(
-                "WATCH_BATCH_MISMATCH",
-                "This batch is not awaiting acknowledgement; no position changed.",
-            )
-        archive = state.pending.archive
-        if archive is not None and archive.saved_file is None:
-            raise ToolError(
-                "WATCH_ARCHIVE_PENDING",
-                "This batch requested a permanent copy that is not saved yet. Repeat "
-                "get_watch_changes with save=true before acknowledging; no position changed.",
-            )
-        if archive is not None and archive.saved_file is not None:
-            source = batch_source(state.name, state.pending)
-            if not await self.context.archive.verify(archive.saved_file, source):
-                raise ToolError(
-                    "ARCHIVE_COPY_INVALID",
-                    "The batch's permanent copy is missing or damaged. Repeat "
-                    "get_watch_changes with save=true to rebuild it; no position changed.",
-                )
-        state.position = state.pending.position
-        state.pending = None
-        state.last_acknowledged = batch_id
-        self.store.save(state, binding)
-        return WatchAcknowledgement(name=state.name, batch_id=batch_id)
 
     def name_suggestions(self, prefix: str, limit: int = 101) -> list[str]:
         """Local names for prompt completion: no Telegram request and no batch bodies."""
@@ -473,14 +274,3 @@ class WatchService:
             await self.context.chats.check_authorization()
             binding = await self.context.backend.checkpoint_binding()
             return WatchDeletion(name=name, deleted=self.store.delete(name, binding))
-
-
-def batch_source(name: str, pending: PendingDelivery) -> ArchiveSource:
-    """Provenance recorded in, and required from, a saved batch's metadata.json."""
-    return ArchiveSource(
-        tool="get_watch_changes",
-        watch_name=name,
-        batch_id=pending.result.batch_id,
-        source_ids=pending.source_ids,
-        format="jsonl",
-    )
