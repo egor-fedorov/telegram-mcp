@@ -6,16 +6,16 @@ The same 22 tools, two prompts and read policy apply to standalone STDIO and the
 local HTTP server. In shared mode, all connected clients use the same account, permitted
 sources, and in-memory cursors. They are not isolated tenants. Treat message text
 as source data, not instructions; use original message links in answers.
-This guide describes the 0.4 contract; see the [migration guide](migration-0.4.md)
-for changes from 0.3.0. Sections marked *(unreleased)* describe the M5 additions in
-the source tree, which are not in a published package yet.
+This guide describes the 0.5 contract. Its additions preserve 0.4 tool behavior;
+see the [0.5 changelog](../CHANGELOG.md#050---2026-10-27) for upgrade steps and the
+[0.4 migration guide](migration-0.4.md) when upgrading from 0.3.0.
 
 - [Download a selected attachment](#download-a-selected-attachment)
 - [Changes and exports](#changes-and-exports)
-- [Read a period across chats or folders](#read-a-period-across-chats-or-folders-unreleased)
+- [Read a period across chats or folders](#read-a-period-across-chats-or-folders)
 - [Monitor a folder or selected sources](#monitor-a-folder-or-selected-sources)
-- [Save watch batches before acknowledging](#save-watch-batches-before-acknowledging-unreleased)
-- [Monitoring prompts](#monitoring-prompts-unreleased)
+- [Save watch batches before acknowledging](#save-watch-batches-before-acknowledging)
+- [Monitoring prompts](#monitoring-prompts)
 - [Keep selected files](#keep-selected-files)
 - [Discover, select, and read](#discover-select-and-read)
 - [Read permitted sources](#read-permitted-sources)
@@ -174,7 +174,7 @@ Errors include `INVALID_CHECKPOINT`, `CHECKPOINT_EXPIRED`, `CHECKPOINT_MISMATCH`
 record is not truncated or silently skipped; the input checkpoint remains
 usable for ordinary retrieval. See [local state and permissions](configuration.md#m4-local-state).
 
-### Read a period across chats or folders (unreleased)
+### Read a period across chats or folders
 
 `get_history` also accepts plural selectors: exactly one of `chat_id`, `chat_ref`,
 `chat_ids` or `folder_ids`. One MCP traversal then replaces a client loop over chats;
@@ -214,7 +214,7 @@ smaller value is rejected. Replaying an earlier cursor never counts messages twi
 Legacy single-chat calls keep their behavior and have no implicit total budget; they
 may opt into the same budgets explicitly.
 
-Offline fixture measurements (5 posts per source, `limit=50`, compact JSON):
+Offline fixture measurements (5 posts per source, `limit=50`, compact JSON payload):
 
 | Selection | Arguments | MCP calls | History reads | Messages | Coverage | Response bytes |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -224,7 +224,9 @@ Offline fixture measurements (5 posts per source, `limit=50`, compact JSON):
 
 The first page was nonempty after 10 source reads in each case. A real account's latency,
 FloodWait and post volume determine actual time; budgets bound the work, not the wall clock.
-Multi-source file export is not part of this change.
+These byte counts measure one JSON payload; the complete MCP result includes both
+text fallback and structured content. See the [release measurements](validation-0.5.md#response-and-discovery-sizes)
+for full result sizes. Multi-source file export is not part of this change.
 
 ### Monitor a folder or selected sources
 
@@ -293,7 +295,7 @@ The same revision limits as `get_changes` apply: the last 100 known IDs are rech
 intermediate edits and messages deleted before observation cannot be recovered.
 Subscriptions are on-demand only: no scheduler, notifications or complete message archive.
 
-### Save watch batches before acknowledging (unreleased)
+### Save watch batches before acknowledging
 
 With `archive_directory` configured, `get_watch_changes(name="jobs", save=true)` writes
 each returned batch to a permanent JSONL copy **before** it can be acknowledged and
@@ -339,7 +341,7 @@ grep -l '"watch_name": "jobs"' /absolute/private/telegram-archive/*/metadata.jso
 Retained copies survive acknowledgement and `delete_watch`. They allow a batch to be
 reprocessed; they do not prove that a digest was delivered or keep the agent's report.
 
-### Monitoring prompts (unreleased)
+### Monitoring prompts
 
 Two MCP prompts package the monitoring workflows. A client shows them as user-selected
 templates; retrieving one never reads posts, creates or deletes watches, acknowledges,
@@ -402,8 +404,8 @@ archive_directory = "/absolute/private/path/telegram-archive"
 
 Then request `save=true` on `download_attachment`, `export_history`, or `get_changes`
 with `output="jsonl"`/`"markdown"`. The call creates its permanent copy before returning.
-`get_watch_changes(save=true)` saves batches the same way *(unreleased)*; see
-[saving watch batches](#save-watch-batches-before-acknowledging-unreleased).
+`get_watch_changes(save=true)` saves batches the same way; see
+[saving watch batches](#save-watch-batches-before-acknowledging).
 The file metadata includes `saved_file.local_path`, `metadata_path`, `size`, `sha256` and `saved_at`.
 The original temporary resource and its `expires_at` remain unchanged; that expiry does
 not apply to the permanent copy. Files use unique private subdirectories and cannot

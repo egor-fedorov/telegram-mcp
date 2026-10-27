@@ -169,7 +169,7 @@ arguments differ from the existing name; use that existing subscription or anoth
 Source failures preserve positions and appear in issues. If permissions are revoked,
 the entire pending response is withheld; it stays available if access is restored.
 
-### Saved watch batches (unreleased)
+### Saved watch batches
 
 `WATCH_ARCHIVE_PENDING` means `save=true` was requested for the pending batch but its
 copy is not recorded yet; repeat `get_watch_changes(name, save=true)` before
@@ -180,7 +180,7 @@ copy from the still-pending batch; the damaged copy is left for you to inspect. 
 positions. Use `grep` on `metadata.json` files under `archive_directory` to find a batch
 by `watch_name` or `batch_id` after an interrupted session.
 
-## Multi-source periods and prompts (unreleased)
+## Multi-source periods and prompts
 
 `SOURCE_LIMIT_EXCEEDED` reports the permitted source count and `max_sources` before any
 history read. Narrow the chats/folders or pass a larger `max_sources` (up to 1000)

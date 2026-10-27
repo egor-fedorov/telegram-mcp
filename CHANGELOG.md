@@ -8,6 +8,8 @@ A version entry describes its target artifact. Verify publication on
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-27
+
 ### Added
 
 - `get_history` reads several selected chats (`chat_ids`) or folders (`folder_ids`) over
@@ -31,13 +33,19 @@ A version entry describes its target artifact. Verify publication on
 - `telegram-context-mcp` as an alias of the existing `telegram-mcp` CLI, allowing
   Registry clients to use the package's default `uvx` executable.
 
-### Compatibility
+### Compatibility and validation
 
 - All changes are additive: existing tool arguments, single-chat history responses
   and `save=false` watches behave as in 0.4.0. Refresh client tool lists to see the new
   `get_history` and `get_watch_changes` arguments.
 - Windows installations now include `tzdata`, because Windows has no system time-zone
   database.
+- Upgrade the shared server and client proxies together, restart the server, and
+  refresh client tools and prompts. `watch_digest` saves batches by default: configure
+  `archive_directory`, or explicitly choose `save=false` and acknowledge after delivery.
+- Selected-source live checks verified bounded multi-source reads, saved-batch recovery
+  across restarts and acknowledgement, plus a Claude Code 2.1.310 digest workflow and
+  watch-name completion. See the [validation record](docs/validation-0.5.md) for coverage.
 
 ## [0.4.0] - 2026-10-26
 

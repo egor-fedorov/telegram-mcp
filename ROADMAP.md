@@ -77,8 +77,9 @@ prompt/completion discovery, archive replay across server restarts and recovery 
 acknowledgement. The maintainer confirmed a bounded `watch_digest` workflow and
 watch-name completion in Claude Code 2.1.310; archive integrity and persisted
 acknowledgement were checked independently. The [0.5 validation record](docs/validation-0.5.md)
-records environments, evidence and coverage limits. Release preparation and publication
-remain separate steps under the [release procedure](docs/releasing.md).
+records environments, evidence and coverage limits. Release preparation targets 0.5.0;
+package and Registry publication remain pending verification under the
+[release procedure](docs/releasing.md).
 
 ## Distribution follow-ups
 

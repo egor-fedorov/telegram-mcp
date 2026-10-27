@@ -9,21 +9,30 @@
     "id": "1410391452"
   },
   "websiteUrl": "https://github.com/egor-fedorov/telegram-mcp#install-and-log-in",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "packages": [
     {
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "telegram-context-mcp",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "runtimeHint": "uvx",
       "runtimeArguments": [
-        {"type": "named", "name": "--python", "value": "3.12"}
+        {
+          "type": "named",
+          "name": "--python",
+          "value": "3.12"
+        }
       ],
       "packageArguments": [
-        {"type": "positional", "value": "serve"}
+        {
+          "type": "positional",
+          "value": "serve"
+        }
       ],
-      "transport": {"type": "stdio"}
+      "transport": {
+        "type": "stdio"
+      }
     }
   ]
 }

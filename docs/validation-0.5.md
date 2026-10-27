@@ -1,9 +1,13 @@
 # 0.5 validation record
 
-M5 was validated on 2026-10-27 against source revision
+This record covers the 0.5.0 release candidate on 2026-10-27 (UTC). M5 was validated against
+source revision
 `ca8fbe2e70ce5ea68698792860bc8d6359cb79f8`, after [PR #43](https://github.com/egor-fedorov/telegram-mcp/pull/43)
-was merged. This records implementation acceptance, not package publication. Version
-0.5.0 still needs release preparation under the [release procedure](releasing.md).
+was merged. The release changes package metadata and documentation; application code
+is unchanged from that live-tested revision. Publication follows the
+[release procedure](releasing.md); verify the version on
+[PyPI](https://pypi.org/project/telegram-context-mcp/0.5.0/) and
+[GitHub Releases](https://github.com/egor-fedorov/telegram-mcp/releases/tag/v0.5.0).
 
 ## Offline verification
 
@@ -12,6 +16,34 @@ skips**. The implementation's [CI run](https://github.com/egor-fedorov/telegram-
 passed the required `checks` job and the supported Python/platform matrix. Coverage
 includes multi-source budgets, access revocation, archive failure/recovery, prompt
 validation, completion without Telegram calls, and STDIO/HTTP/`connect` parity.
+
+## Response and discovery sizes
+
+Release measurements use synthetic offline fixtures. Full result sizes serialize
+the MCP result as UTF-8, including both text fallback and structured content; the
+JSON-RPC envelope is excluded.
+
+| Fixture | Bytes |
+| --- | ---: |
+| `tools/list`, 22 tools, compact schemas | 27,050 |
+| `tools/list`, 22 tools, full schemas | 114,041 |
+| `prompts/list`, two prompts | 2,037 |
+| Single-chat history, 30 posts retaining 10,260 text characters | 32,327 |
+
+Multi-source fixtures contain five posts per source and request `limit=50` with
+`ordering="page"`. The source budget is explicitly raised for 100-source fixtures.
+
+| Sources | Message budget | MCP calls | History reads | Messages | Coverage | Full result bytes |
+| ---: | ---: | ---: | ---: | ---: | --- | ---: |
+| 20 | 100 | 2 | 20 | 100 | Complete | 99,816 |
+| 100 | 100 | 2 | 20 | 100 | Partial, budget exhausted | 100,962 |
+| 100 | 1000 | 10 | 100 | 500 | Complete | 503,796 |
+
+Each first page was nonempty after ten synthetic history reads. Local fixture time
+to that page was 6.7–9.4 ms; this is not a Telegram latency estimate. The compact JSON
+payload alone totaled 48,304, 48,846 and 243,754 bytes respectively. Clients determine
+which representations enter model context. Fixtures live in
+`tests/adapters/mcp/test_wire.py` and `test_multi_source_history.py`.
 
 ## Agent-run selected-source checks
 

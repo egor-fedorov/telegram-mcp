@@ -254,4 +254,4 @@ remain outside M5. See the [roadmap](../../ROADMAP.md) and [released usage](../u
 - `period_digest` with `folder_id` does not read the folder title; the template
   identifies the folder by ID and `get_history` validates it.
 - Offline measurements for the proposed defaults are recorded in the
-  [usage guide](../usage.md#read-a-period-across-chats-or-folders-unreleased).
+  [usage guide](../usage.md#read-a-period-across-chats-or-folders).

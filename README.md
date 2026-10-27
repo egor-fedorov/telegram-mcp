@@ -20,19 +20,25 @@ calls. See the
 [0.4 migration guide](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/migration-0.4.md)
 before upgrading from 0.3.
 
+Version 0.5 adds bounded history across chats or folders, watch batches saved before
+acknowledgement, and `watch_digest` / `period_digest` prompts with local watch-name
+completion. When upgrading, restart the server and client proxies and refresh tools
+and prompts. The [0.5 changelog](https://github.com/egor-fedorov/telegram-mcp/blob/main/CHANGELOG.md#050---2026-10-27)
+describes the additive changes and archive setup.
+
 ## Install and log in
 
 Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then run:
 
 ```sh
-uv tool install --python 3.12 telegram-context-mcp==0.4.0
+uv tool install --python 3.12 telegram-context-mcp==0.5.0
 telegram-mcp --version
 telegram-mcp login
 telegram-mcp configure
 telegram-mcp status
 ```
 
-These examples target release 0.4.0; check [PyPI](https://pypi.org/project/telegram-context-mcp/)
+These examples target release 0.5.0; check [PyPI](https://pypi.org/project/telegram-context-mcp/)
 for published versions. Use the [source setup](#run-from-source) for unreleased revisions.
 Upgrading from 0.3? Read the [migration guide](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/migration-0.4.md),
 then restart the server and refresh your client's tool schemas.
@@ -50,7 +56,7 @@ The package name is **`telegram-context-mcp`**; the executable is **`telegram-mc
 You can also run a pinned version without installing a persistent command:
 
 ```sh
-uvx --python 3.12 --from telegram-context-mcp==0.4.0 telegram-mcp --version
+uvx --python 3.12 --from telegram-context-mcp==0.5.0 telegram-mcp --version
 ```
 
 The next release will also publish installation metadata to the
@@ -100,7 +106,7 @@ do not paste it into client configuration. This is a local, single-user integrat
 | `search_public_channels` | Find public broadcast channels by query; metadata only |
 | `get_similar_channels` | Find similar public channels for one specified public source; metadata only |
 | `search_messages` | Search by keywords, chats, folders, dates, sender, media type, or links |
-| `get_history` | Chat or forum-topic history over a time range, in either order; bounded chat/folder periods *(unreleased)* |
+| `get_history` | Chat or forum-topic history over a time range, in either order; bounded chat/folder periods |
 | `list_topics` | Forum topics with navigation references, optional title query, and pagination |
 | `get_pinned_messages` | Chat-wide or forum-topic pinned messages, newest first |
 | `get_messages` | Messages by links/IDs with authors, dates, attachments, counters, reactions, and polls |
@@ -110,15 +116,15 @@ do not paste it into client configuration. This is a local, single-user integrat
 | `download_attachment` | One selected attachment up to 20 MiB as a temporary local file and MCP resource |
 | `get_changes` | New messages and recent observed revisions in one chat, with restartable checkpoints |
 | `create_watch` / `list_watches` | Save and discover named chat/folder subscriptions |
-| `get_watch_changes` / `ack_watch_changes` | Poll and acknowledge a durable batch without per-chat tokens; optionally save it first *(unreleased)* |
+| `get_watch_changes` / `ack_watch_changes` | Poll and acknowledge a durable batch without per-chat tokens; optionally save it first |
 | `delete_watch` | Explicitly discard a subscription and its pending batch |
 | `export_history` | Source-linked JSONL or Markdown history in bounded, restartable parts |
 
-*(Unreleased.)* Two prompts package these tools for monitoring: `watch_digest` turns
+Two prompts package these tools for monitoring: `watch_digest` turns
 a named watch into a source-linked digest, saving each batch before acknowledging it;
 `period_digest` reads one chat or folder over a fixed period with explicit budgets.
 They do not add permissions. See
-[monitoring prompts](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/usage.md#monitoring-prompts-unreleased).
+[monitoring prompts](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/usage.md#monitoring-prompts).
 
 ## First tasks
 
@@ -184,8 +190,8 @@ and squash merges after CI. See the
 [architecture](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/architecture.md),
 [changelog](https://github.com/egor-fedorov/telegram-mcp/blob/main/CHANGELOG.md), and
 [release procedure](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/releasing.md).
-The [0.4 validation record](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/validation-0.4.md)
-reports payload-size measurements and the scope of selected-source live checks.
+The [0.5 validation record](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/validation-0.5.md)
+reports release checks and the scope of selected-source and client validation.
 
 The code is [MIT licensed](https://github.com/egor-fedorov/telegram-mcp/blob/main/LICENSE).
 This does not grant rights to Telegram content. Secret chats are unsupported; attachment

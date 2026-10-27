@@ -124,17 +124,17 @@ The ordinary 20 MiB per-file limit remains; there is no total archive quota. Man
 space and delete unwanted copies yourself. Configuring the directory does not enable
 downloads or expand source access. `get_status.archive_enabled` reports its availability.
 
-`get_watch_changes(save=true)` *(unreleased)* uses the same directory for each pending
+`get_watch_changes(save=true)` uses the same directory for each pending
 watch batch: one JSONL copy plus `metadata.json` naming the watch, batch and sources,
 written before acknowledgement and reused on retries. See
-[saving watch batches](usage.md#save-watch-batches-before-acknowledging-unreleased).
+[saving watch batches](usage.md#save-watch-batches-before-acknowledging).
 
 `mcp_schema_mode="compact"` omits optional output schemas from `tools/list`; `"full"`
 advertises them. Both preserve input schemas, typed server-side output validation,
 and identical response JSON. Restart the server and refresh client tools after changing
 this setting. `configure` preserves these TOML fields; it does not prompt for them.
 
-## Prompt time zone (unreleased)
+## Prompt time zone
 
 ```toml
 timezone = "Europe/Moscow"  # IANA name; default "UTC"
