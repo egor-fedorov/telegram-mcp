@@ -14,7 +14,7 @@ class HistoryExportService:
     def __init__(self, context: IncrementalContext):
         self.context = context
 
-    async def export_history(
+    async def export_history(  # noqa: C901
         self,
         chat_ref: str | None = None,
         date_from: datetime | None = None,

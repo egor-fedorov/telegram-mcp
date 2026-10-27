@@ -43,6 +43,13 @@ changing public behavior: the MCP contract, persisted formats and existing test
 assertions stay fixed. Feature work is frozen until R6 completes; `main` accepts R6
 refactoring, bug fixes and reviewed dependency updates.
 
+Completed steps:
+
+- Guardrails: Ruff `C901` at 15 with explicit markers on existing offenders, parallel
+  pytest-xdist runs (`make check` from about 4.5 to 1.2 minutes on four cores), a `slow`
+  marker with `make test-fast`, and fixtures pinning tool order and descriptions, wire/domain
+  field parity and 0.5 persisted state.
+
 ## 0.4 completion
 
 Monitoring now batches selected peer metadata, supports acknowledgement with the next

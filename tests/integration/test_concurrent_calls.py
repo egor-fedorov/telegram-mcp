@@ -13,6 +13,9 @@ from telegram_mcp.adapters.transport import endpoint
 from tests.support.concurrency import ConcurrentBackend
 from tests.support.transport import running_server
 
+# Real transports and subprocesses; excluded from make test-fast.
+pytestmark = pytest.mark.slow
+
 
 async def assert_overlapping_reads(client: Client) -> None:
     async with asyncio.timeout(15):

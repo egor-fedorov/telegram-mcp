@@ -7,6 +7,9 @@ import pytest
 from tests.support.fakes import BASE
 from tests.support.transport import connection, running_server
 
+# Real transports and subprocesses; excluded from make test-fast.
+pytestmark = pytest.mark.slow
+
 
 async def exercise(kind, path, mode, schema_mode, settings=None):
     async with connection(kind, path, mode, schema_mode, settings) as client:

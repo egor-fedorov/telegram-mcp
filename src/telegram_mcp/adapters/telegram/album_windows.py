@@ -24,7 +24,9 @@ class AlbumWindowReader:
         self.runtime = runtime
         self.chats = chats
 
-    async def read(self, chat_id: str, *, anchor_id: int, limit: int, newer: bool) -> HistoryWindow:
+    async def read(  # noqa: C901
+        self, chat_id: str, *, anchor_id: int, limit: int, newer: bool
+    ) -> HistoryWindow:
         """Read one bounded history response without filling short or empty pages."""
         if type(limit) is not int or not 1 <= limit <= 100:
             raise ToolError("INVALID_ARGUMENT", "limit must be an integer from 1 to 100.")

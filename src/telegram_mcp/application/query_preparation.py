@@ -90,7 +90,7 @@ class QueryPreparation:
         self.cursors = cursors
         self.clock = clock
 
-    async def prepare(
+    async def prepare(  # noqa: C901
         self, spec: QuerySpec, cursor: str | None
     ) -> tuple[QueryState | GlobalQueryState, str]:
         filters = spec.read.filters

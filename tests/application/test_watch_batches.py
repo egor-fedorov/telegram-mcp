@@ -33,7 +33,7 @@ async def drain(service, *, maximum=200):
     pytest.fail("Watch did not finish within the bounded number of calls")
 
 
-@pytest.mark.parametrize("count,budget", [(100, 1), (1000, 12)])
+@pytest.mark.parametrize("count,budget", [(100, 1), pytest.param(1000, 12, marks=pytest.mark.slow)])
 async def test_warm_unchanged_channels_need_only_batched_metadata(tmp_path, count, budget):
     backend = channels(count)
     settings = Settings(allowed_folder_ids=[1])

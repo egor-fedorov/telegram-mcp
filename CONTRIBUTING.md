@@ -17,8 +17,9 @@ uv sync --locked --python 3.12
 make check
 ```
 
-`make check` runs Ruff formatting checks, Ruff lint, ty, and pytest. Tests are offline:
-they do not require a Telegram account, login, or network requests to Telegram.
+`make check` runs Ruff formatting checks, Ruff lint, ty, and pytest in parallel through
+pytest-xdist. Tests are offline: they do not require a Telegram account, login, or
+network requests to Telegram.
 Dependency installation may require network access. Add tests for changed behavior
 and keep existing MCP contracts compatible, or explain any compatibility changes.
 For documentation-only changes, check links, examples, and formatting.
@@ -29,8 +30,12 @@ On Windows without Make, run the same checks directly:
 uv run --locked ruff format --check .
 uv run --locked ruff check .
 uv run --locked ty check
-uv run --locked pytest
+uv run --locked pytest -n auto
 ```
+
+Ruff enforces a maximum McCabe complexity of 15. Split a function into named steps
+instead of raising the limit; the remaining `# noqa: C901` markers are scheduled for
+removal in [R6](docs/specs/r6-structural-consolidation.md).
 
 CI checks formatting/types, builds wheel and source distributions, and runs tests
 plus clean-install smoke checks. The matrix covers Python 3.12–3.15 on Linux and
@@ -66,10 +71,16 @@ Test modules must not import other test modules. Put genuinely shared helpers in
 modules directly, without collecting a test module. Avoid an implicit fixture registry
 in `conftest.py`. The shared `paths` module locates the project and fixtures independently
 of test depth; keep the versioned schema fixture at `tests/fixtures/mcp_contract.json`.
+`tests/fixtures/mcp_listing.json` pins tool order, descriptions, server instructions,
+prompts and resource templates. `tests/fixtures/state-0.5/` holds state written by
+0.5.0; it must keep loading and serializing byte for byte.
 
-For a focused run, use the appropriate directory or file:
+For quick iteration, `make test-fast` skips tests marked `slow` (real transports,
+subprocesses and very large fixtures). For a focused run, use the appropriate
+directory or file:
 
 ```sh
+make test-fast
 uv run --locked pytest tests/adapters/telegram tests/application
 uv run --locked pytest tests/integration/test_attachment_resources.py
 ```
@@ -106,9 +117,10 @@ criteria are met; distinguish offline checks from any separately performed live 
 Commit `uv.lock` alongside dependency changes. Review release notes and the lockfile
 diff, then run the appropriate compatibility checks. Dependabot opens update PRs for
 review; it does not merge them automatically. Weekly version updates separate the
-MCP packages, development tools (`pytest`, `pytest-asyncio`, Ruff and ty), and other
-dependencies. Telethon updates receive their own PRs. Development-tool and other
-dependency groups combine only minor/patch updates; major updates stay individual.
+MCP packages, development tools (`pytest`, `pytest-asyncio`, `pytest-xdist`, Ruff and
+ty), and other dependencies. Telethon updates receive their own PRs. Development-tool
+and other dependency groups combine only minor/patch updates; major updates stay
+individual.
 GitHub Actions have their own weekly minor/patch group and follow the same review
 and CI process. These groups keep a type-checker or linter change from blocking a
 library update.

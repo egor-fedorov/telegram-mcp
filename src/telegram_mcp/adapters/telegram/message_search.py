@@ -338,7 +338,7 @@ class MessageSearch:
             limit=limit,
         )
 
-    def _global_page(
+    def _global_page(  # noqa: C901
         self,
         response: Any,
         request: SearchRead,

@@ -151,6 +151,7 @@ async def test_bridge_forwards_schemas_instructions_and_error_results(
         assert not backend.closed
 
 
+@pytest.mark.slow
 async def test_two_stdio_bridge_subprocesses_keep_daemon_alive(tmp_path: Path) -> None:
     async with running_server(tmp_path) as (settings, backend):
         path = tmp_path / "config.toml"

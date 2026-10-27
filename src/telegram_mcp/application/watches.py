@@ -193,7 +193,7 @@ class WatchService:
         else:
             access.require_access(chat_id)
 
-    async def changes(
+    async def changes(  # noqa: C901
         self, name: str, limit: int = 30, ack_batch_id: str | None = None, save: bool = False
     ) -> WatchChangesResult:
         if type(limit) is not int or not 1 <= limit <= 100:

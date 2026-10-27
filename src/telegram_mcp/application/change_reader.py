@@ -32,7 +32,7 @@ class ChangeScan:
     issues: list[Issue] = field(default_factory=list)
 
 
-async def advance_changes(
+async def advance_changes(  # noqa: C901
     ctx: IncrementalContext,
     state: CheckpointState,
     budget: ReadBudget,

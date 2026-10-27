@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "file": "file.jsonl",
+  "source": {
+    "tool": "get_watch_changes",
+    "format": "jsonl",
+    "watch_name": "jobs",
+    "batch_id": "N-AU5St3qwyari26KUFXY4jnjMVIQ77ah1-XfwH19Gw",
+    "source_ids": [
+      "1"
+    ]
+  },
+  "original_name": "jobs.jsonl",
+  "mime_type": "application/x-ndjson",
+  "size": 2577,
+  "sha256": "84e4e3d59dfc02a3269965dd830dcde3c118d6d47e87f64f9a41ecf71d328fe4",
+  "saved_at": "2026-10-01T00:00:00+00:00"
+}

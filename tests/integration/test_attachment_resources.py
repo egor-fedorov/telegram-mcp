@@ -28,6 +28,9 @@ from tests.support.resources import (
 )
 from tests.support.transport import running_resource_server
 
+# Real transports and subprocesses; excluded from make test-fast.
+pytestmark = pytest.mark.slow
+
 
 @pytest.mark.parametrize("mode", ["auto", "legacy"])
 async def test_mcp_download_uses_real_access_and_storage(tmp_path: Path, mode: str) -> None:

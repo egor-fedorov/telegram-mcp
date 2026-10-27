@@ -17,6 +17,9 @@ from tests.support.fakes import msg
 from tests.support.incremental import EXPORT_TEXT
 from tests.support.transport import running_server
 
+# Real transports and subprocesses; excluded from make test-fast.
+pytestmark = pytest.mark.slow
+
 
 async def assert_export_round_trip(client: Client):
     response = await client.call_tool("export_history", {"chat_ref": "1"})

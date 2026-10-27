@@ -30,7 +30,9 @@ class TopicHistoryReader:
         self.runtime = runtime
         self.chats = chats
 
-    async def read(self, chat_id: str, request: TopicRead, *, offset: int, limit: int) -> Batch:
+    async def read(  # noqa: C901
+        self, chat_id: str, request: TopicRead, *, offset: int, limit: int
+    ) -> Batch:
         topic_id = request.topic_id
         pinned_only = request.pinned_only
         filters = request.filters

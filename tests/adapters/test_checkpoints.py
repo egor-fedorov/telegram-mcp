@@ -172,6 +172,7 @@ def test_failed_capacity_reservation_keeps_the_retained_input(tmp_path):
         store.close()
 
 
+@pytest.mark.slow
 def test_busy_sources_cannot_evict_a_quiet_source_after_4096_polls(tmp_path):
     clock = FakeClock()
     store = CheckpointStore(tmp_path / "session", clock, root=tmp_path / "state")

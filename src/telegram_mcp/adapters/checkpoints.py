@@ -47,7 +47,7 @@ class CheckpointStore:
         self._closed = False
         self._writer_initialized = False
 
-    def _db(self) -> sqlite3.Connection:
+    def _db(self) -> sqlite3.Connection:  # noqa: C901
         if self._closed:
             raise _storage_error()
         if self._connection is not None:
@@ -167,7 +167,7 @@ class CheckpointStore:
         except sqlite3.Error:
             raise _storage_error() from None
 
-    def put(
+    def put(  # noqa: C901
         self,
         state: CheckpointState,
         binding: str,

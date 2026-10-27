@@ -18,7 +18,7 @@ class ChangesService:
     def __init__(self, context: IncrementalContext):
         self.context = context
 
-    async def get_changes(
+    async def get_changes(  # noqa: C901
         self,
         chat_ref: str | None = None,
         checkpoint: str | None = None,

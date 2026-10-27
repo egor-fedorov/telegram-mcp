@@ -143,7 +143,7 @@ def expose_tool_errors[**P, R](
     return wrapped
 
 
-def create_server(
+def create_server(  # noqa: C901
     service: Service,
     *,
     gate: ToolCallGate | None = None,

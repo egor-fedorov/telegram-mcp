@@ -15,6 +15,9 @@ from telegram_mcp.adapters.bridge import create_bridge
 from tests.support.fakes import BASE
 from tests.support.transport import connection, running_server
 
+# Real transports and subprocesses; excluded from make test-fast.
+pytestmark = pytest.mark.slow
+
 PERIOD = {
     "chat_ref": "1",
     "date_from": "2026-01-01",
