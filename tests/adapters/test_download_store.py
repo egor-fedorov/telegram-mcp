@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from telegram_mcp.adapters import downloads, private_paths
+from telegram_mcp.adapters import downloads, private_paths, temporary_files
 from telegram_mcp.adapters.downloads import DownloadStore
 from telegram_mcp.application.attachment_ports import (
     DOWNLOAD_TTL_SECONDS,
@@ -400,19 +400,19 @@ async def test_windows_private_acl_is_applied_before_writing(store: DownloadStor
 async def test_permission_failure_leaves_no_attachment_bytes_or_leaked_lock(
     store: DownloadStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    original = downloads.protect_private_path
+    original = temporary_files.protect_private_path
 
     def denied(path: Path, *, directory: bool = False) -> None:
         if path.name == ".lock":
             raise PermissionError("synthetic private path")
         original(path, directory=directory)
 
-    monkeypatch.setattr(downloads, "protect_private_path", denied)
+    monkeypatch.setattr(temporary_files, "protect_private_path", denied)
     with pytest.raises(ToolError, match="LOCAL_IO_ERROR") as caught:
         await store.reserve(source())
     assert "synthetic private path" not in str(caught.value)
     assert not list(store.root.glob("*.part"))
-    monkeypatch.setattr(downloads, "protect_private_path", original)
+    monkeypatch.setattr(temporary_files, "protect_private_path", original)
     writer = await store.reserve(source())
     await store.discard(writer)
 
@@ -468,7 +468,7 @@ async def test_cleanup_unlinks_managed_symlink_without_touching_target(
 async def test_default_root_uses_cache_and_canonical_session_path(
     tmp_path: Path, clock: FakeClock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(downloads, "user_cache_path", lambda _name: tmp_path / "cache")
+    monkeypatch.setattr(temporary_files, "user_cache_path", lambda _name: tmp_path / "cache")
     session = tmp_path / "account.session"
     store = DownloadStore(session, clock)
     digest = hashlib.sha256(os.fsencode(session.resolve())).hexdigest()

@@ -47,7 +47,7 @@ class CheckpointStore:
         self._closed = False
         self._writer_initialized = False
 
-    def _db(self) -> sqlite3.Connection:  # noqa: C901
+    def _db(self) -> sqlite3.Connection:
         if self._closed:
             raise _storage_error()
         if self._connection is not None:
@@ -55,73 +55,7 @@ class CheckpointStore:
         connection = None
         try:
             connection = open_private_database(self.path)
-            version = connection.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1, 2, 3):
-                raise ToolError("CHECKPOINT_INCOMPATIBLE", "Unknown checkpoint database version.")
-            if version == 0:
-                if connection.execute("SELECT name FROM sqlite_master").fetchone():
-                    raise _storage_error()
-                connection.execute("PRAGMA auto_vacuum = FULL")
-                with connection:
-                    connection.execute(
-                        "CREATE TABLE checkpoints (token TEXT PRIMARY KEY, binding TEXT NOT NULL, "
-                        "kind TEXT NOT NULL, expires REAL NOT NULL, payload TEXT NOT NULL, "
-                        "size INTEGER NOT NULL)"
-                    )
-                    connection.execute(
-                        "CREATE TABLE cooldowns (binding TEXT PRIMARY KEY, until REAL NOT NULL)"
-                    )
-                    connection.execute("PRAGMA user_version = 1")
-            if version < 2:
-                with connection:
-                    connection.execute(
-                        "ALTER TABLE checkpoints ADD COLUMN head INTEGER NOT NULL DEFAULT 0"
-                    )
-                    connection.execute("ALTER TABLE checkpoints ADD COLUMN parent TEXT")
-                    connection.execute(
-                        "ALTER TABLE checkpoints ADD COLUMN published INTEGER NOT NULL DEFAULT 1"
-                    )
-                    # Legacy snapshots have no ancestry. Protect the newest valid
-                    # snapshot of each source; older tokens remain readable.
-                    latest: dict[tuple[str, str, str], str] = {}
-                    for token, binding, kind, payload in connection.execute(
-                        "SELECT token, binding, kind, payload FROM checkpoints ORDER BY rowid"
-                    ):
-                        try:
-                            state = CheckpointState.model_validate_json(payload)
-                        except ValidationError:
-                            continue
-                        latest[binding, kind, state.chat_id] = token
-                    connection.executemany(
-                        "UPDATE checkpoints SET head = 1 WHERE token = ?",
-                        ((token,) for token in latest.values()),
-                    )
-                    connection.execute("CREATE INDEX checkpoint_parents ON checkpoints(parent)")
-                    connection.execute("PRAGMA user_version = 2")
-            if version < 3:
-                with connection:
-                    # Legacy roots may have been continued without changing their
-                    # token. Never guess that such a consumer was abandoned.
-                    connection.execute(
-                        "ALTER TABLE checkpoints ADD COLUMN baseline INTEGER NOT NULL DEFAULT 0"
-                    )
-                    connection.execute("ALTER TABLE checkpoints ADD COLUMN chat_id TEXT")
-                    connection.execute("ALTER TABLE checkpoints ADD COLUMN replacement TEXT")
-                    for token, payload in connection.execute(
-                        "SELECT token, payload FROM checkpoints"
-                    ).fetchall():
-                        try:
-                            source = CheckpointState.model_validate_json(payload).chat_id
-                        except ValidationError:
-                            continue
-                        connection.execute(
-                            "UPDATE checkpoints SET chat_id = ? WHERE token = ?", (source, token)
-                        )
-                    connection.execute(
-                        "CREATE INDEX checkpoint_baselines "
-                        "ON checkpoints(binding, chat_id, baseline)"
-                    )
-                    connection.execute("PRAGMA user_version = 3")
+            _migrate(connection)
             self._connection = connection
             return connection
         except (OSError, sqlite3.Error):
@@ -167,7 +101,7 @@ class CheckpointStore:
         except sqlite3.Error:
             raise _storage_error() from None
 
-    def put(  # noqa: C901
+    def put(
         self,
         state: CheckpointState,
         binding: str,
@@ -175,43 +109,23 @@ class CheckpointStore:
         retain: str | None = None,
         pending: bool = False,
     ) -> CheckpointReceipt:
-        try:
-            payload = CheckpointState.model_validate(state.model_dump()).model_dump_json()
-        except ValidationError:
-            raise _storage_error() from None
-        size = len(payload.encode("utf-8"))
-        if size > self.max_bytes:
-            raise ToolError("CHECKPOINT_STORAGE_FULL", "Checkpoint exceeds the storage budget.")
+        payload, size = self._payload(state)
         now = self.clock.utc_now()
         expires = now + timedelta(seconds=CHECKPOINT_TTL_SECONDS)
         token = secrets.token_urlsafe(32)
         try:
             db = self._db()
-            if not self._writer_initialized:
-                # A write follows authenticated source preparation and ownership
-                # of the Telegram session lease. Merely reading a cooldown before
-                # acquiring that lease must not remove another process's receipt.
-                with db:
-                    db.execute("DELETE FROM checkpoints WHERE published = 0")
-                self._writer_initialized = True
+            self._initialize_writer(db)
             with db:
                 db.execute("DELETE FROM checkpoints WHERE expires <= ?", (now.timestamp(),))
                 db.execute("DELETE FROM cooldowns WHERE until <= ?", (now.timestamp(),))
-                replacement = None
+                replacement = (
+                    _unused_baseline(db, binding, state.chat_id)
+                    if retain is None and state.kind == "changes"
+                    else None
+                )
+                candidate = retain if retain is not None else replacement
                 previous = None
-                candidate = retain
-                if retain is None and state.kind == "changes":
-                    row = db.execute(
-                        "SELECT token FROM checkpoints WHERE binding = ? AND chat_id = ? "
-                        "AND kind = 'changes' AND baseline = 1 AND head = 1 AND published = 1 "
-                        "AND token NOT IN (SELECT replacement FROM checkpoints "
-                        "WHERE published = 0 AND replacement IS NOT NULL) "
-                        "AND token NOT IN (SELECT parent FROM checkpoints "
-                        "WHERE published = 0 AND parent IS NOT NULL) ORDER BY rowid DESC LIMIT 1",
-                        (binding, state.chat_id),
-                    ).fetchone()
-                    if row is not None:
-                        candidate = replacement = row[0]
                 if candidate is not None:
                     previous = self.get(candidate, binding, state.kind)
                     if previous.chat_id != state.chat_id:
@@ -220,52 +134,17 @@ class CheckpointStore:
                     # A caller has used this position. Keep it protected even if
                     # a later file publication fails and the caller must retry.
                     db.execute("UPDATE checkpoints SET baseline = 0 WHERE token = ?", (retain,))
-                if candidate is not None and previous is not None:
-                    is_head = db.execute(
-                        "SELECT head FROM checkpoints WHERE token = ?", (candidate,)
-                    ).fetchone()[0]
-                    excluded = (
-                        {"date_to"} if state.kind == "changes" and state.phase == "idle" else set()
+                if (
+                    candidate is not None
+                    and previous is not None
+                    and _unchanged_head(db, candidate, previous, state)
+                ):
+                    db.execute(
+                        "UPDATE checkpoints SET expires = ? WHERE token = ?",
+                        (expires.timestamp(), candidate),
                     )
-                    if is_head and previous.model_dump(exclude=excluded) == state.model_dump(
-                        exclude=excluded
-                    ):
-                        db.execute(
-                            "UPDATE checkpoints SET expires = ? WHERE token = ?",
-                            (expires.timestamp(), candidate),
-                        )
-                        return CheckpointReceipt(candidate, expires)
-                count, used = db.execute(
-                    "SELECT COUNT(*), COALESCE(SUM(size), 0) FROM checkpoints "
-                    "WHERE token NOT IN (SELECT replacement FROM checkpoints "
-                    "WHERE published = 0 AND replacement IS NOT NULL)"
-                ).fetchone()
-                # An unused root can reserve its replacement without destroying
-                # the old token before files are published. Each reservation has
-                # one exclusive victim; failed confirmation restores the old head.
-                if replacement is not None:
-                    count -= 1
-                    used -= db.execute(
-                        "SELECT size FROM checkpoints WHERE token = ?", (replacement,)
-                    ).fetchone()[0]
-                while count >= self.maximum or used + size > self.max_bytes:
-                    oldest = db.execute(
-                        "SELECT token, size FROM checkpoints WHERE token != ? AND head = 0 "
-                        "AND token NOT IN (SELECT parent FROM checkpoints "
-                        "WHERE published = 0 AND parent IS NOT NULL) "
-                        "AND token NOT IN (SELECT replacement FROM checkpoints "
-                        "WHERE published = 0 AND replacement IS NOT NULL) "
-                        "ORDER BY rowid LIMIT 1",
-                        (retain or "",),
-                    ).fetchone()
-                    if oldest is None:
-                        raise ToolError(
-                            "CHECKPOINT_STORAGE_FULL",
-                            "Storage contains protected checkpoints; no position was discarded. "
-                            "Inspect 'telegram-mcp checkpoints status' for local cleanup.",
-                        )
-                    db.execute("DELETE FROM checkpoints WHERE token = ?", (oldest[0],))
-                    count, used = count - 1, used - oldest[1]
+                    return CheckpointReceipt(candidate, expires)
+                self._make_room(db, size, retain, replacement)
                 db.execute(
                     "INSERT INTO checkpoints VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)",
                     (
@@ -290,6 +169,62 @@ class CheckpointStore:
         except sqlite3.Error:
             raise _storage_error() from None
         return CheckpointReceipt(token, expires)
+
+    def _payload(self, state: CheckpointState) -> tuple[str, int]:
+        try:
+            payload = CheckpointState.model_validate(state.model_dump()).model_dump_json()
+        except ValidationError:
+            raise _storage_error() from None
+        size = len(payload.encode("utf-8"))
+        if size > self.max_bytes:
+            raise ToolError("CHECKPOINT_STORAGE_FULL", "Checkpoint exceeds the storage budget.")
+        return payload, size
+
+    def _initialize_writer(self, db: sqlite3.Connection) -> None:
+        if self._writer_initialized:
+            return
+        # A write follows authenticated source preparation and ownership
+        # of the Telegram session lease. Merely reading a cooldown before
+        # acquiring that lease must not remove another process's receipt.
+        with db:
+            db.execute("DELETE FROM checkpoints WHERE published = 0")
+        self._writer_initialized = True
+
+    def _make_room(
+        self, db: sqlite3.Connection, size: int, retain: str | None, replacement: str | None
+    ) -> None:
+        """Evict the oldest unprotected snapshots until the new one fits."""
+        count, used = db.execute(
+            "SELECT COUNT(*), COALESCE(SUM(size), 0) FROM checkpoints "
+            "WHERE token NOT IN (SELECT replacement FROM checkpoints "
+            "WHERE published = 0 AND replacement IS NOT NULL)"
+        ).fetchone()
+        # An unused root can reserve its replacement without destroying
+        # the old token before files are published. Each reservation has
+        # one exclusive victim; failed confirmation restores the old head.
+        if replacement is not None:
+            count -= 1
+            used -= db.execute(
+                "SELECT size FROM checkpoints WHERE token = ?", (replacement,)
+            ).fetchone()[0]
+        while count >= self.maximum or used + size > self.max_bytes:
+            oldest = db.execute(
+                "SELECT token, size FROM checkpoints WHERE token != ? AND head = 0 "
+                "AND token NOT IN (SELECT parent FROM checkpoints "
+                "WHERE published = 0 AND parent IS NOT NULL) "
+                "AND token NOT IN (SELECT replacement FROM checkpoints "
+                "WHERE published = 0 AND replacement IS NOT NULL) "
+                "ORDER BY rowid LIMIT 1",
+                (retain or "",),
+            ).fetchone()
+            if oldest is None:
+                raise ToolError(
+                    "CHECKPOINT_STORAGE_FULL",
+                    "Storage contains protected checkpoints; no position was discarded. "
+                    "Inspect 'telegram-mcp checkpoints status' for local cleanup.",
+                )
+            db.execute("DELETE FROM checkpoints WHERE token = ?", (oldest[0],))
+            count, used = count - 1, used - oldest[1]
 
     def confirm(self, token: str) -> None:
         """Publish a receipt only after its associated files have been created."""
@@ -450,3 +385,104 @@ class CheckpointStore:
         if self._connection is not None:
             self._connection.close()
             self._connection = None
+
+
+def _migrate(connection: sqlite3.Connection) -> None:
+    """Create or upgrade the schema one version at a time."""
+    version = connection.execute("PRAGMA user_version").fetchone()[0]
+    if version not in (0, 1, 2, 3):
+        raise ToolError("CHECKPOINT_INCOMPATIBLE", "Unknown checkpoint database version.")
+    if version == 0:
+        _create_schema(connection)
+    if version < 2:
+        _add_ancestry(connection)
+    if version < 3:
+        _add_baselines(connection)
+
+
+def _create_schema(connection: sqlite3.Connection) -> None:
+    if connection.execute("SELECT name FROM sqlite_master").fetchone():
+        raise _storage_error()
+    connection.execute("PRAGMA auto_vacuum = FULL")
+    with connection:
+        connection.execute(
+            "CREATE TABLE checkpoints (token TEXT PRIMARY KEY, binding TEXT NOT NULL, "
+            "kind TEXT NOT NULL, expires REAL NOT NULL, payload TEXT NOT NULL, "
+            "size INTEGER NOT NULL)"
+        )
+        connection.execute("CREATE TABLE cooldowns (binding TEXT PRIMARY KEY, until REAL NOT NULL)")
+        connection.execute("PRAGMA user_version = 1")
+
+
+def _add_ancestry(connection: sqlite3.Connection) -> None:
+    with connection:
+        connection.execute("ALTER TABLE checkpoints ADD COLUMN head INTEGER NOT NULL DEFAULT 0")
+        connection.execute("ALTER TABLE checkpoints ADD COLUMN parent TEXT")
+        connection.execute(
+            "ALTER TABLE checkpoints ADD COLUMN published INTEGER NOT NULL DEFAULT 1"
+        )
+        # Legacy snapshots have no ancestry. Protect the newest valid
+        # snapshot of each source; older tokens remain readable.
+        latest: dict[tuple[str, str, str], str] = {}
+        for token, binding, kind, payload in connection.execute(
+            "SELECT token, binding, kind, payload FROM checkpoints ORDER BY rowid"
+        ):
+            try:
+                state = CheckpointState.model_validate_json(payload)
+            except ValidationError:
+                continue
+            latest[binding, kind, state.chat_id] = token
+        connection.executemany(
+            "UPDATE checkpoints SET head = 1 WHERE token = ?",
+            ((token,) for token in latest.values()),
+        )
+        connection.execute("CREATE INDEX checkpoint_parents ON checkpoints(parent)")
+        connection.execute("PRAGMA user_version = 2")
+
+
+def _add_baselines(connection: sqlite3.Connection) -> None:
+    with connection:
+        # Legacy roots may have been continued without changing their
+        # token. Never guess that such a consumer was abandoned.
+        connection.execute("ALTER TABLE checkpoints ADD COLUMN baseline INTEGER NOT NULL DEFAULT 0")
+        connection.execute("ALTER TABLE checkpoints ADD COLUMN chat_id TEXT")
+        connection.execute("ALTER TABLE checkpoints ADD COLUMN replacement TEXT")
+        for token, payload in connection.execute(
+            "SELECT token, payload FROM checkpoints"
+        ).fetchall():
+            try:
+                source = CheckpointState.model_validate_json(payload).chat_id
+            except ValidationError:
+                continue
+            connection.execute(
+                "UPDATE checkpoints SET chat_id = ? WHERE token = ?", (source, token)
+            )
+        connection.execute(
+            "CREATE INDEX checkpoint_baselines ON checkpoints(binding, chat_id, baseline)"
+        )
+        connection.execute("PRAGMA user_version = 3")
+
+
+def _unused_baseline(db: sqlite3.Connection, binding: str, chat_id: str) -> str | None:
+    """The source's unused baseline head, unless a pending receipt already claims it."""
+    row = db.execute(
+        "SELECT token FROM checkpoints WHERE binding = ? AND chat_id = ? "
+        "AND kind = 'changes' AND baseline = 1 AND head = 1 AND published = 1 "
+        "AND token NOT IN (SELECT replacement FROM checkpoints "
+        "WHERE published = 0 AND replacement IS NOT NULL) "
+        "AND token NOT IN (SELECT parent FROM checkpoints "
+        "WHERE published = 0 AND parent IS NOT NULL) ORDER BY rowid DESC LIMIT 1",
+        (binding, chat_id),
+    ).fetchone()
+    return row[0] if row is not None else None
+
+
+def _unchanged_head(
+    db: sqlite3.Connection, candidate: str, previous: CheckpointState, state: CheckpointState
+) -> bool:
+    """An unchanged head keeps its token; idle change polls may differ only in date_to."""
+    is_head = db.execute("SELECT head FROM checkpoints WHERE token = ?", (candidate,)).fetchone()[0]
+    excluded = {"date_to"} if state.kind == "changes" and state.phase == "idle" else set()
+    return bool(is_head) and previous.model_dump(exclude=excluded) == state.model_dump(
+        exclude=excluded
+    )

@@ -97,10 +97,10 @@ async def test_attachment_copy_survives_shutdown_and_archive_failure_releases_ca
             raise ToolError("ARCHIVE_STORAGE_ERROR", "Disk is full")
 
         monkeypatch.setattr(service._archive, "save", fail)
-        before = len(store._entries)
+        before = len(store._files.entries)
         with pytest.raises(ToolError, match="ARCHIVE_STORAGE_ERROR"):
             await service.download_attachment("1:10:document", save=True)
-        assert len(store._entries) == before
+        assert len(store._files.entries) == before
     assert (await asyncio.to_thread(saved.read_bytes)) == backend.data
     assert not (await asyncio.to_thread(Path(result.local_path).exists))
 

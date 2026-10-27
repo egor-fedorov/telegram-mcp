@@ -187,8 +187,10 @@ archive status is derived from its stored fields, not stored separately:
 | `saved` | Key and receipt | Allowed while the copy verifies, otherwise `ARCHIVE_COPY_INVALID` |
 
 `ExportStorePort` owns a separate bounded cache of generated JSONL/Markdown files.
-It reuses private-path protection, has a process lease, atomic publication, hashes,
-expiry and cleanup. Resource reads reauthorize the source before reading the stored
+Like the download store, it builds on `TemporaryFiles`: a per-session private cache
+directory with an exclusive process lease, expiring entries, removal of leftover
+managed files and digest-verified reads. Each store keeps its own names, limits, write
+path and error codes; exports add atomic publication and hashes. Resource reads reauthorize the source before reading the stored
 snapshot. Existing attachment resource checks retain their stronger media-identity
 verification. The MCP resource dispatcher returns text exports and binary attachments
 over all transports without adding a file-serving HTTP route.

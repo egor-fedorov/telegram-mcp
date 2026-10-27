@@ -62,6 +62,9 @@ Completed steps:
 - Watches: `WatchSweep` runs one bounded pass, `WatchDelivery` owns replay, archiving and
   acknowledgement of the pending batch, and its archive status is derived without changing
   stored state.
+- Local storage: download and export stores share `TemporaryFiles` (lease, expiry, leftover
+  cleanup, verified reads); checkpoint persistence is split into schema migrations and
+  named write steps. Error codes and stored formats are unchanged.
 
 ## 0.4 completion
 
