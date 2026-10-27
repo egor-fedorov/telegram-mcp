@@ -1,0 +1,81 @@
+name: Publish MCP Registry metadata
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Already published PyPI release tag
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Already published PyPI release tag, such as v0.4.1
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mcp-registry-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Verify PyPI and publish Registry metadata
+    if: github.repository == 'egor-fedorov/telegram-mcp' && (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out the workflow revision with release history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.13.1"
+          python-version: "3.12"
+      - name: Validate tagged metadata and the published PyPI release
+        id: metadata
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: >-
+          uv run --no-project python scripts/check_registry.py
+          --tag "$RELEASE_TAG" --output "$RUNNER_TEMP/server.json"
+          --check-pypi --check-registry --github-output "$GITHUB_OUTPUT"
+      - name: Download the pinned publisher and verify its checksum
+        if: steps.metadata.outputs.published != 'true'
+        env:
+          PUBLISHER_VERSION: v1.8.5
+          PUBLISHER_SHA256: 2d151ac57275c9a6684d9d22b1cba81058bab195ea0a162e8fce3c6a5ec32812
+        run: |
+          curl --fail --silent --show-error --location --retry 3 --connect-timeout 10 --max-time 120 \
+            "https://github.com/modelcontextprotocol/registry/releases/download/$PUBLISHER_VERSION/mcp-publisher_linux_amd64.tar.gz" \
+            --output "$RUNNER_TEMP/mcp-publisher.tar.gz"
+          printf '%s  %s\n' "$PUBLISHER_SHA256" "$RUNNER_TEMP/mcp-publisher.tar.gz" | sha256sum --check --status
+          tar -xzf "$RUNNER_TEMP/mcp-publisher.tar.gz" -C "$RUNNER_TEMP" mcp-publisher
+      - name: Authenticate with GitHub OIDC and publish
+        if: steps.metadata.outputs.published != 'true'
+        working-directory: ${{ runner.temp }}
+        run: |
+          timeout 120s ./mcp-publisher login github-oidc
+          timeout 120s ./mcp-publisher publish server.json
+      - name: Verify the exact published Registry version
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: >-
+          uv run --no-project python scripts/check_registry.py
+          --tag "$RELEASE_TAG" --require-published
+      - name: Remove publisher credentials
+        if: always()
+        working-directory: ${{ runner.temp }}
+        run: |
+          if [ -x ./mcp-publisher ]; then
+            ./mcp-publisher logout
+          fi

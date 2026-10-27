@@ -37,6 +37,7 @@ classifiers = [
 
 [project.scripts]
 telegram-mcp = "telegram_mcp.cli:main"
+telegram-context-mcp = "telegram_mcp.cli:main"
 
 [project.urls]
 Documentation = "https://github.com/egor-fedorov/telegram-mcp/blob/main/README.md"

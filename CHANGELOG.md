@@ -8,6 +8,15 @@ A version entry describes its target artifact. Verify publication on
 
 ## [Unreleased]
 
+### Added
+
+- MCP Registry metadata for `io.github.egor-fedorov/telegram-mcp`, validated against
+  the package version and published after PyPI through GitHub OIDC. A separate
+  workflow retries Registry publication without rebuilding or uploading the package.
+  The first Registry entry requires a release containing this integration.
+- `telegram-context-mcp` as an alias of the existing `telegram-mcp` CLI, allowing
+  Registry clients to use the package's default `uvx` executable.
+
 ## [0.4.0] - 2026-10-26
 
 ### Added

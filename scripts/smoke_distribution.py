@@ -40,6 +40,7 @@ def smoke(artifact: Path, python: str, version: str) -> None:
             Path(__file__).resolve().parents[1] / "tests/fixtures/mcp_contract.json",
             root / "mcp_contract.json",
         )
+        shutil.copyfile(Path(__file__).resolve().parents[1] / "server.json", root / "server.json")
         subprocess.run(
             [str(interpreter), "-I", str(probe), "--version", version],
             check=True,
