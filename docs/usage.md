@@ -312,9 +312,13 @@ location first, publishes the file and its `metadata.json`, then records the rec
 Retries, lost responses and restarts reuse the same copy; a crash between publication
 and receipt is reconciled without writing a second file. Once saving was requested for
 a pending batch, both acknowledgement paths require a verified receipt
-(`WATCH_ARCHIVE_PENDING` otherwise); a later `save=false` call cannot bypass it. A
-missing or damaged copy returns `ARCHIVE_COPY_INVALID` on acknowledgement and is rebuilt
-from the still-pending batch by the next `save=true` call. With `ack_batch_id`, the
+(`WATCH_ARCHIVE_PENDING` otherwise); a later `save=false` call cannot bypass it.
+Verification covers the file and its `metadata.json`: schema, file name, size, SHA-256,
+save time and the watch/batch/source provenance must all match the receipt. A missing
+or damaged copy returns `ARCHIVE_COPY_INVALID` on acknowledgement. A replay without
+`save=true` then omits `saved_file` and reports an `ARCHIVE_COPY_INVALID` issue instead of
+returning the receipt; the next `save=true` call rebuilds the copy from the still-pending
+batch. With `ack_batch_id`, the
 acknowledged batch is archived first; a later poll or save failure keeps that
 acknowledgement and leaves the new batch pending. Access and saving restrictions are
 rechecked before replaying or saving. Batches used only with `save=false` keep the

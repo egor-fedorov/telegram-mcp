@@ -218,7 +218,7 @@ class WatchService:
                 await self._check_pending(state, access)
                 if save:
                     await self._ensure_archive(state, binding)
-                return self._delivered(state.pending)
+                return await self._delivered(state, verified=save)
             if not state.position.remaining:
                 self._start_cycle(state, access)
             candidate = state.position.model_copy(deep=True)
@@ -331,7 +331,7 @@ class WatchService:
                 self.store.save(state, binding)
                 if save:
                     await self._ensure_archive(state, binding)
-                return self._delivered(state.pending)
+                return await self._delivered(state, verified=save)
             state.position = candidate
             self.store.save(state, binding)
             return result
@@ -351,17 +351,36 @@ class WatchService:
                 "CONNECTION_ERROR", "Pending batch checks timed out; retry this watch."
             ) from None
 
-    @staticmethod
-    def _delivered(pending: PendingDelivery) -> WatchChangesResult:
+    async def _delivered(self, state: WatchState, *, verified: bool) -> WatchChangesResult:
+        """Return the pending batch; never present an unverified copy as saved."""
+        pending = state.pending
+        assert pending is not None
         saved = pending.archive.saved_file if pending.archive is not None else None
-        return pending.result.model_copy(update={"saved_file": saved})
+        result = pending.result.model_copy(update={"saved_file": saved})
+        if saved is None or verified:
+            return result
+        if await self.context.archive.verify(saved, batch_source(state.name, pending)):
+            return result
+        issue = Issue(
+            code="ARCHIVE_COPY_INVALID",
+            message="This batch's permanent copy is missing or damaged. Repeat "
+            "get_watch_changes with save=true to rebuild it before acknowledging.",
+        )
+        return result.model_copy(
+            update={
+                "saved_file": None,
+                "issues": [issue, *result.issues][:20],
+                "issue_count": result.issue_count + 1,
+            }
+        )
 
     async def _ensure_archive(self, state: WatchState, binding: str) -> None:
         """Publish one permanent copy of the pending batch and record its receipt."""
         pending, archive = state.pending, self.context.archive
         assert pending is not None
+        source = batch_source(state.name, pending)
         if pending.archive is not None and pending.archive.saved_file is not None:
-            if await archive.verify(pending.archive.saved_file):
+            if await archive.verify(pending.archive.saved_file, source):
                 return
             pending.archive = None  # Rebuild a missing or damaged copy from the batch.
         if pending.archive is None:
@@ -369,13 +388,6 @@ class WatchService:
             self.store.save(state, binding)
         data = batch_jsonl(state.name, pending)
         digest = hashlib.sha256(data).hexdigest()
-        source = ArchiveSource(
-            tool="get_watch_changes",
-            watch_name=state.name,
-            batch_id=pending.result.batch_id,
-            source_ids=pending.source_ids,
-            format="jsonl",
-        )
 
         async def publish(key: str):
             return await archive.save(
@@ -430,7 +442,8 @@ class WatchService:
                 "get_watch_changes with save=true before acknowledging; no position changed.",
             )
         if archive is not None and archive.saved_file is not None:
-            if not await self.context.archive.verify(archive.saved_file):
+            source = batch_source(state.name, state.pending)
+            if not await self.context.archive.verify(archive.saved_file, source):
                 raise ToolError(
                     "ARCHIVE_COPY_INVALID",
                     "The batch's permanent copy is missing or damaged. Repeat "
@@ -465,3 +478,14 @@ class WatchService:
             await self.context.chats.check_authorization()
             binding = await self.context.backend.checkpoint_binding()
             return WatchDeletion(name=name, deleted=self.store.delete(name, binding))
+
+
+def batch_source(name: str, pending: PendingDelivery) -> ArchiveSource:
+    """Provenance recorded in, and required from, a saved batch's metadata.json."""
+    return ArchiveSource(
+        tool="get_watch_changes",
+        watch_name=name,
+        batch_id=pending.result.batch_id,
+        source_ids=pending.source_ids,
+        format="jsonl",
+    )

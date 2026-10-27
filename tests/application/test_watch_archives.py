@@ -263,3 +263,108 @@ async def test_save_false_watches_keep_the_previous_contract(tmp_path):
         assert page.batch_id and page.saved_file is None
         await env.service.ack_watch_changes("jobs", page.batch_id)
         assert batch_copies(tmp_path) == []
+
+
+def corrupt_sidecar(metadata_path: str, kind: str) -> None:
+    path = Path(metadata_path)
+    if kind == "malformed":
+        path.write_text("{", encoding="utf-8")
+        return
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    if kind == "empty":
+        manifest = {}
+    elif kind == "missing_checksum":
+        del manifest["sha256"]
+    elif kind == "other_batch":
+        manifest["source"]["batch_id"] = "x" * 43
+    elif kind == "other_watch":
+        manifest["source"]["watch_name"] = "news"
+    elif kind == "wrong_size":
+        manifest["size"] += 1
+    elif kind == "naive_time":
+        manifest["saved_at"] = "2026-10-27T08:00:00"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+
+
+def alter_copy(file_path: str, kind: str) -> None:
+    path = Path(file_path)
+    if kind == "deleted":
+        path.unlink()
+    else:
+        path.write_bytes(path.read_bytes() + b"\n")
+
+
+SIDECAR_DEFECTS = [
+    "malformed",
+    "empty",
+    "missing_checksum",
+    "other_batch",
+    "other_watch",
+    "wrong_size",
+    "naive_time",
+]
+
+
+@pytest.mark.parametrize("defect", SIDECAR_DEFECTS)
+@pytest.mark.parametrize("ack_path", ["ack_watch_changes", "ack_batch_id"])
+async def test_invalid_sidecar_blocks_acknowledgement_until_repaired(tmp_path, defect, ack_path):
+    async with incremental_fixture(tmp_path, settings=archive_settings(tmp_path)) as env:
+        await env.service.create_watch("jobs", chat_refs=["1"], date_from=BASE)
+        page = await env.service.get_watch_changes("jobs", save=True)
+        assert page.batch_id and page.saved_file
+        corrupt_sidecar(page.saved_file.metadata_path, defect)
+        with pytest.raises(ToolError, match="ARCHIVE_COPY_INVALID"):
+            if ack_path == "ack_watch_changes":
+                await env.service.ack_watch_changes("jobs", page.batch_id)
+            else:
+                await env.service.get_watch_changes("jobs", ack_batch_id=page.batch_id)
+        state = env.watches.get("jobs", env.backend.binding)
+        assert state is not None and state.pending is not None
+        assert state.pending.result.batch_id == page.batch_id
+        assert state.last_acknowledged is None
+        repaired = await env.service.get_watch_changes("jobs", save=True)
+        assert repaired.batch_id == page.batch_id and repaired.saved_file is not None
+        assert repaired.saved_file.local_path != page.saved_file.local_path
+        _, metadata = read_copy(repaired.saved_file.local_path)
+        assert metadata["source"]["batch_id"] == page.batch_id
+        assert metadata["source"]["watch_name"] == "jobs"
+        if ack_path == "ack_watch_changes":
+            await env.service.ack_watch_changes("jobs", page.batch_id)
+        else:
+            await env.service.get_watch_changes("jobs", ack_batch_id=page.batch_id)
+        state = env.watches.get("jobs", env.backend.binding)
+        assert state is not None and state.last_acknowledged == page.batch_id
+
+
+@pytest.mark.parametrize("defect", ["deleted", "altered", "sidecar"])
+@pytest.mark.parametrize("explicit", [False, True])
+async def test_default_replay_reports_an_invalid_copy_instead_of_returning_it(
+    tmp_path, defect, explicit
+):
+    async with incremental_fixture(tmp_path, settings=archive_settings(tmp_path)) as env:
+        await env.service.create_watch("jobs", chat_refs=["1"], date_from=BASE)
+        page = await env.service.get_watch_changes("jobs", save=True)
+        assert page.batch_id and page.saved_file
+        intact = await env.service.get_watch_changes("jobs")
+        assert intact == page
+        if defect == "sidecar":
+            corrupt_sidecar(page.saved_file.metadata_path, "other_batch")
+        else:
+            alter_copy(page.saved_file.local_path, defect)
+        replay = await (
+            env.service.get_watch_changes("jobs", save=False)
+            if explicit
+            else env.service.get_watch_changes("jobs")
+        )
+        assert replay.batch_id == page.batch_id and replay.changes == page.changes
+        assert replay.saved_file is None
+        assert replay.issues[0].code == "ARCHIVE_COPY_INVALID"
+        assert replay.issue_count == page.issue_count + 1
+        state = env.watches.get("jobs", env.backend.binding)
+        assert state is not None and state.pending is not None
+        assert state.pending.result.issues == page.issues  # the warning is not persisted
+        with pytest.raises(ToolError, match="ARCHIVE_COPY_INVALID"):
+            await env.service.ack_watch_changes("jobs", page.batch_id)
+        repaired = await env.service.get_watch_changes("jobs", save=True)
+        assert repaired.saved_file is not None and repaired.issues == page.issues
+        await env.service.ack_watch_changes("jobs", page.batch_id)

@@ -10,6 +10,7 @@ import shutil
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
+from datetime import datetime
 from functools import partial
 from pathlib import Path
 
@@ -20,6 +21,17 @@ from telegram_mcp.domain.models import SavedFile, ToolError
 
 _KEY = re.compile(r"[A-Za-z0-9_-]{43}")
 _MAX_BYTES = 20 * 1024 * 1024
+_MAX_METADATA_BYTES = 1024 * 1024
+_MANIFEST_KEYS = {
+    "schema_version",
+    "file",
+    "source",
+    "original_name",
+    "mime_type",
+    "size",
+    "sha256",
+    "saved_at",
+}
 
 
 def _read_bounded(path: Path) -> bytes:
@@ -28,6 +40,42 @@ def _read_bounded(path: Path) -> bytes:
     if len(data) > _MAX_BYTES:
         raise OSError("Archived copy exceeds the file bound")
     return data
+
+
+def _checked_copy(path: Path, *, sha256: str, source: ArchiveSource | None) -> SavedFile:
+    """Validate one published file and its sidecar; raise OSError/ValueError/TypeError."""
+    metadata = path.parent / "metadata.json"
+    if path.parent.is_symlink() or path.is_symlink() or metadata.is_symlink():
+        raise OSError("Redirected copy")
+    if len(metadata.read_bytes()) > _MAX_METADATA_BYTES:
+        raise ValueError("Oversized metadata")
+    manifest = json.loads(metadata.read_text(encoding="utf-8"))
+    data = _read_bounded(path)
+    if not isinstance(manifest, dict) or set(manifest) != _MANIFEST_KEYS:
+        raise ValueError("Invalid metadata fields")
+    recorded = ArchiveSource.model_validate(manifest["source"])
+    if (
+        manifest["schema_version"] != 1
+        or manifest["file"] != path.name
+        or not isinstance(manifest["original_name"], str)
+        or not isinstance(manifest["mime_type"], str)
+        or type(manifest["size"]) is not int
+        or manifest["size"] != len(data)
+        or manifest["sha256"] != sha256
+        or hashlib.sha256(data).hexdigest() != sha256
+        or (source is not None and recorded != source)
+    ):
+        raise ValueError("Metadata does not describe this copy")
+    saved_at = datetime.fromisoformat(manifest["saved_at"])
+    if saved_at.utcoffset() is None:
+        raise ValueError("Naive save time")
+    return SavedFile(
+        local_path=str(path),
+        metadata_path=str(metadata),
+        size=len(data),
+        sha256=sha256,
+        saved_at=saved_at,
+    )
 
 
 class ArchiveStore:
@@ -126,7 +174,7 @@ class ArchiveStore:
             try:
                 if directory.exists() or directory.is_symlink():
                     # A previous attempt published this key before its receipt was recorded.
-                    return self._existing(path, sha256)
+                    return self._existing(path, sha256, source)
                 if staging.exists() and not staging.is_symlink():
                     # Only this key's interrupted, never-published attempt can own it.
                     shutil.rmtree(staging)
@@ -183,45 +231,28 @@ class ArchiveStore:
                 "and disk space.",
             ) from None
 
-    def _existing(self, path: Path, sha256: str) -> SavedFile:
-        metadata = path.parent / "metadata.json"
+    def _existing(self, path: Path, sha256: str, source: ArchiveSource) -> SavedFile:
         try:
-            if path.parent.is_symlink() or path.is_symlink() or metadata.is_symlink():
-                raise OSError("Redirected copy")
-            manifest = json.loads(metadata.read_text(encoding="utf-8"))
-            data = _read_bounded(path)
-            if (
-                manifest.get("sha256") != sha256
-                or hashlib.sha256(data).hexdigest() != sha256
-                or manifest.get("file") != path.name
-            ):
-                raise ValueError("Different copy")
-            return SavedFile(
-                local_path=str(path),
-                metadata_path=str(metadata),
-                size=len(data),
-                sha256=sha256,
-                saved_at=manifest["saved_at"],
-            )
-        except (OSError, ValueError, KeyError, TypeError):
+            return _checked_copy(path, sha256=sha256, source=source)
+        except (OSError, ValueError, TypeError):
             raise ToolError(
                 "ARCHIVE_COPY_INVALID",
                 "The reserved permanent copy is missing, damaged or different.",
             ) from None
 
-    async def verify(self, saved: SavedFile) -> bool:
-        return await self._run(partial(self._verify, saved))
+    async def verify(self, saved: SavedFile, source: ArchiveSource | None = None) -> bool:
+        return await self._run(partial(self._verify, saved, source))
 
     @staticmethod
-    def _verify(saved: SavedFile) -> bool:
-        path, metadata = Path(saved.local_path), Path(saved.metadata_path)
-        try:
-            if path.is_symlink() or path.parent.is_symlink() or not metadata.is_file():
-                return False
-            data = _read_bounded(path)
-        except OSError:
+    def _verify(saved: SavedFile, source: ArchiveSource | None = None) -> bool:
+        path = Path(saved.local_path)
+        if Path(saved.metadata_path) != path.parent / "metadata.json":
             return False
-        return len(data) == saved.size and hashlib.sha256(data).hexdigest() == saved.sha256
+        try:
+            found = _checked_copy(path, sha256=saved.sha256, source=source)
+        except (OSError, ValueError, TypeError):
+            return False
+        return found == saved
 
     async def discard(self, saved: SavedFile) -> None:
         """Roll back only the copy created by an unsuccessful tool invocation."""

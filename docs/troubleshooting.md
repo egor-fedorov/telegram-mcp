@@ -173,8 +173,10 @@ the entire pending response is withheld; it stays available if access is restore
 
 `WATCH_ARCHIVE_PENDING` means `save=true` was requested for the pending batch but its
 copy is not recorded yet; repeat `get_watch_changes(name, save=true)` before
-acknowledging. `ARCHIVE_COPY_INVALID` means the recorded copy is missing or changed;
-the same call rebuilds it from the still-pending batch. Neither error advances
+acknowledging. `ARCHIVE_COPY_INVALID` means the recorded copy or its `metadata.json` is
+missing, changed or describes another batch; it appears as an error on acknowledgement
+and as an issue on replays without `save=true`. The same `save=true` call rebuilds the
+copy from the still-pending batch; the damaged copy is left for you to inspect. Neither error advances
 positions. Use `grep` on `metadata.json` files under `archive_directory` to find a batch
 by `watch_name` or `batch_id` after an interrupted session.
 

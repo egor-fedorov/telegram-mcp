@@ -23,8 +23,8 @@ class ArchivePort(Protocol):
         """Publish a new copy; with key, reuse an identical copy already published there."""
         ...
 
-    async def verify(self, saved: SavedFile) -> bool:
-        """Report whether a recorded copy still exists with its recorded size and hash."""
+    async def verify(self, saved: SavedFile, source: ArchiveSource | None = None) -> bool:
+        """Report whether the copy and its sidecar still match the receipt and provenance."""
         ...
 
     async def discard(self, saved: SavedFile) -> None: ...

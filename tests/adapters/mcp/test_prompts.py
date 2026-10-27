@@ -262,7 +262,7 @@ async def test_templates_state_trust_rules_and_keep_focus_separate():
         assert "not proof of no matches" in text
     assert '"save": true' in watch and "saved_file is present" in watch
     assert "never create, recreate or reset" in watch
-    assert "do not acknowledge it" in watch  # an oversized pending replay stays pending
+    assert "do not process or acknowledge it" in watch  # oversized replays stay pending
     assert "Do not call get_history once per chat" in period
     assert "SOURCE_LIMIT_EXCEEDED" in period and "budget.exhausted" in period
 
@@ -338,3 +338,32 @@ async def test_completion_without_a_local_binding_or_store_returns_nothing(tmp_p
             )
             assert result.completion.values == []
         assert not env.watches.path.exists()
+
+
+@pytest.mark.parametrize("save", ["true", "false"])
+async def test_both_watch_templates_stop_before_an_oversized_pending_batch(tmp_path, save):
+    settings = Settings(allowed_chat_ids=["1"], archive_directory=tmp_path / "archive")
+    async with incremental_fixture(tmp_path, settings=settings) as env:
+        await env.service.create_watch("budget", chat_refs=["1"], date_from=BASE)
+        pending = await env.service.get_watch_changes("budget", limit=3)
+        assert pending.batch_id and pending.returned_count == 3
+        async with Client(create_server(env.service, owns_service=False)) as client:
+            text = prompt_text(
+                await client.get_prompt(
+                    "watch_digest",
+                    {"watch_name": "budget", "save": save, "max_messages": "1"},
+                )
+            )
+        match = re.search(r"get_watch_changes (?:once )?with (\{.*?\})", text)
+        assert match is not None
+        poll = json.loads(match.group(1))
+        assert poll == {"name": "budget", "save": save == "true", "limit": 1}
+        # The prescribed call replays the whole pending batch, beyond the budget of 1 ...
+        replay = await env.service.get_watch_changes(**poll)
+        assert replay.batch_id == pending.batch_id and replay.returned_count == 3
+        # ... so the template must stop before processing or acknowledging it.
+        assert "returned_count (changes plus omissions)" in text
+        assert "do not process or acknowledge it" in text
+        assert "ask the user for a max_messages of at least that count" in text
+        guard = text.index("do not process or acknowledge it")
+        assert guard < text.index("process every change and omission")

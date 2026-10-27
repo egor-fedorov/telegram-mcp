@@ -255,3 +255,25 @@ async def test_verify_detects_missing_or_changed_copies(archive_store):
     assert not await archive_store.verify(saved)
     await asyncio.to_thread(Path(saved.local_path).unlink)
     assert not await archive_store.verify(saved)
+
+
+async def test_crash_recovery_and_verification_share_the_sidecar_contract(tmp_path, archive_store):
+    key = "r" * 43
+    data = b'{"type":"watch_batch"}\n'
+    digest = hashlib.sha256(data).hexdigest()
+    source = ArchiveSource(tool="get_watch_changes", watch_name="jobs", batch_id="b" * 43)
+    other = source.model_copy(update={"batch_id": "c" * 43})
+    saved = await archive_store.save(
+        data, "jobs.jsonl", digest, mime_type="application/x-ndjson", source=source, key=key
+    )
+    assert await archive_store.verify(saved, source)
+    assert not await archive_store.verify(saved, other)
+    metadata = Path(saved.metadata_path)
+    manifest = json.loads(await asyncio.to_thread(metadata.read_text, encoding="utf-8"))
+    manifest["source"]["batch_id"] = "c" * 43
+    await asyncio.to_thread(metadata.write_text, json.dumps(manifest), encoding="utf-8")
+    assert not await archive_store.verify(saved, source)
+    with pytest.raises(ToolError, match="ARCHIVE_COPY_INVALID"):
+        await archive_store.save(
+            data, "jobs.jsonl", digest, mime_type="application/x-ndjson", source=source, key=key
+        )

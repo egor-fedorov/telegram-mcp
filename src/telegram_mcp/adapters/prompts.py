@@ -185,10 +185,11 @@ class PromptCatalog:
 that; never create, recreate or reset a subscription.
 2. Call get_watch_changes with {json.dumps(poll)}. Request at most the remaining budget as \
 limit (never above 100) on later calls.
-3. When a batch_id is returned, check that saved_file is present before processing. Process \
-every change and omission in the batch, including items outside the focus. A pending batch is \
-indivisible: if it exceeds the remaining budget, do not acknowledge it; stop and report that \
-a larger max_messages is needed.
+3. When a batch_id is returned, first compare its returned_count (changes plus omissions) \
+with the remaining budget. A pending batch is replayed whole, so limit cannot shrink it: if \
+it is larger, do not process or acknowledge it; stop and ask the user for a max_messages of \
+at least that count. Otherwise check that saved_file is present, then process every change \
+and omission in the batch, including items outside the focus.
 4. After processing a batch, acknowledge it by passing its batch_id as ack_batch_id in the \
 next get_watch_changes call (same name and save=true).
 5. Stop when complete is true or the budget of {budget} is used. Acknowledge the last \
@@ -203,9 +204,12 @@ session; they do not prove that this digest was delivered."""
 1. Call list_watches and confirm that "{watch}" exists. If it does not, stop and report \
 that; never create, recreate or reset a subscription.
 2. Call get_watch_changes once with {json.dumps(poll)}.
-3. Process every change and omission in that one batch, including items outside the focus. \
-Do not acknowledge it and do not poll again: report its batch_id and ask the user to confirm \
-acknowledgement (ack_watch_changes) after they have received the digest.
+3. Compare the batch's returned_count (changes plus omissions) with the budget of {budget}. \
+A pending batch is replayed whole, so limit cannot shrink it: if it is larger, do not \
+process or acknowledge it; stop and ask the user for a max_messages of at least that count.
+4. Otherwise process every change and omission in that one batch, including items outside \
+the focus. Do not acknowledge it and do not poll again: report its batch_id and ask the user \
+to confirm acknowledgement (ack_watch_changes) after they have received the digest.
 A null batch_id needs no acknowledgement. An unacknowledged batch is replayed; a replay is \
 not a new event."""
         text = "\n\n".join(
