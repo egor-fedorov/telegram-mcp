@@ -24,7 +24,7 @@ need a concrete contract before implementation; no delivery dates are assigned.
 | M4 | Complete for 0.4 | Durable checkpoints, recent revisions and source-linked JSONL/Markdown exports |
 | R4 | Complete for 0.4 | Bounded scope previews, early restricted search, reusable catalogs and concurrent calls |
 | R5 | Complete for 0.4 | Named subscriptions, protected positions, permanent selected files and compact discovery |
-| M5 | Implemented, unreleased | Bounded multi-source history, archived watch batches and usable monitoring prompts |
+| M5 | Complete, unreleased | Bounded multi-source history, archived watch batches and usable monitoring prompts |
 
 The [0.4 changelog](CHANGELOG.md#040---2026-10-26), [migration guide](docs/migration-0.4.md)
 and [validation record](docs/validation-0.4.md) describe the complete release scope.
@@ -56,9 +56,9 @@ Telegram readers and shared explicit fixtures. Dependency and development-tool u
 receive manual review; CI checks supported Python/platform combinations and fresh
 wheel/source installations.
 
-## 0.5: monitoring workflows (implemented, unreleased)
+## 0.5: monitoring workflows (complete, unreleased)
 
-[M5](docs/specs/m5-monitoring-workflows.md) is implemented in source and not released.
+[M5](docs/specs/m5-monitoring-workflows.md) is implemented and validated, but not released.
 
 - `get_history` reads selected `chat_ids`/`folder_ids` over a fixed period in one
   traversal, with early `ordering="page"` results, `max_sources`/`max_messages` budgets
@@ -71,11 +71,14 @@ wheel/source installations.
   completion, forwarded through STDIO, HTTP and `connect`. Templates treat Telegram
   content as data and bound each workflow. The vacancy digest is a documented preset.
 
-Offline `make check` passes: Ruff, ty and 1338 tests (two platform-specific skips).
-Before publication, acceptance criterion 6 requires a bounded live check of
-prompt/completion discovery and a workflow in a real client on selected sources,
-including interruption after archiving and recovery from retained files. No live
-Telegram or client validation has been done.
+Offline `make check` passes: Ruff, ty and 1403 tests (two platform-specific skips).
+Selected-source live checks on 2026-10-27 verified bounded multi-source history,
+prompt/completion discovery, archive replay across server restarts and recovery after
+acknowledgement. The maintainer confirmed a bounded `watch_digest` workflow and
+watch-name completion in Claude Code 2.1.310; archive integrity and persisted
+acknowledgement were checked independently. The [0.5 validation record](docs/validation-0.5.md)
+records environments, evidence and coverage limits. Release preparation and publication
+remain separate steps under the [release procedure](docs/releasing.md).
 
 ## Distribution follow-ups
 

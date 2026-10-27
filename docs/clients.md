@@ -217,8 +217,13 @@ subscription storage. `connect` forwards both and advertises them only when the 
 server supports them. Clients decide how prompts are shown; documentation for
 [Claude Code](https://code.claude.com/docs/en/mcp) and
 [VS Code](https://code.visualstudio.com/docs/agent-customization/mcp-servers) describes
-MCP prompts as chat commands. This project has not verified prompt or completion UI in
-any client. Offline tests use the Python MCP SDK over STDIO, HTTP and `connect`.
+MCP prompts as chat commands. On 2026-10-27, the maintainer verified `watch_digest`
+execution and watch-name completion in Claude Code 2.1.310 against a Linux server over
+STDIO. The run processed one selected change, saved the batch and acknowledged it;
+archive integrity and persisted acknowledgement were checked independently. See the
+[0.5 validation record](validation-0.5.md) for the exact scope. Other client UIs,
+`period_digest` execution in Claude Code, and live HTTP/`connect` workflows remain
+unverified. Offline tests cover all three transports with the Python MCP SDK.
 
 Without prompt support, use the
 [copyable recipes](usage.md#monitoring-prompts-unreleased): the same tool calls, budgets

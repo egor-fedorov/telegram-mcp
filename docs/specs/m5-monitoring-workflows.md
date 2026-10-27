@@ -1,8 +1,8 @@
 # M5: Bounded monitoring workflows (0.5)
 
-Status: implemented in source, unreleased; acceptance criterion 6 (live client
-validation) remains before publication. M5 combines bounded multi-source history,
-recoverable watch delivery and two general-purpose MCP prompts. The calling agent
+Status: implemented and validated, unreleased. The [validation record](../validation-0.5.md)
+documents the selected-source live checks and Claude Code workflow. M5 combines
+bounded multi-source history, recoverable watch delivery and two general-purpose MCP prompts. The calling agent
 performs analysis; the server supplies original content, progress and workflow templates.
 
 Version 0.4 already provides named chat/folder watches, durable positions and pending
@@ -200,8 +200,8 @@ the upstream supports it. Static templates need no change notifications. Preserv
 resources and compact/full output parity. Additive tool arguments/result fields require
 updated contract fixtures and usage/configuration guidance; default `save=false` and
 legacy single-source behavior remain compatible. No Telegram write/elicitation capability,
-scheduler or unrelated dependency upgrade is included. This planning PR changes no runtime
-code, package version or package changelog; implementation follows review.
+scheduler or unrelated dependency upgrade is included. Package versioning and publication
+follow the separate release process.
 
 ## Acceptance criteria
 
@@ -231,12 +231,13 @@ code, package version or package changelog; implementation follows review.
    discovery and a bounded workflow in a real supported client on selected sources,
    including interruption after archiving/acknowledgement and recovery from retained
    files. Record actual client/OS support and coverage without source content or credentials.
-   This documentation PR does not claim that future live validation has passed.
+   The [validation record](../validation-0.5.md) records the completed bounded checks.
 
 ## Delivery boundary
 
-Review this proposal first, then implement M5 in one focused PR. Mark completion only
-after acceptance and use the existing release process. Distribution remains independent:
+M5 was implemented in [PR #43](https://github.com/egor-fedorov/telegram-mcp/pull/43).
+Implementation and bounded live validation are complete; publication uses the existing
+release process. Distribution remains independent:
 [Registry #39](https://github.com/egor-fedorov/telegram-mcp/issues/39),
 [autostart #40](https://github.com/egor-fedorov/telegram-mcp/issues/40),
 [MCPB #41](https://github.com/egor-fedorov/telegram-mcp/issues/41).
