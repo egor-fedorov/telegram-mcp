@@ -51,6 +51,8 @@ Completed steps:
   field parity and 0.5 persisted state.
 - MCP tools by feature: `adapters.mcp` is a package whose server assembly registers seven
   feature modules in the advertised order; tool modules cannot import each other.
+- Wire DTOs by feature: `adapters.wire` is a package with the same feature modules, shared
+  `common` types and a split projection in `encoding`; schemas are unchanged.
 
 ## 0.4 completion
 

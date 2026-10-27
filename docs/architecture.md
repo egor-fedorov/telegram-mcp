@@ -29,8 +29,11 @@ Domain models deliberately use Pydantic. The MCP adapter owns separate compact w
 models because its public contract shares chat summaries, encodes canonical references
 and omits unknown optional metadata. Scope projection limits ID previews to 20 each
 and adds exact counts/truncation flags; internal authorization and cursor state retain
-every ID. Other boundaries reuse domain models where a
-second representation would add no useful behavior. Internal Python imports and
+every ID. The `adapters.wire` package groups these DTOs by the same features as the
+tool modules, with shared chats, issues, scopes and saved files in `common.py` and
+the projection in `encoding.py`; a contract test keeps their fields aligned with the
+domain models except for these documented projections. Other boundaries reuse domain
+models where a second representation would add no useful behavior. Internal Python imports and
 constructors are not a supported compatibility surface.
 
 ## Application responsibilities
