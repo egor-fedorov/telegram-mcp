@@ -8,6 +8,15 @@ A version entry describes its target artifact. Verify publication on
 
 ## [Unreleased]
 
+### Development
+
+- R6 structural consolidation: MCP tools and wire DTOs are organized by feature, complex
+  query, change, watch, storage and Telegram reader functions are split into named steps,
+  and Ruff enforces a McCabe complexity limit of 15. Tool schemas, descriptions, error
+  codes and persisted formats are unchanged.
+- Tests run in parallel through pytest-xdist; `make test-fast` skips tests marked `slow`.
+  New fixtures pin tool order and descriptions, wire/domain field parity and 0.5 state.
+
 ## [0.5.0] - 2026-10-27
 
 ### Added

@@ -1,7 +1,8 @@
 # R6: Structural consolidation
 
-Status: in progress after 0.5.0. Feature work is frozen until R6 completes; `main`
-accepts only R6 refactoring, bug fixes and reviewed dependency updates.
+Status: done. During R6, `main` accepted only R6 refactoring, bug fixes and reviewed
+dependency updates; the [roadmap](../../ROADMAP.md) records each step and the final
+measurements.
 
 In the week before 0.5.0 the source grew from about 4,000 to 12,100 lines. Feature PRs
 touched 16–29 source files, six to eight of them the same central modules: the MCP tool
@@ -73,3 +74,21 @@ detail of the composition root. Both are intentionally kept.
 - A full parallel `make check` is substantially faster than before, and `make test-fast`
   takes under a minute.
 - `make check` and the required GitHub `checks` job pass for every change.
+
+## Completion record
+
+All criteria are met. Ruff enforces `C901` at 15 with no exceptions; the largest MCP or
+wire module has 235 lines; the publication transaction, forward reader and temporary
+file store each have one implementation. The full parallel `make check` takes about 65
+seconds instead of four and a half minutes on four cores, and `make test-fast` about 40.
+
+Deviations from the plan:
+
+- `Service.close` keeps nested `finally` blocks. `AsyncExitStack` closes in the same
+  order but drops the first failure from the context of a later one; a new test pins
+  the order and the exception chain.
+- Exclusive private file writes stay in each store. Only the lease, expiry, leftover
+  cleanup and verified reads are shared, so store-specific limits and error codes,
+  including the code for a redirected file, remain unchanged.
+- Radon still rates a few functions D or worse because it also counts boolean operators;
+  all of them pass the McCabe limit.

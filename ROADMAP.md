@@ -25,7 +25,7 @@ need a concrete contract before implementation; no delivery dates are assigned.
 | R4 | Complete for 0.4 | Bounded scope previews, early restricted search, reusable catalogs and concurrent calls |
 | R5 | Complete for 0.4 | Named subscriptions, protected positions, permanent selected files and compact discovery |
 | M5 | Complete for 0.5 | Bounded multi-source history, archived watch batches and usable monitoring prompts |
-| R6 | In progress | Feature-organized MCP and wire modules, bounded complexity, shared storage and faster tests |
+| R6 | Done | Feature-organized MCP and wire modules, bounded complexity, shared storage and faster tests |
 
 The [0.5 changelog](CHANGELOG.md#050---2026-10-27) and
 [validation record](docs/validation-0.5.md) describe the current release scope.
@@ -36,14 +36,16 @@ Publication of 0.5.0 was verified on
 The [0.4 migration guide](docs/migration-0.4.md) applies to upgrades from 0.3;
 [0.4](docs/validation-0.4.md) and [0.3](docs/validation-0.3.md) retain earlier validation.
 
-## R6: structural consolidation (in progress)
+## R6: structural consolidation (done)
 
-[R6](docs/specs/r6-structural-consolidation.md) reorganizes the code after 0.5.0 without
+[R6](docs/specs/r6-structural-consolidation.md) reorganized the code after 0.5.0 without
 changing public behavior: the MCP contract, persisted formats and existing test
-assertions stay fixed. Feature work is frozen until R6 completes; `main` accepts R6
-refactoring, bug fixes and reviewed dependency updates.
+assertions stayed fixed. The feature freeze has ended. Offline `make check` passes with
+Ruff (`C901` at 15, no exceptions), ty and 1431 tests (two platform-specific skips) in
+about 65 seconds on four cores; `make test-fast` takes about 40 seconds. MCP and wire
+modules are at most 235 lines. No live Telegram validation was needed or performed.
 
-Completed steps:
+Steps:
 
 - Guardrails: Ruff `C901` at 15 with explicit markers on existing offenders, parallel
   pytest-xdist runs (`make check` from about 4.5 to 1.2 minutes on four cores), a `slow`

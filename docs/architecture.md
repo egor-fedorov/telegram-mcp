@@ -1,8 +1,8 @@
 # Architecture
 
 The server separates domain contracts, application policy and concrete adapters.
-This document describes the 0.4 architecture, including attachment downloads,
-durable monitoring and export capabilities. The [roadmap](../ROADMAP.md) and [changelog](../CHANGELOG.md) track delivery;
+This document describes the architecture after the R6 consolidation, including
+attachment downloads, durable monitoring and export capabilities. The [roadmap](../ROADMAP.md) and [changelog](../CHANGELOG.md) track delivery;
 [completed specifications](specs/README.md) preserve milestone contracts.
 
 ## Dependency rules

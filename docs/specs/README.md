@@ -4,10 +4,6 @@ Proposed contracts are review material, not implemented features. Completed cont
 describe delivery at each milestone; later changes are recorded in the
 [changelog](../../CHANGELOG.md) and [roadmap](../../ROADMAP.md).
 
-## In progress
-
-- [R6: Structural consolidation](r6-structural-consolidation.md) — feature freeze until complete
-
 ## Completed
 
 - [M1: Public-channel discovery](m1-public-channel-discovery.md)
@@ -16,6 +12,7 @@ describe delivery at each milestone; later changes are recorded in the
 - [M4: Changes and export](m4-changes-export.md)
 - [M5: Monitoring workflows (0.5)](m5-monitoring-workflows.md) — released in 0.5.0; see the [validation record](../validation-0.5.md)
 - [R2: Installation, local sharing, and release 0.2.0](r2-general-purpose.md)
+- [R6: Structural consolidation](r6-structural-consolidation.md) — internal; no public behavior change
 
 See [current layered architecture](../architecture.md) for the maintained design,
 including the R1 separation and subsequent retrieval, transport, and download work.

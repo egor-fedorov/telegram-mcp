@@ -33,9 +33,8 @@ uv run --locked ty check
 uv run --locked pytest -n auto
 ```
 
-Ruff enforces a maximum McCabe complexity of 15. Split a function into named steps
-instead of raising the limit; the remaining `# noqa: C901` markers are scheduled for
-removal in [R6](docs/specs/r6-structural-consolidation.md).
+Ruff enforces a maximum McCabe complexity of 15 with no exceptions. Split a function
+into named steps instead of raising the limit or adding `# noqa: C901`.
 
 CI checks formatting/types, builds wheel and source distributions, and runs tests
 plus clean-install smoke checks. The matrix covers Python 3.12–3.15 on Linux and
@@ -86,6 +85,21 @@ uv run --locked pytest tests/integration/test_attachment_resources.py
 ```
 
 Run the complete `make check` before opening or merging a PR.
+
+## Adding an MCP tool
+
+Tools are organized by feature: watches, changes, attachments, status, discovery,
+catalog and messages. A new tool in an existing feature touches only that feature:
+
+1. Implement the use case in `application/`, adding a port method, its Telegram gateway
+   and the matching `tests/support` fake only when it needs new Telegram data.
+2. Add one `Service` method that delegates to the use case.
+3. Add response DTOs to `adapters/wire/<feature>.py` and export them from
+   `adapters/wire/__init__.py`; the wire parity test lists any intended projection.
+4. Register the tool in `adapters/mcp/tools/<feature>.py`. Only a new feature module
+   needs one registration line in `adapters/mcp/server.py`, which fixes the tool order.
+5. Update `tests/fixtures/mcp_contract.json` and `tests/fixtures/mcp_listing.json` for
+   the intended contract change, and document the tool in the usage guide.
 
 ## Branches, commits, and pull requests
 
