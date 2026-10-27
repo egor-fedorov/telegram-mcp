@@ -249,7 +249,11 @@ def test_network_failure_is_not_mistaken_for_missing_version(monkeypatch) -> Non
         registry.fetch_json("https://example.invalid", missing_ok=True)
 
 
-@pytest.mark.parametrize("body", [b"[]", b"not json", b"x" * (2 * 1024 * 1024 + 1)])
+@pytest.mark.parametrize(
+    "body",
+    [b"[]", b"not json", b"x" * (2 * 1024 * 1024 + 1)],
+    ids=["not-an-object", "invalid-json", "oversized"],
+)
 def test_invalid_or_oversized_remote_metadata_is_rejected(monkeypatch, body: bytes) -> None:
     monkeypatch.setattr(registry, "urlopen", lambda *args, **kwargs: io.BytesIO(body))
     with pytest.raises(ValueError):
