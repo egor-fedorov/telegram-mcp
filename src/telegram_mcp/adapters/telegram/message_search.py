@@ -338,7 +338,7 @@ class MessageSearch:
             limit=limit,
         )
 
-    def _global_page(  # noqa: C901
+    def _global_page(
         self,
         response: Any,
         request: SearchRead,
@@ -362,21 +362,7 @@ class MessageSearch:
         last_date = None
         next_offset = offset
         for raw in response.messages:
-            mid, raw_peer, date = (
-                getattr(raw, "id", None),
-                getattr(raw, "peer_id", None),
-                getattr(raw, "date", None),
-            )
-            if (
-                not isinstance(raw, (types.Message, types.MessageService))
-                or not valid_topic_id(mid)
-                or raw_peer is None
-                or not isinstance(date, datetime)
-            ):
-                raise ToolError(
-                    "PAGINATION_INCOMPLETE",
-                    "Telegram returned a global search row without a usable position.",
-                )
+            mid, raw_peer, date = global_row(raw)
             cid = search_peer_id(raw_peer)
             if last_date is not None and utc(date) > last_date:
                 raise ToolError(
@@ -404,33 +390,68 @@ class MessageSearch:
             message = normalize_message(raw, chat, entities=entities)
             if matches_filters(message, filters):
                 output.append(message)
-        rate = getattr(response, "next_rate", None)
-        if rate is not None:
-            if type(rate) is not int or not 0 <= rate <= MAX_TOPIC_ID:
-                raise ToolError(
-                    "PAGINATION_INCOMPLETE",
-                    "Telegram returned an invalid global search continuation.",
-                )
-            next_offset = GlobalOffset(
-                rate, next_offset.peer_id, next_offset.message_id, next_offset.access_hash
-            )
-        if (next_offset.rate, next_offset.peer_id, next_offset.message_id) == (
-            offset.rate,
-            offset.peer_id,
-            offset.message_id,
-        ):
-            raise ToolError(
-                "PAGINATION_STALLED", "Telegram returned a non-advancing global search page."
-            )
+        next_offset = global_continuation(response, offset, next_offset)
         exhausted = isinstance(response, types.messages.Messages)
-        if not exhausted and next_offset.peer_id is not None:
-            _, kind = utils.resolve_id(int(next_offset.peer_id))
-            if kind is not types.PeerChat and next_offset.access_hash is None:
-                issues.append(
-                    ToolError(
-                        "PAGINATION_INCOMPLETE",
-                        "Telegram returned no usable continuation peer metadata.",
-                    ).issue()
-                )
-                exhausted = True
+        if not exhausted and not resumable(next_offset):
+            issues.append(
+                ToolError(
+                    "PAGINATION_INCOMPLETE",
+                    "Telegram returned no usable continuation peer metadata.",
+                ).issue()
+            )
+            exhausted = True
         return GlobalBatch(output, next_offset, exhausted, issues)
+
+
+def global_row(raw: Any) -> tuple[int, Any, datetime]:
+    """The position of one global search row; every row must have one."""
+    mid, raw_peer, date = (
+        getattr(raw, "id", None),
+        getattr(raw, "peer_id", None),
+        getattr(raw, "date", None),
+    )
+    if (
+        not isinstance(raw, (types.Message, types.MessageService))
+        or not valid_topic_id(mid)
+        or raw_peer is None
+        or not isinstance(date, datetime)
+    ):
+        raise ToolError(
+            "PAGINATION_INCOMPLETE",
+            "Telegram returned a global search row without a usable position.",
+        )
+    assert mid is not None
+    return mid, raw_peer, date
+
+
+def global_continuation(
+    response: Any, offset: GlobalOffset, next_offset: GlobalOffset
+) -> GlobalOffset:
+    """Apply Telegram's next rate and reject a page that does not advance."""
+    rate = getattr(response, "next_rate", None)
+    if rate is not None:
+        if type(rate) is not int or not 0 <= rate <= MAX_TOPIC_ID:
+            raise ToolError(
+                "PAGINATION_INCOMPLETE",
+                "Telegram returned an invalid global search continuation.",
+            )
+        next_offset = GlobalOffset(
+            rate, next_offset.peer_id, next_offset.message_id, next_offset.access_hash
+        )
+    if (next_offset.rate, next_offset.peer_id, next_offset.message_id) == (
+        offset.rate,
+        offset.peer_id,
+        offset.message_id,
+    ):
+        raise ToolError(
+            "PAGINATION_STALLED", "Telegram returned a non-advancing global search page."
+        )
+    return next_offset
+
+
+def resumable(offset: GlobalOffset) -> bool:
+    """A continuation peer other than a basic group needs its access hash."""
+    if offset.peer_id is None:
+        return True
+    _, kind = utils.resolve_id(int(offset.peer_id))
+    return kind is types.PeerChat or offset.access_hash is not None

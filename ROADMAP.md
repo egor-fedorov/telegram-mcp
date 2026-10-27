@@ -65,6 +65,9 @@ Completed steps:
 - Local storage: download and export stores share `TemporaryFiles` (lease, expiry, leftover
   cleanup, verified reads); checkpoint persistence is split into schema migrations and
   named write steps. Error codes and stored formats are unchanged.
+- Telegram readers: topic history, album windows and global search pages are split into
+  request, position and message steps with one shared page-issue collector. No function
+  needs a `C901` exemption any more.
 
 ## 0.4 completion
 
