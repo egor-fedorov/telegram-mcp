@@ -54,6 +54,13 @@ IDs. Regression tests exercise message and context reads through both MCP modes 
 the real Telegram adapter with synthetic responses, asserting no entity or message
 read occurs for a rejected ID. No live service-notification content is used.
 
+Selected-source validation passed on 2026-10-28: history/search, messages/context,
+album, photo and document/video downloads, checkpoints and exports, owned-client
+reconnect, selected peer metadata, and saved-watch replay/acknowledgement after
+reopening the service and stores. Offline `make check` passes 1478 tests with two
+platform-specific skips. The validation record lists bounds and untested live paths;
+publication remains a separate step.
+
 ## R6: structural consolidation (done)
 
 [R6](docs/specs/r6-structural-consolidation.md) reorganized the code after 0.5.0 without

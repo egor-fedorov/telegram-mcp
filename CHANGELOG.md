@@ -39,6 +39,8 @@ Security patch for 0.5.0; upgrading is recommended for every installation.
   Upgrade the shared server and client proxies together and restart the server.
 - A configuration whose `allowed_chat_ids` contains `777000` now fails with
   `INVALID_CONFIGURATION`; remove that entry or run `telegram-mcp configure`.
+- Noncanonical allowlist IDs also fail configuration validation. Use the ASCII decimal
+  ID returned by Telegram MCP, without leading zeros, a plus sign or whitespace.
 - See the [validation record](docs/validation-0.5.1.md) for offline and
   selected-source checks.
 
