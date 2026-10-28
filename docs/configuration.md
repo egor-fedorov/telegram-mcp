@@ -79,6 +79,9 @@ Discovery remains independent even when `allow_all_chats` is enabled.
 Telegram service notifications (`777000`) deliver login codes and are never readable:
 all-chat and folder access exclude them, explicit reads return `ACCESS_DENIED`, and
 listing them in `allowed_chat_ids` is a configuration error.
+Verification Codes (`489000`) follows the normal access policy: it is not permitted
+by default, but an allowlist, selected folder or `allow_all_chats` can permit it.
+The unconditional exception applies only to `777000`.
 Policy IDs use ASCII decimal digits with an optional minus sign and no leading zeros,
 whitespace or plus sign. Noncanonical IDs in message references return `INVALID_REFERENCE`
 before any read; noncanonical `allowed_chat_ids` entries are configuration errors.

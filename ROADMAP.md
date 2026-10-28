@@ -27,16 +27,16 @@ need a concrete contract before implementation; no delivery dates are assigned.
 | M5 | Complete for 0.5 | Bounded multi-source history, archived watch batches and usable monitoring prompts |
 | R6 | Done | Feature-organized MCP and wire modules, bounded complexity, shared storage and faster tests |
 
-The [0.5 changelog](CHANGELOG.md#050---2026-10-27) and
-[validation record](docs/validation-0.5.md) describe the current release scope.
-Publication of 0.5.0 was verified on
-[PyPI](https://pypi.org/project/telegram-context-mcp/0.5.0/),
-[GitHub Releases](https://github.com/egor-fedorov/telegram-mcp/releases/tag/v0.5.0), and the
-[MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.egor-fedorov%2Ftelegram-mcp/versions/0.5.0).
+The [0.5.1 changelog](CHANGELOG.md#051---2026-10-28) and
+[validation record](docs/validation-0.5.1.md) describe the current release scope.
+Publication of 0.5.1 was verified on
+[PyPI](https://pypi.org/project/telegram-context-mcp/0.5.1/),
+[GitHub Releases](https://github.com/egor-fedorov/telegram-mcp/releases/tag/v0.5.1), and the
+[MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.egor-fedorov%2Ftelegram-mcp/versions/0.5.1).
 The [0.4 migration guide](docs/migration-0.4.md) applies to upgrades from 0.3;
 [0.4](docs/validation-0.4.md) and [0.3](docs/validation-0.3.md) retain earlier validation.
 
-## 0.5.1: security patch (prepared)
+## 0.5.1: security patch (released)
 
 Telegram's service-notification chat `777000` delivers login codes. In 0.5.0,
 all-chat access or a selected folder containing it made it readable. 0.5.1 excludes
@@ -46,7 +46,7 @@ requests with `ACCESS_DENIED`, and rejects allowlisting it. The fix was contribu
 [#59](https://github.com/egor-fedorov/telegram-mcp/pull/59). The patch also ships R6;
 tools, schemas and persisted state are unchanged. The
 [0.5.1 validation record](docs/validation-0.5.1.md) tracks offline and selected-source
-checks; publication remains pending under the [release procedure](docs/releasing.md).
+checks and publication verification under the [release procedure](docs/releasing.md).
 The follow-up in [#62](https://github.com/egor-fedorov/telegram-mcp/pull/62)
 checks canonical ASCII chat IDs before any grant,
 closing a Unicode-digit alias bypass. Configuration rejects noncanonical allowlist
@@ -58,8 +58,13 @@ Selected-source validation passed on 2026-10-28: history/search, messages/contex
 album, photo and document/video downloads, checkpoints and exports, owned-client
 reconnect, selected peer metadata, and saved-watch replay/acknowledgement after
 reopening the service and stores. Offline `make check` passes 1478 tests with two
-platform-specific skips. The validation record lists bounds and untested live paths;
-publication remains a separate step.
+platform-specific skips. The release workflow passed, the published package and Registry
+entry were verified, and fresh PyPI installations passed. The validation record lists
+coverage limits and the initial CI transport timeout that passed on retry.
+
+Verification Codes (`489000`) retains the normal configured access policy; the
+unconditional exception remains limited to `777000`. The proposed blanket ban in
+[#61](https://github.com/egor-fedorov/telegram-mcp/pull/61) was declined.
 
 ## R6: structural consolidation (done)
 

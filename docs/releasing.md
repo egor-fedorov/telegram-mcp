@@ -6,7 +6,7 @@ The commands below use **0.5.2 as an example**, not a published or scheduled rel
 substitute the version being prepared. Published 0.4.0 predates Registry metadata.
 Publishing requires selected-source validation, including any changed download,
 monitoring and retrieval paths. The [0.5.1 validation record](validation-0.5.1.md) covers
-the current candidate; the [0.4 migration guide](migration-0.4.md) applies to upgrades
+the current release; the [0.4 migration guide](migration-0.4.md) applies to upgrades
 from 0.3. Source changes, a release
 tag, a GitHub Release, a published PyPI distribution, and an MCP Registry entry are
 separate states. Verify each publication before announcing it.

@@ -23,9 +23,14 @@ The server's read-only API and allowlists restrict its tools, not the permission
 of the underlying Telegram session. Keep session files private and report suspected
 policy bypasses through the private channel above.
 
-Telegram service notifications (`777000`) deliver login codes. Every tool denies this
-chat regardless of `allow_all_chats`, folders or allowlists, so login codes never reach
-the model.
+Telegram service notifications (`777000`) deliver Telegram login codes. Every tool
+denies reads from this chat regardless of `allow_all_chats`, folders or allowlists.
+This exception does not filter codes copied into other permitted chats.
+
+Verification Codes (`489000`), which delivers codes for third-party services, follows
+the normal configured access policy. It is not permitted by default, but an allowlist,
+selected folder or `allow_all_chats` can permit it. Granting that access can expose
+those codes to the connected agent.
 
 ## Local HTTP trust boundary
 

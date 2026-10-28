@@ -1,6 +1,6 @@
 # 0.5.1 validation record
 
-This record covers the 0.5.1 security patch, prepared on 2026-10-28 (UTC). Since the
+This record covers the 0.5.1 security patch, released on 2026-10-28 (UTC). Since the
 [0.5.0 record](validation-0.5.md), `main` gained these changes:
 
 - [#59](https://github.com/egor-fedorov/telegram-mcp/pull/59), ported from
@@ -16,8 +16,40 @@ This record covers the 0.5.1 security patch, prepared on 2026-10-28 (UTC). Since
 Application code matches source revision `c85f60b6e35959738b9dfa2154acc487a0fc73ae`,
 after #62 was merged. Checks ran on release candidate `ae974b4`, which incorporates
 that fix; subsequent release edits change documentation only.
-Publication is pending. PyPI, GitHub Release and MCP Registry checks will be recorded
-after the release workflow completes.
+Tag `v0.5.1` points to `09dabf34a72c798218f1b02eeed039d7cdc19773`, the squash merge
+of [#60](https://github.com/egor-fedorov/telegram-mcp/pull/60). Its tree exactly matches
+the validated release PR head `3b3bdd4`.
+
+## Publication verification
+
+The [release workflow](https://github.com/egor-fedorov/telegram-mcp/actions/runs/40689376715)
+passed validation and all three publication jobs. Both non-yanked artifacts were
+downloaded from [PyPI](https://pypi.org/project/telegram-context-mcp/0.5.1/); their sizes
+and SHA-256 values matched the [GitHub Release](https://github.com/egor-fedorov/telegram-mcp/releases/tag/v0.5.1)
+asset metadata:
+
+| Artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Wheel | 175,724 | `6b2d0177de3085864a94c818a0c4a36bd4c9d69f15519017fda43b7c8db27637` |
+| Source distribution | 439,883 | `34fa8b2dfd83ce2afee5cb1ea5ef6d85ebe04726d4591b5b54929cb4ffc941fa` |
+
+The [Registry entry](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.egor-fedorov%2Ftelegram-mcp/versions/0.5.1)
+is active and exactly matches the tagged `server.json`. The command
+`scripts/check_registry.py --tag v0.5.1 --check-pypi --require-published` passed.
+
+Both downloaded distributions passed isolated installation and the Registry launch,
+metadata, CLI, STDIO, HTTP and bridge smoke checks with compact and full schemas.
+Fresh `uvx` runs from the primary PyPI index reported `telegram-mcp 0.5.1` for both
+the `telegram-mcp` executable and its `telegram-context-mcp` alias. Downloads,
+temporary caches and environments were removed after verification.
+
+The first release CI attempt timed out in
+`test_http_and_connect_deliver_full_size_resource[connect-legacy]` on Linux/Python
+3.14.4, while listing resources after the 20 MiB resource had been verified. PyPI
+publication was skipped. The exact test then passed three times in an isolated local
+Python 3.14.4 environment (about 4–6 seconds each). The failed CI jobs were retried and
+passed without changing source, timeouts or the tag. The initial timeout's root cause
+was not isolated; this record does not claim a transport fix.
 
 ## Offline verification
 
