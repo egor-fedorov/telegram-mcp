@@ -6,6 +6,7 @@ import pytest
 from pydantic import SecretStr, ValidationError
 
 from telegram_mcp.adapters.config import Settings, load_settings, save_settings
+from telegram_mcp.domain.models import ToolError
 
 
 def test_configuration_roundtrip_and_file_permissions(
@@ -99,3 +100,11 @@ def test_prompt_timezone_defaults_to_utc_and_rejects_unknown_zones(tmp_path: Pat
     for value in ("Mars/Olympus", "+03:00", "../etc/passwd"):
         with pytest.raises(ValidationError, match="IANA time zone"):
             Settings(timezone=value)
+
+
+def test_service_notifications_cannot_be_allowlisted(tmp_path: Path) -> None:
+    path = tmp_path / "config.toml"
+    path.write_text('allowed_chat_ids = ["1", "777000"]\n', encoding="utf-8")
+    with pytest.raises(ToolError, match="INVALID_CONFIGURATION") as error:
+        load_settings(path)
+    assert "777000" in error.value.detail

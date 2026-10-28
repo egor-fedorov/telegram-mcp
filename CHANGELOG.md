@@ -8,6 +8,14 @@ A version entry describes its target artifact. Verify publication on
 
 ## [Unreleased]
 
+### Security
+
+- Telegram service notifications (`777000`), which deliver login codes, are never
+  readable: all-chat and folder access exclude them, explicit reads and monitoring,
+  export or download requests return `ACCESS_DENIED`, and configuration that
+  allowlists them is rejected. Previously `allow_all_chats` or a folder containing
+  this chat let a prompt-injected agent read a login code.
+
 ### Development
 
 - R6 structural consolidation: MCP tools and wire DTOs are organized by feature, complex

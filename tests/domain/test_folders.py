@@ -103,3 +103,13 @@ def test_unread_mentions_and_community_rules() -> None:
     chat.is_archived = False
     chat.is_community = True
     assert not contains(folder, chat)
+
+
+def test_service_notifications_are_never_allowed() -> None:
+    chats = [
+        Chat(id="1", title="one", type="private"),
+        Chat(id="777000", title="Telegram", type="private"),
+    ]
+    folders = [Folder(id=1, title="All", position=0, included_chat_ids=["1", "777000"])]
+    assert allowed_ids(ReadPolicy(allow_all_chats=True), chats, folders) == {"1"}
+    assert allowed_ids(ReadPolicy(allowed_folder_ids=(1,)), chats, folders) == {"1"}

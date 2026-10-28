@@ -23,6 +23,10 @@ The server's read-only API and allowlists restrict its tools, not the permission
 of the underlying Telegram session. Keep session files private and report suspected
 policy bypasses through the private channel above.
 
+Telegram service notifications (`777000`) deliver login codes. Every tool denies this
+chat regardless of `allow_all_chats`, folders or allowlists, so login codes never reach
+the model.
+
 ## Local HTTP trust boundary
 
 The optional HTTP server binds to `127.0.0.1` and requires a bearer token stored in

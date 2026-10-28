@@ -2,6 +2,9 @@
 
 from dataclasses import dataclass
 
+# Telegram's service-notification account delivers login codes; it is never readable.
+SERVICE_NOTIFICATIONS_ID = "777000"
+
 
 @dataclass(frozen=True)
 class ReadPolicy:

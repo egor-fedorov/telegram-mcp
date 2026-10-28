@@ -20,6 +20,7 @@ from telegram_mcp.application.requests import (
 )
 from telegram_mcp.domain.folders import select_chats
 from telegram_mcp.domain.models import Chat, Scope, ToolError, TraversalBudget
+from telegram_mcp.domain.policy import SERVICE_NOTIFICATIONS_ID
 
 
 @dataclass(frozen=True)
@@ -182,7 +183,7 @@ class QueryPreparation:
                 )
                 known.add(chat_id)
         allowed = (
-            {chat.id for chat in chats}
+            {chat.id for chat in chats} - {SERVICE_NOTIFICATIONS_ID}
             if access.policy.allow_all_chats
             else access.allowed | access.public.keys()
         )

@@ -14,7 +14,7 @@ from pydantic import Field, SecretStr, ValidationError, field_validator
 
 from telegram_mcp.domain.models import Model, ToolError
 from telegram_mcp.domain.periods import load_zone
-from telegram_mcp.domain.policy import ReadPolicy
+from telegram_mcp.domain.policy import SERVICE_NOTIFICATIONS_ID, ReadPolicy
 
 
 class Settings(Model):
@@ -51,6 +51,16 @@ class Settings(Model):
             load_zone(value)
         except ToolError:
             raise ValueError("must be an IANA time zone name such as Europe/Moscow") from None
+        return value
+
+    @field_validator("allowed_chat_ids")
+    @classmethod
+    def refuse_service_notifications(cls, value: list[str]) -> list[str]:
+        if SERVICE_NOTIFICATIONS_ID in value:
+            raise ValueError(
+                f"remove {SERVICE_NOTIFICATIONS_ID}; Telegram service notifications contain "
+                "login codes and are never readable"
+            )
         return value
 
     def credentials(self) -> tuple[int, str]:
