@@ -6,6 +6,11 @@ from urllib.parse import urlparse
 from telegram_mcp.domain.models import ToolError
 
 
+def is_canonical_chat_id(value: str) -> bool:
+    """Policy IDs must match the ASCII decimal form produced by Telegram peer mapping."""
+    return re.fullmatch(r"-?[1-9][0-9]*", value) is not None
+
+
 def chat_target(ref: str) -> int | str:
     value = ref.strip()
     if value.startswith(("t.me/", "telegram.me/", "www.t.me/")):

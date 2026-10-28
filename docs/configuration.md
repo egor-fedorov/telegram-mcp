@@ -79,6 +79,9 @@ Discovery remains independent even when `allow_all_chats` is enabled.
 Telegram service notifications (`777000`) deliver login codes and are never readable:
 all-chat and folder access exclude them, explicit reads return `ACCESS_DENIED`, and
 listing them in `allowed_chat_ids` is a configuration error.
+Policy IDs use ASCII decimal digits with an optional minus sign and no leading zeros,
+whitespace or plus sign. Noncanonical IDs in message references return `INVALID_REFERENCE`
+before any read; noncanonical `allowed_chat_ids` entries are configuration errors.
 
 Folders form a union; explicit `chat_ids` intersect with selected folders. Query filters
 cannot expand server permissions. Comments and parent replies from another chat require

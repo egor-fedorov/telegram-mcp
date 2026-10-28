@@ -36,6 +36,14 @@ Publication of 0.5.0 was verified on
 The [0.4 migration guide](docs/migration-0.4.md) applies to upgrades from 0.3;
 [0.4](docs/validation-0.4.md) and [0.3](docs/validation-0.3.md) retain earlier validation.
 
+## Security follow-up (unreleased)
+
+Service-notification access now checks canonical ASCII chat IDs before any grant,
+closing a Unicode-digit alias bypass. Configuration rejects noncanonical allowlist
+IDs. Regression tests exercise message and context reads through both MCP modes and
+the real Telegram adapter with synthetic responses, asserting no entity or message
+read occurs for a rejected ID. No live service-notification content is used.
+
 ## R6: structural consolidation (done)
 
 [R6](docs/specs/r6-structural-consolidation.md) reorganized the code after 0.5.0 without
