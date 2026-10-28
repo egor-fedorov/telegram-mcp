@@ -1,0 +1,54 @@
+{
+  "manifest_version": "0.4",
+  "name": "telegram-mcp",
+  "display_name": "Telegram Context",
+  "version": "0.0.0",
+  "description": "Read Telegram through your configured shared local server.",
+  "long_description": "Connect Claude Desktop to an existing Telegram Context MCP HTTP server on this computer. Complete Telegram login and access configuration separately, start the shared server, and select its configuration file. The extension does not start the server or ask for Telegram login codes. Keep the shared server and extension on the same package version.",
+  "author": {
+    "name": "Egor Fedorov",
+    "url": "https://github.com/egor-fedorov"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/egor-fedorov/telegram-mcp"
+  },
+  "homepage": "https://github.com/egor-fedorov/telegram-mcp",
+  "documentation": "https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/mcpb.md",
+  "support": "https://github.com/egor-fedorov/telegram-mcp/issues",
+  "license": "MIT",
+  "privacy_policies": ["https://telegram.org/privacy"],
+  "server": {
+    "type": "uv",
+    "entry_point": "server.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--locked",
+        "--python",
+        "3.12",
+        "--directory",
+        "${__dirname}",
+        "server.py",
+        "--config",
+        "${user_config.config_file}"
+      ]
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {"python": ">=3.12"}
+  },
+  "tools_generated": true,
+  "prompts_generated": true,
+  "keywords": ["telegram", "search", "monitoring"],
+  "user_config": {
+    "config_file": {
+      "type": "file",
+      "title": "Shared server configuration",
+      "description": "Select the existing config.toml used by your local Telegram Context HTTP server. Use an absolute path outside the extension directory. Complete login and start the server separately before enabling this extension.",
+      "required": true
+    }
+  }
+}

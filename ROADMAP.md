@@ -166,8 +166,14 @@ automatic startup after reboot and login, followed by an authorized, connected
 package release is needed to adopt it.
 
 [Ship a validated MCPB bundle (#41)](https://github.com/egor-fedorov/telegram-mcp/issues/41)
-remains the next independent distribution task, reusing the shared-server setup
-and session-ownership model.
+is in progress. One `uv` bundle uses the release wheel and locked runtime dependencies,
+runs only the existing `connect` proxy, and selects an external configuration file.
+CI covers packaging, checksums, reproducibility and extracted launches on Linux,
+Windows and macOS; release automation attaches the validated bundle separately from
+the PyPI artifacts. The [installation and validation guide](docs/mcpb.md) records
+the shared-server prerequisite. Windows Claude Desktop acceptance remains pending;
+manual macOS Desktop validation is explicitly unverified and does not block the
+first bundle. The issue stays open until the Windows report is recorded.
 
 ## Later decisions
 
