@@ -157,15 +157,17 @@ is complete with 0.5.0: the active entry points to the verified PyPI artifacts a
 the package-named STDIO executable. The OIDC publication workflow remains independently
 retryable; see the [release procedure](docs/releasing.md#mcp-registry-publication).
 
-Remaining distribution work can ship independently:
+[Opt-in shared HTTP server autostart (#40)](https://github.com/egor-fedorov/telegram-mcp/issues/40)
+is complete on Linux: the user unit and [lifecycle guide](docs/autostart.md) were
+validated on Arch Linux with systemd 262.1. Two clients, failure recovery,
+stop/restart, reinstall and removal passed. On 2026-10-28, the maintainer confirmed
+automatic startup after reboot and login, followed by an authorized, connected
+`get_status` response in Claude Code. The unit works with published 0.5.1; no
+package release is needed to adopt it.
 
-1. [Support opt-in shared HTTP server autostart (#40)](https://github.com/egor-fedorov/telegram-mcp/issues/40):
-   the Linux user unit and [lifecycle guide](docs/autostart.md) are implemented and
-   validated on Arch Linux with systemd 262.1. Two clients, failure recovery,
-   stop/restart, reinstall and removal passed. Fresh-login startup confirmation
-   remains pending, so the issue stays open. The unit works with published 0.5.1;
-   no package release is needed to adopt it.
-2. [Ship a validated MCPB bundle (#41)](https://github.com/egor-fedorov/telegram-mcp/issues/41), after the setup and session-ownership model is settled.
+[Ship a validated MCPB bundle (#41)](https://github.com/egor-fedorov/telegram-mcp/issues/41)
+remains the next independent distribution task, reusing the shared-server setup
+and session-ownership model.
 
 ## Later decisions
 

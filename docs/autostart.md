@@ -174,12 +174,14 @@ Repository `make check` passed Ruff, ty, and 1478 tests with two platform-specif
 skips, using the locked development dependencies. The user service was left
 enabled and active, with linger disabled.
 
-**Fresh-login startup is pending.** At the next login, before manually starting
-the service, check `systemctl --user status telegram-mcp.service --no-pager` and
-call MCP `get_status`. Record confirmation in
-[#40](https://github.com/egor-fedorov/telegram-mcp/issues/40) before closing it.
-Enabling the unit alone does not prove this check passed; no logout or reboot is
-performed automatically. Other Linux distributions have not been validated.
+The maintainer confirmed startup after reboot and login on 2026-10-28. Before any
+manual start, `systemctl --user status telegram-mcp.service --no-pager` reported
+the unit enabled and active since 18:23:40 UTC. A subsequent `get_status` call in
+Claude Code returned `authorized: true`, `connected: true`, and `mode: read_only`;
+the configured access policy and archive setting were unchanged. This completes
+the login-startup check for
+[#40](https://github.com/egor-fedorov/telegram-mcp/issues/40). Other Linux
+distributions have not been validated.
 
 References: [systemd service lifecycle](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html),
 [uv tool installation](https://docs.astral.sh/uv/concepts/tools/).
