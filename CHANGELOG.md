@@ -8,6 +8,10 @@ A version entry describes its target artifact. Verify publication on
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-10-28
+
+Security patch for 0.5.0; upgrading is recommended for every installation.
+
 ### Security
 
 - Telegram service notifications (`777000`), which deliver login codes, are never
@@ -24,6 +28,15 @@ A version entry describes its target artifact. Verify publication on
   codes and persisted formats are unchanged.
 - Tests run in parallel through pytest-xdist; `make test-fast` skips tests marked `slow`.
   New fixtures pin tool order and descriptions, wire/domain field parity and 0.5 state.
+
+### Compatibility and validation
+
+- Tools, prompts, schemas and persisted state are unchanged; no client refresh is needed.
+  Upgrade the shared server and client proxies together and restart the server.
+- A configuration whose `allowed_chat_ids` contains `777000` now fails with
+  `INVALID_CONFIGURATION`; remove that entry or run `telegram-mcp configure`.
+- See the [validation record](docs/validation-0.5.1.md) for offline and
+  selected-source checks.
 
 ## [0.5.0] - 2026-10-27
 

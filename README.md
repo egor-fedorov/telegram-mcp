@@ -24,21 +24,23 @@ Version 0.5 adds bounded history across chats or folders, watch batches saved be
 acknowledgement, and `watch_digest` / `period_digest` prompts with local watch-name
 completion. When upgrading, restart the server and client proxies and refresh tools
 and prompts. The [0.5 changelog](https://github.com/egor-fedorov/telegram-mcp/blob/main/CHANGELOG.md#050---2026-10-27)
-describes the additive changes and archive setup.
+describes the additive changes and archive setup. Version 0.5.1 is a security patch:
+Telegram's service-notification chat, which delivers login codes, is never readable,
+even with all-chat or folder access. Upgrade every installation.
 
 ## Install and log in
 
 Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then run:
 
 ```sh
-uv tool install --python 3.12 telegram-context-mcp==0.5.0
+uv tool install --python 3.12 telegram-context-mcp==0.5.1
 telegram-mcp --version
 telegram-mcp login
 telegram-mcp configure
 telegram-mcp status
 ```
 
-These examples target release 0.5.0; check [PyPI](https://pypi.org/project/telegram-context-mcp/)
+These examples target release 0.5.1; check [PyPI](https://pypi.org/project/telegram-context-mcp/)
 for published versions. Use the [source setup](#run-from-source) for unreleased revisions.
 Upgrading from 0.3? Read the [migration guide](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/migration-0.4.md),
 then restart the server and refresh your client's tool schemas.
@@ -56,7 +58,7 @@ The package name is **`telegram-context-mcp`**; the executable is **`telegram-mc
 You can also run a pinned version without installing a persistent command:
 
 ```sh
-uvx --python 3.12 --from telegram-context-mcp==0.5.0 telegram-mcp --version
+uvx --python 3.12 --from telegram-context-mcp==0.5.1 telegram-mcp --version
 ```
 
 The server is listed in the official MCP Registry as
@@ -190,7 +192,9 @@ and squash merges after CI. See the
 [changelog](https://github.com/egor-fedorov/telegram-mcp/blob/main/CHANGELOG.md), and
 [release procedure](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/releasing.md).
 The [0.5 validation record](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/validation-0.5.md)
-reports release checks and the scope of selected-source and client validation.
+reports release checks and the scope of selected-source and client validation;
+the [0.5.1 record](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/validation-0.5.1.md)
+covers the security patch.
 
 The code is [MIT licensed](https://github.com/egor-fedorov/telegram-mcp/blob/main/LICENSE).
 This does not grant rights to Telegram content. Secret chats are unsupported; attachment

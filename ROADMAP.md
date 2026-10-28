@@ -36,6 +36,18 @@ Publication of 0.5.0 was verified on
 The [0.4 migration guide](docs/migration-0.4.md) applies to upgrades from 0.3;
 [0.4](docs/validation-0.4.md) and [0.3](docs/validation-0.3.md) retain earlier validation.
 
+## 0.5.1: security patch (prepared)
+
+Telegram's service-notification chat `777000` delivers login codes. In 0.5.0,
+all-chat access or a selected folder containing it made it readable. 0.5.1 excludes
+it from all-chat and folder access, denies explicit, monitoring, export and download
+requests with `ACCESS_DENIED`, and rejects allowlisting it. The fix was contributed in
+[#34](https://github.com/egor-fedorov/telegram-mcp/pull/34) and ported onto R6 in
+[#59](https://github.com/egor-fedorov/telegram-mcp/pull/59). The patch also ships R6;
+tools, schemas and persisted state are unchanged. The
+[0.5.1 validation record](docs/validation-0.5.1.md) tracks offline and selected-source
+checks; publication remains pending under the [release procedure](docs/releasing.md).
+
 ## R6: structural consolidation (done)
 
 [R6](docs/specs/r6-structural-consolidation.md) reorganized the code after 0.5.0 without
