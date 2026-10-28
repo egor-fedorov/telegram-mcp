@@ -19,6 +19,10 @@ Security patch for 0.5.0; upgrading is recommended for every installation.
   export or download requests return `ACCESS_DENIED`, and configuration that
   allowlists them is rejected. Previously `allow_all_chats` or a folder containing
   this chat let a prompt-injected agent read a login code.
+- Access checks reject noncanonical numeric chat IDs before all-chat, explicit,
+  public-channel or same-source grants. Unicode-digit aliases previously bypassed
+  the service-notification deny rule in message and context reads. `allowed_chat_ids`
+  also requires ASCII decimal IDs without leading zeros or extra characters.
 
 ### Development
 

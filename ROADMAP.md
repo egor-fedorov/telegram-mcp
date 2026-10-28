@@ -47,6 +47,12 @@ requests with `ACCESS_DENIED`, and rejects allowlisting it. The fix was contribu
 tools, schemas and persisted state are unchanged. The
 [0.5.1 validation record](docs/validation-0.5.1.md) tracks offline and selected-source
 checks; publication remains pending under the [release procedure](docs/releasing.md).
+The follow-up in [#62](https://github.com/egor-fedorov/telegram-mcp/pull/62)
+checks canonical ASCII chat IDs before any grant,
+closing a Unicode-digit alias bypass. Configuration rejects noncanonical allowlist
+IDs. Regression tests exercise message and context reads through both MCP modes and
+the real Telegram adapter with synthetic responses, asserting no entity or message
+read occurs for a rejected ID. No live service-notification content is used.
 
 ## R6: structural consolidation (done)
 

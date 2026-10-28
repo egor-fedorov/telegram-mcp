@@ -5,8 +5,10 @@ from datetime import timedelta
 import pytest
 
 from telegram_mcp.adapters.config import Settings
+from telegram_mcp.application.access import AccessContext
 from telegram_mcp.bootstrap import build_service
 from telegram_mcp.domain.models import Chat, Folder, ToolError
+from telegram_mcp.domain.policy import ReadPolicy
 from tests.support.fakes import BASE, FakeBackend, msg
 from tests.support.incremental import incremental_fixture
 
@@ -79,3 +81,23 @@ async def test_monitoring_and_exports_deny_the_service_chat(tmp_path) -> None:
                 await call()
         info = await env.service.create_watch("all", folder_ids=[7])
         assert info.source_count == 1
+
+
+@pytest.mark.parametrize(
+    "chat_id", ["77700\u0660", "77700\uff10", "0777000", "+777000", "777000\n"]
+)
+@pytest.mark.parametrize("grant", ["all-chats", "allowlist", "public", "same-source"])
+async def test_canonical_id_check_precedes_every_access_grant(chat_id: str, grant: str) -> None:
+    backend = FakeBackend()
+    access = AccessContext(
+        [],
+        [],
+        {chat_id} if grant == "allowlist" else set(),
+        ReadPolicy(allow_all_chats=grant == "all-chats", allow_public_channel_reads=True),
+        backend,
+    )
+    with pytest.raises(ToolError, match="INVALID_REFERENCE"):
+        access.require_access(chat_id, same_source=chat_id if grant == "same-source" else None)
+    with pytest.raises(ToolError, match="INVALID_REFERENCE"):
+        await access.allow_explicit(chat_id)
+    assert not backend.backend_calls

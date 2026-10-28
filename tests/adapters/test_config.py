@@ -108,3 +108,13 @@ def test_service_notifications_cannot_be_allowlisted(tmp_path: Path) -> None:
     with pytest.raises(ToolError, match="INVALID_CONFIGURATION") as error:
         load_settings(path)
     assert "777000" in error.value.detail
+
+
+@pytest.mark.parametrize("chat_id", ["77700\u0660", "77700\uff10", "0777000", "+777000", "777000 "])
+def test_noncanonical_chat_ids_cannot_be_allowlisted(tmp_path: Path, chat_id: str) -> None:
+    path = tmp_path / "config.toml"
+    path.write_text(f'allowed_chat_ids = ["1", "{chat_id}"]\n', encoding="utf-8")
+    with pytest.raises(ToolError, match="INVALID_CONFIGURATION") as error:
+        load_settings(path)
+    assert "allowed_chat_ids" in error.value.detail
+    assert "ASCII" in error.value.detail

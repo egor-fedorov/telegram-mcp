@@ -6,6 +6,7 @@ from telegram_mcp.application.ports import ChatPort, PolicyProvider
 from telegram_mcp.domain.folders import allowed_ids
 from telegram_mcp.domain.models import Chat, Folder, ToolError
 from telegram_mcp.domain.policy import SERVICE_NOTIFICATIONS_ID, ReadPolicy
+from telegram_mcp.domain.references import is_canonical_chat_id
 
 
 @dataclass
@@ -17,13 +18,23 @@ class AccessContext:
     chat_port: ChatPort
     public: dict[str, Chat] = field(default_factory=dict)
 
-    def require_access(self, chat_id: str, *, same_source: str | None = None) -> None:
-        """Linked peers require normal access; parents may share their anchor's grant."""
+    def _require_readable_id(self, chat_id: str) -> None:
+        # int() accepts Unicode digits; raw aliases must not bypass string-based policy checks.
+        if not is_canonical_chat_id(chat_id):
+            raise ToolError(
+                "INVALID_REFERENCE",
+                "Use a numeric chat ID with ASCII digits, no leading zeros, "
+                "and an optional minus sign.",
+            )
         if chat_id == SERVICE_NOTIFICATIONS_ID:
             raise ToolError(
                 "ACCESS_DENIED",
                 "Telegram service notifications contain login codes and are never readable.",
             )
+
+    def require_access(self, chat_id: str, *, same_source: str | None = None) -> None:
+        """Linked peers require normal access; parents may share their anchor's grant."""
+        self._require_readable_id(chat_id)
         if (
             not self.policy.allow_all_chats
             and chat_id not in self.allowed
@@ -35,8 +46,7 @@ class AccessContext:
 
     async def allow_explicit(self, chat_id: str) -> None:
         """Authorize a user-selected source without extending the dialog catalog."""
-        if chat_id == SERVICE_NOTIFICATIONS_ID:
-            self.require_access(chat_id)
+        self._require_readable_id(chat_id)
         if self.policy.allow_all_chats or chat_id in self.allowed or chat_id in self.public:
             return
         if not self.policy.allow_public_channel_reads:

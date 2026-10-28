@@ -15,6 +15,7 @@ from pydantic import Field, SecretStr, ValidationError, field_validator
 from telegram_mcp.domain.models import Model, ToolError
 from telegram_mcp.domain.periods import load_zone
 from telegram_mcp.domain.policy import SERVICE_NOTIFICATIONS_ID, ReadPolicy
+from telegram_mcp.domain.references import is_canonical_chat_id
 
 
 class Settings(Model):
@@ -56,6 +57,11 @@ class Settings(Model):
     @field_validator("allowed_chat_ids")
     @classmethod
     def refuse_service_notifications(cls, value: list[str]) -> list[str]:
+        if any(not is_canonical_chat_id(chat_id) for chat_id in value):
+            raise ValueError(
+                "use numeric chat IDs with ASCII digits, no leading zeros, "
+                "and an optional minus sign"
+            )
         if SERVICE_NOTIFICATIONS_ID in value:
             raise ValueError(
                 f"remove {SERVICE_NOTIFICATIONS_ID}; Telegram service notifications contain "
