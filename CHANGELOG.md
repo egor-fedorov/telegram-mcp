@@ -8,6 +8,13 @@ A version entry describes its target artifact. Verify publication on
 
 ## [Unreleased]
 
+### Distribution
+
+- Optional Linux systemd user unit and installation/lifecycle guide for the shared
+  HTTP server. It runs a persistent installed executable, restarts after crashes,
+  and preserves the existing local authentication and session ownership model.
+  The unit works with published 0.5.1; no package upgrade is required to adopt it.
+
 ## [0.5.1] - 2026-10-28
 
 Security patch for 0.5.0; upgrading is recommended for every installation.

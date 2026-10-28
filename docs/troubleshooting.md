@@ -23,7 +23,10 @@ the version to PyPI are separate steps.
 ## The shared server cannot be reached
 
 `connect` does not start a server. Start `telegram-mcp serve --transport http` yourself
-and keep the process running. The endpoint is `http://127.0.0.1:8765/mcp` by default.
+and keep the process running, or start the optional [Linux user service](autostart.md).
+For that service, inspect `systemctl --user status telegram-mcp.service` and
+`journalctl --user -u telegram-mcp.service`; use MCP `get_status` to check Telegram
+authorization separately. The endpoint is `http://127.0.0.1:8765/mcp` by default.
 Check that the server and proxies use the same configuration, `http_port`, and
 `http_token_path`. They must run on the same local machine and user profile.
 

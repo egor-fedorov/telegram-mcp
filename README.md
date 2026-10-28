@@ -78,6 +78,10 @@ Start one server in a terminal and leave it running:
 telegram-mcp serve --transport http
 ```
 
+On Linux with systemd, the optional
+[user-service setup](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/autostart.md)
+starts that server at login and keeps it running independently of a terminal.
+
 It listens only on `http://127.0.0.1:8765/mcp`. Configure each MCP client to launch
 `telegram-mcp connect` over STDIO. This small proxy reads the local token and connects
 to the existing server; it does not start a server or silently fall back to another

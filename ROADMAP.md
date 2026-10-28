@@ -159,7 +159,12 @@ retryable; see the [release procedure](docs/releasing.md#mcp-registry-publicatio
 
 Remaining distribution work can ship independently:
 
-1. [Support opt-in shared HTTP server autostart (#40)](https://github.com/egor-fedorov/telegram-mcp/issues/40), starting with a tested user-level systemd service.
+1. [Support opt-in shared HTTP server autostart (#40)](https://github.com/egor-fedorov/telegram-mcp/issues/40):
+   the Linux user unit and [lifecycle guide](docs/autostart.md) are implemented and
+   validated on Arch Linux with systemd 262.1. Two clients, failure recovery,
+   stop/restart, reinstall and removal passed. Fresh-login startup confirmation
+   remains pending, so the issue stays open. The unit works with published 0.5.1;
+   no package release is needed to adopt it.
 2. [Ship a validated MCPB bundle (#41)](https://github.com/egor-fedorov/telegram-mcp/issues/41), after the setup and session-ownership model is settled.
 
 ## Later decisions

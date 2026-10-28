@@ -1,0 +1,21 @@
+[Unit]
+Description=Telegram MCP shared local HTTP server
+Documentation=https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/autostart.md
+AssertPathExists=%h/.config/telegram-mcp/config.toml
+StartLimitIntervalSec=60s
+StartLimitBurst=3
+
+[Service]
+Type=exec
+WorkingDirectory=%h
+ExecStart="%h/.local/bin/telegram-mcp" --config "%h/.config/telegram-mcp/config.toml" serve --transport http
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=90s
+UMask=0077
+StandardInput=null
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

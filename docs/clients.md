@@ -7,7 +7,8 @@ shared server in a terminal:
 telegram-mcp serve --transport http
 ```
 
-Keep that terminal open. Each client below launches a STDIO `connect` proxy to
+Keep that terminal open, or use the optional [Linux systemd user service](autostart.md)
+to start the shared server at login. Each client below launches a STDIO `connect` proxy to
 `http://127.0.0.1:8765/mcp`. The proxy reads the bearer token from your local user
 profile; no Telegram credentials or HTTP token belong in these client configurations.
 It never starts the HTTP server automatically.

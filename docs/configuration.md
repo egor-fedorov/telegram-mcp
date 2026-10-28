@@ -162,7 +162,7 @@ zone database. Restart the server after changing it; `configure` preserves the f
 | Command | Owner of the Telegram session | Lifetime |
 | --- | --- | --- |
 | `serve` or `serve --transport stdio` | This process | Managed by one MCP client |
-| `serve --transport http` | This process | Foreground terminal process, stopped with Ctrl+C |
+| `serve --transport http` | This process | Foreground process, managed by a terminal or the optional Linux user service |
 | `connect` | The existing HTTP server | Proxy managed by an MCP client |
 
 HTTP binds to `127.0.0.1` only and serves Streamable HTTP at `/mcp`. Configure its port
@@ -176,7 +176,8 @@ http_port = 8765
 `http_port` accepts 1–65535. There is no public-bind or remote-server mode. Start the
 server explicitly before connecting clients. `connect` reads the token from the local
 file and sends it as bearer authentication; it does not create the token, start a daemon,
-or fall back to standalone STDIO if the server is unavailable.
+or fall back to standalone STDIO if the server is unavailable. The optional
+[Linux systemd user service](autostart.md) starts the same HTTP command at login.
 
 Every connected client belongs to the same local user and trust boundary. They share
 one account, one read policy, and in-memory cursor state. A cursor is not a per-client
