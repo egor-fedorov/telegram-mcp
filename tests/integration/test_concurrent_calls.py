@@ -1,17 +1,15 @@
 import asyncio
 import sys
 
-import httpx2
 import pytest
 from mcp.client import Client
 from mcp.client.stdio import StdioServerParameters
 from mcp.client.streamable_http import streamable_http_client
 
 from telegram_mcp.adapters.config import save_settings
-from telegram_mcp.adapters.http_token import load_token
 from telegram_mcp.adapters.transport import endpoint
 from tests.support.concurrency import ConcurrentBackend
-from tests.support.transport import running_server
+from tests.support.transport import authorized_http, running_server
 
 # Real transports and subprocesses; excluded from make test-fast.
 pytestmark = pytest.mark.slow
@@ -60,10 +58,7 @@ async def test_stdio_admits_overlapping_histories(tmp_path, mode):
 async def test_shared_transports_admit_overlapping_histories(tmp_path, mode, transport):
     async with running_server(tmp_path, ConcurrentBackend()) as (settings, backend):
         if transport == "http":
-            async with httpx2.AsyncClient(
-                headers={"Authorization": f"Bearer {load_token(settings.http_token_path)}"},
-                trust_env=False,
-            ) as http:
+            async with authorized_http(settings) as http:
                 async with Client(
                     streamable_http_client(endpoint(settings), http_client=http),
                     mode=mode,

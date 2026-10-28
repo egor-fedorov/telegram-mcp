@@ -26,6 +26,15 @@ from tests.support.resources import (
 )
 
 
+def authorized_http(settings: Settings) -> httpx2.AsyncClient:
+    """An HTTP client for MCP sessions; httpx's 5-second default fails on loaded CI runners."""
+    return httpx2.AsyncClient(
+        headers={"Authorization": f"Bearer {load_token(settings.http_token_path)}"},
+        timeout=httpx2.Timeout(30),
+        trust_env=False,
+    )
+
+
 @asynccontextmanager
 async def running_server(
     tmp_path: Path,
@@ -134,10 +143,7 @@ async def connection(kind, path, mode, schema_mode, settings=None):
             yield client
     else:
         assert settings is not None
-        async with httpx2.AsyncClient(
-            headers={"Authorization": f"Bearer {load_token(settings.http_token_path)}"},
-            trust_env=False,
-        ) as http:
+        async with authorized_http(settings) as http:
             async with Client(
                 streamable_http_client(endpoint(settings), http_client=http), mode=mode, cache=None
             ) as client:

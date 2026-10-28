@@ -3,7 +3,6 @@ import hashlib
 import json
 import sys
 
-import httpx2
 import pytest
 from mcp.client import Client
 from mcp.client.stdio import StdioServerParameters
@@ -11,11 +10,10 @@ from mcp.client.streamable_http import streamable_http_client
 from mcp_types import ResourceLink, TextResourceContents
 
 from telegram_mcp.adapters.config import save_settings
-from telegram_mcp.adapters.http_token import load_token
 from telegram_mcp.adapters.transport import endpoint
 from tests.support.fakes import msg
 from tests.support.incremental import EXPORT_TEXT
-from tests.support.transport import running_server
+from tests.support.transport import authorized_http, running_server
 
 # Real transports and subprocesses; excluded from make test-fast.
 pytestmark = pytest.mark.slow
@@ -63,10 +61,7 @@ async def test_shared_transports_transfer_exports_and_independent_checkpoints(
         backend.stored_messages = [msg("1", mid, EXPORT_TEXT) for mid in range(1, 5)]
         async with asyncio.timeout(60):
             if transport == "http":
-                async with httpx2.AsyncClient(
-                    headers={"Authorization": f"Bearer {load_token(settings.http_token_path)}"},
-                    trust_env=False,
-                ) as http:
+                async with authorized_http(settings) as http:
                     async with Client(
                         streamable_http_client(endpoint(settings), http_client=http),
                         mode=mode,
@@ -82,10 +77,7 @@ async def test_shared_transports_transfer_exports_and_independent_checkpoints(
                 )
                 async with Client(command, mode=mode, cache=None) as client:
                     await assert_export_round_trip(client)
-            async with httpx2.AsyncClient(
-                headers={"Authorization": f"Bearer {load_token(settings.http_token_path)}"},
-                trust_env=False,
-            ) as http:
+            async with authorized_http(settings) as http:
                 async with (
                     Client(
                         streamable_http_client(endpoint(settings), http_client=http),

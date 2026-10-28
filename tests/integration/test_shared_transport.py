@@ -22,7 +22,7 @@ from telegram_mcp.adapters.transport import _serve_http, create_http_app, endpoi
 from telegram_mcp.bootstrap import build_service
 from telegram_mcp.domain.models import ToolError
 from tests.support.fakes import FakeBackend
-from tests.support.transport import running_server
+from tests.support.transport import authorized_http, running_server
 
 
 async def test_http_requires_auth_for_every_method_and_rejects_foreign_origins(
@@ -86,10 +86,7 @@ async def test_two_http_clients_share_cursors_and_only_daemon_owns_shutdown(
     tmp_path: Path, first_mode: str, second_mode: str
 ) -> None:
     async with running_server(tmp_path) as (settings, backend):
-        token = load_token(settings.http_token_path)
-        async with httpx2.AsyncClient(
-            headers={"Authorization": f"Bearer {token}"}, trust_env=False
-        ) as http:
+        async with authorized_http(settings) as http:
             async with Client(
                 streamable_http_client(endpoint(settings), http_client=http), mode=first_mode
             ) as first:

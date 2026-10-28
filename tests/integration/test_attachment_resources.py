@@ -16,7 +16,6 @@ from mcp_types import (
 )
 
 from telegram_mcp.adapters.config import save_settings
-from telegram_mcp.adapters.http_token import load_token
 from telegram_mcp.adapters.mcp import create_server
 from telegram_mcp.adapters.transport import endpoint
 from tests.support.downloads import setup_downloads
@@ -26,7 +25,7 @@ from tests.support.resources import (
     assert_binary_read,
     assert_compact_download,
 )
-from tests.support.transport import running_resource_server
+from tests.support.transport import authorized_http, running_resource_server
 
 # Real transports and subprocesses; excluded from make test-fast.
 pytestmark = pytest.mark.slow
@@ -102,10 +101,7 @@ async def test_http_and_connect_deliver_full_size_resource(
     async with running_resource_server(tmp_path, MAX_BYTES) as (settings, service):
         async with asyncio.timeout(60):
             if transport == "http":
-                async with httpx2.AsyncClient(
-                    headers={"Authorization": f"Bearer {load_token(settings.http_token_path)}"},
-                    trust_env=False,
-                ) as http:
+                async with authorized_http(settings) as http:
                     async with Client(
                         streamable_http_client(endpoint(settings), http_client=http),
                         mode=mode,
