@@ -46,7 +46,8 @@ enabled_tools = [
   "get_status", "list_folders", "list_chats", "get_chat", "search_messages",
   "get_history", "get_messages", "get_album", "get_context", "get_thread",
   "search_public_channels", "get_similar_channels", "list_topics", "get_pinned_messages",
-  "download_attachment", "get_changes", "export_history", "create_watch", "list_watches",
+  "download_attachment", "extract_attachment_text", "get_changes", "export_history",
+  "create_watch", "list_watches",
   "get_watch_changes", "ack_watch_changes", "delete_watch"
 ]
 ```
