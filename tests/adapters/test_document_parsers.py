@@ -2,12 +2,18 @@
 
 import io
 import zipfile
+from types import SimpleNamespace
 
 import pytest
 
 from telegram_mcp.adapters.extraction import parsers
 from telegram_mcp.domain.models import ToolError
-from tests.support.extraction import docx_bytes, pdf_bytes
+from tests.support.extraction import (
+    damaged_pdf_bytes,
+    docx_bytes,
+    pdf_bytes,
+    relocated_docx_bytes,
+)
 
 
 def test_pdf_text_and_physical_pages_survive_blank_pages() -> None:
@@ -129,3 +135,153 @@ def test_an_arbitrary_zip_is_not_a_docx() -> None:
 def test_unsupported_content_is_distinct_from_damage(data: bytes) -> None:
     with pytest.raises(ToolError, match="DOCUMENT_UNSUPPORTED"):
         parsers.extract_document(data)
+
+
+@pytest.mark.parametrize("defect", ["xref", "length", "prefix"])
+def test_pdf_recovery_preserves_text_pages_and_existing_issues(defect: str) -> None:
+    from pypdf import PdfReader
+    from pypdf.errors import PdfReadError
+
+    data = damaged_pdf_bytes(defect)
+    with pytest.raises(PdfReadError):
+        reader = PdfReader(io.BytesIO(data), strict=True)
+        for page in reader.pages:
+            page.extract_text()
+    expected = parsers.extract_document(pdf_bytes(["First", None, "Last"]))
+    recovered = parsers.extract_document(data)
+    assert recovered.text == expected.text
+    assert recovered.page_count == expected.page_count
+    assert recovered.page_spans == expected.page_spans
+    assert recovered.issues[:-1] == expected.issues
+    assert recovered.issues[-1].code == "DOCUMENT_RECOVERED"
+    assert "DOCUMENT_RECOVERED" not in {issue.code for issue in expected.issues}
+
+
+def test_pdf_offsets_already_accepted_by_strict_reader_keep_their_text() -> None:
+    result = parsers.extract_document(damaged_pdf_bytes("offsets"))
+    assert result == parsers.extract_document(pdf_bytes(["First", None, "Last"]))
+
+
+@pytest.mark.parametrize("prefix_size", [1019, 1020, 1024])
+def test_pdf_signature_must_fit_in_the_first_1024_bytes(prefix_size: int) -> None:
+    data = b" " * prefix_size + pdf_bytes(["Boundary"])
+    if prefix_size == 1019:
+        result = parsers.extract_document(data)
+        assert result.text == "Boundary" and result.issues[0].code == "DOCUMENT_RECOVERED"
+    else:
+        with pytest.raises(ToolError, match="DOCUMENT_UNSUPPORTED"):
+            parsers.extract_document(data)
+
+
+@pytest.mark.parametrize("failure", ["pages", "text", "empty", "encrypted", "memory", "parser"])
+def test_pdf_recovery_does_not_retry_nonstructural_failures(monkeypatch, failure: str) -> None:
+    from pypdf.errors import FileNotDecryptedError, LimitReachedError
+
+    calls = []
+    error = {
+        "pages": parsers.limit_error("Pages"),
+        "text": parsers.limit_error("Text"),
+        "empty": ToolError("DOCUMENT_NO_TEXT", "Empty"),
+        "encrypted": FileNotDecryptedError("Encrypted"),
+        "memory": MemoryError(),
+        "parser": LimitReachedError("Budget"),
+    }[failure]
+
+    def read(data: bytes, *, strict: bool):
+        calls.append(strict)
+        raise error
+
+    monkeypatch.setattr(parsers, "_read_pdf", read)
+    with pytest.raises(type(error)):
+        parsers.extract_pdf(b"input")
+    assert calls == [True]
+
+
+@pytest.mark.parametrize("budget", ["MAX_PDF_PAGES", "MAX_TEXT_CHARACTERS"])
+def test_recovered_pdf_still_enforces_budgets(monkeypatch, budget: str) -> None:
+    monkeypatch.setattr(parsers, budget, 1)
+    with pytest.raises(ToolError, match="EXTRACTION_LIMIT_EXCEEDED"):
+        parsers.extract_document(damaged_pdf_bytes("xref"))
+
+
+@pytest.mark.parametrize("main_name", ["word/document2.xml", "word/body.dat"])
+def test_docx_main_part_uses_opc_relationships(main_name: str) -> None:
+    result = parsers.extract_document(relocated_docx_bytes(main_name))
+    assert result.text == "Relocated\n" and result.format == "docx"
+
+
+def rewrite_package(data: bytes, replacements: dict[str, bytes]) -> bytes:
+    output = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(data)) as source, zipfile.ZipFile(output, "w") as target:
+        for name in source.namelist():
+            target.writestr(name, replacements.get(name, source.read(name)))
+    return output.getvalue()
+
+
+def test_docm_main_content_type_is_unsupported() -> None:
+    data = docx_bytes()
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        types = archive.read("[Content_Types].xml").replace(
+            b"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml",
+            b"application/vnd.ms-word.document.macroEnabled.main+xml",
+        )
+    with pytest.raises(ToolError, match="DOCUMENT_UNSUPPORTED"):
+        parsers.extract_document(rewrite_package(data, {"[Content_Types].xml": types}))
+
+
+@pytest.mark.parametrize("damage", ["missing_target", "broken_relationships", "broken_body"])
+def test_invalid_relocated_docx_is_not_misclassified(damage: str) -> None:
+    data = relocated_docx_bytes()
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        replacements = {
+            "missing_target": {
+                "_rels/.rels": archive.read("_rels/.rels").replace(b"document2.xml", b"absent.xml")
+            },
+            "broken_relationships": {"_rels/.rels": b"<private-canary"},
+            "broken_body": {"word/document2.xml": b"<private-canary"},
+        }[damage]
+    with pytest.raises(ToolError, match="DOCUMENT_INVALID") as caught:
+        parsers.extract_document(rewrite_package(data, replacements))
+    assert "private-canary" not in caught.value.detail
+
+
+def test_docx_entry_budget_applies_before_loading_regardless_of_part_name(monkeypatch) -> None:
+    import docx
+
+    data = relocated_docx_bytes("word/body.dat", text="x" * 600000)
+    monkeypatch.setattr(parsers, "MAX_DOCX_ENTRY_BYTES", 500000)
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        assert [e.filename for e in archive.infolist() if e.file_size > 500000] == ["word/body.dat"]
+
+    def unexpected_load(*args):
+        pytest.fail("Oversized packages must be rejected before loading XML")
+
+    monkeypatch.setattr(docx, "Document", unexpected_load)
+    with pytest.raises(ToolError, match="EXTRACTION_LIMIT_EXCEEDED"):
+        parsers.extract_document(data)
+
+
+@pytest.mark.parametrize("remaining,entry_limit", [(10, 100), (100, 10)])
+def test_docx_budgets_count_actual_decompressed_bytes(
+    monkeypatch, remaining: int, entry_limit: int
+):
+    monkeypatch.setattr(parsers, "MAX_DOCX_ENTRY_BYTES", entry_limit)
+    with zipfile.ZipFile(io.BytesIO(docx_bytes())) as archive:
+        monkeypatch.setattr(archive, "open", lambda _: io.BytesIO(b"x" * 20))
+        with pytest.raises(ToolError, match="EXTRACTION_LIMIT_EXCEEDED"):
+            parsers._expanded_size(archive, zipfile.ZipInfo("part.xml"), remaining)
+
+
+def test_xml_memory_error_is_not_reported_as_document_damage(monkeypatch) -> None:
+    from lxml import etree  # ty: ignore[unresolved-import]
+
+    error = etree.XMLSyntaxError("private-canary", 0, 0, 0)
+    error.error_log = [SimpleNamespace(type=etree.ErrorTypes.ERR_NO_MEMORY)]
+
+    def out_of_memory(data: bytes):
+        raise error
+
+    monkeypatch.setattr(parsers, "_detect_and_extract", out_of_memory)
+    with pytest.raises(ToolError, match="EXTRACTION_LIMIT_EXCEEDED") as caught:
+        parsers.extract_document(b"input")
+    assert "private-canary" not in caught.value.detail

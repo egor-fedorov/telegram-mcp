@@ -44,17 +44,29 @@ server-side extra installation instruction before any Telegram call.
 
 Require the existing attachment-download permission and current source-read policy.
 Reuse download protection/TTL checks, bounded bytes and FloodWait handling. Recheck
-source access and attachment identity before parsing, before first delivery and on
+source access and attachment identity before download, before first delivery and on
 every continuation. A changed attachment is ATTACHMENT_UNAVAILABLE. Authorization
 and transient network failures withhold cached output and preserve the extraction
 until its normal expiry. No access expands to forwarded origins or other chats.
+The post-parse check also covers changes during download; an immediate duplicate
+source request between download and parsing is unnecessary.
 
 Identify formats from bytes, using file names/MIME only as metadata. Only actual
-PDF and DOCX packages qualify. Parse PDF pages with pypdf in strict mode, preserving
-text-layer content and physical page boundaries without promising visual reading
-order, tables, or OCR. Read DOCX main-body paragraphs, visible hyperlink text and
+PDF and DOCX packages qualify. Look for the complete `%PDF-` signature within the
+first 1024 bytes, without stripping prefixes or changing the source digest. Parse
+PDF pages with pypdf in strict mode first. On a structural `PdfReadError`, retry
+from the original bytes with a fresh reader and text accumulator in tolerant mode.
+Both attempts share one worker, memory limit and 30-second deadline. Encryption,
+no-text results and budget failures do not trigger a retry. Successful fallback
+adds DOCUMENT_RECOVERED: recovery is best effort and does not guarantee completeness.
+Preserve text-layer content and physical page boundaries without promising visual
+reading order, tables, or OCR. Read DOCX main-body paragraphs, visible hyperlink text and
 tables in order using python-docx; traverse nested tables and avoid repeating merged
 cells. Tabs separate cell positions and newlines separate paragraphs/rows.
+Resolve the main part through OPC relationships using python-docx; do not require
+`word/document.xml`. Non-Word main content types, including DOCM, are unsupported;
+damaged XML or relationships remain invalid. Validate ZIP entry paths, duplicates,
+encryption and declared/actual expansion before loading the document XML.
 Headers, footers, notes, comments, text boxes and revisions are outside coverage;
 detected omissions produce DOCUMENT_CONTENT_OMITTED. Embedded objects and external
 relationships are never executed or fetched.
@@ -70,7 +82,8 @@ it in the environment of the session-owning HTTP/STDIO server.
 | Extracted text | 1,000,000 Unicode code points including separators |
 | Parser execution | 30 seconds |
 | Complete admitted call | 90 seconds |
-| Expanded DOCX | 64 MiB and 2048 ZIP entries |
+| Expanded DOCX | 64 MiB total, 32 MiB per entry and 2048 ZIP entries |
+| Linux worker address space | 1 GiB; stricter inherited limits remain in force |
 | Nested DOCX tables | 64 levels |
 | Serialized worker result | 8 MiB |
 | Extraction cache | 32 results and 64 MiB, including reservations/orphans |
@@ -81,6 +94,14 @@ against the call deadline; queue exhaustion is SERVER_BUSY. Kill and reap worker
 timeout, cancellation and shutdown. Bound IPC before decoding. Do not keep the
 attachment lock while parsing. Clean up only inputs owned by the current extraction.
 
+On Linux, apply `RLIMIT_AS` before importing parsers or reading input. If setting it
+fails, return EXTRACTION_FAILED without parsing. A Python MemoryError exits with a
+dedicated code that the parent maps to EXTRACTION_LIMIT_EXCEEDED, including when
+the input pipe closes early. Native XML allocation failures receive the same error;
+unrelated signals/exits are not assumed to indicate memory exhaustion. Windows and
+macOS have no OS-enforced memory cap: only the time, input, expansion and output
+budgets apply there. The Linux cap measures virtual address space, not resident RAM.
+
 Reuse private temporary-file infrastructure with capacity reservations, atomic
 publication, checksums and cleanup. Do not evict unexpired results. Restart invalidates
 IDs. No permanent database or general file-serving endpoint is added.
@@ -90,11 +111,11 @@ IDs. No permanent database or general file-serving endpoint is added.
 | Code | Meaning |
 | --- | --- |
 | EXTRACTION_UNAVAILABLE | Install the optional extra in the server environment |
-| DOCUMENT_UNSUPPORTED | Unsupported content; includes OLE Office containers and legacy .doc |
+| DOCUMENT_UNSUPPORTED | Unsupported content; includes DOCM, OLE Office containers and legacy .doc |
 | DOCUMENT_ENCRYPTED | Encrypted PDF/package; no password parameter |
 | DOCUMENT_INVALID | Damaged or unparseable document |
 | DOCUMENT_NO_TEXT | No text in supported content; OCR may be needed, but a scan is not inferred |
-| EXTRACTION_LIMIT_EXCEEDED | Page, text, expansion or worker-output limit |
+| EXTRACTION_LIMIT_EXCEEDED | Page, text, expansion, worker-output or allocation limit |
 | EXTRACTION_TIMEOUT | Parser/call deadline exceeded |
 | EXTRACTION_EXPIRED | Unknown, expired or previous-process extraction ID |
 | EXTRACTION_STORAGE_FULL | Capacity unavailable; existing results remain intact |
@@ -102,13 +123,18 @@ IDs. No permanent database or general file-serving endpoint is added.
 
 A mixed PDF returns its text with DOCUMENT_PAGES_WITHOUT_TEXT, an exact count and
 at most 20 example page numbers. Empty pages may be blank or image-only. Textual
-coverage does not imply complete visual understanding. Processing failures publish
-no partial text or continuation token. Existing access/download errors are preserved.
+coverage does not imply complete visual understanding. DOCUMENT_RECOVERED is an
+informational issue on successful tolerant PDF parsing, preserved on continuation.
+Processing failures publish no partial text or continuation token. Existing
+access/download errors are preserved.
 
 ## Acceptance and delivery
 
 Cover real synthetic PDFs/DOCX files: Unicode and physical pages; blank, image-only,
 mixed, encrypted and damaged documents; nested/merged tables, links and omissions.
+Include recoverable xref/stream-length defects and prefixed PDFs, relocated DOCX main
+parts, DOCM classification and per-entry expansion. Exercise Linux memory enforcement,
+inherited limits, setup failure and allocation errors without exhausting the test host.
 Verify exact reconstruction across small slices, immutable digests, expiry without
 renewal, quota accounting, access revocation, replacement and transient recheck errors.
 Exercise cancellation/timeouts/shutdown, bounded IPC, no orphan workers/files, and
@@ -154,6 +180,11 @@ The public record contains counts and outcomes only. No document content, file n
 source selectors or credentials are retained. This check does not claim manual visual
 comparison, live multi-page coverage, or live encrypted/damaged-document coverage;
 those parsing and pagination paths remain covered by synthetic offline tests.
+
+The pre-release recovery and resource-limit fixes pass `make check`: Ruff, ty,
+1682 tests and two platform-specific skips. The added cases use synthetic documents
+and disposable workers, including a real Linux address-space limit. Repeat the two
+selected live document checks on the final release candidate before publication.
 
 References: [pypdf extraction](https://pypdf.readthedocs.io/en/stable/user/extract-text.html),
 [python-docx document iteration](https://python-docx.readthedocs.io/en/latest/api/document.html).

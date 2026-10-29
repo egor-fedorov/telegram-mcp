@@ -2,6 +2,8 @@
 
 import asyncio
 import io
+import re
+import zipfile
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from dataclasses import replace
@@ -59,6 +61,45 @@ def docx_bytes(text: str = "Résumé 😀\nПривет 世界") -> bytes:
     return output.getvalue()
 
 
+def damaged_pdf_bytes(defect: str) -> bytes:
+    """Small recoverable defects, including a stream failure after a valid first page."""
+    data = pdf_bytes(["First", None, "Last"])
+    if defect == "xref":
+        return re.sub(rb"(startxref\s+)(\d+)", lambda m: m[1] + str(int(m[2]) + 1).encode(), data)
+    if defect == "offsets":
+        return re.sub(
+            rb"(?m)^(\d{10})( \d{5} n )",
+            lambda m: f"{int(m[1]) + 1:010}".encode() + m[2],
+            data,
+        )
+    if defect == "length":
+        match = list(re.finditer(rb"/Length (\d+)", data))[-1]
+        return data[: match.start(1)] + b"1".rjust(len(match[1]), b"0") + data[match.end(1) :]
+    if defect == "prefix":
+        return b"\xef\xbb\xbf" + data
+    raise ValueError(f"Unknown PDF defect: {defect}")
+
+
+def relocated_docx_bytes(main_name: str = "word/document2.xml", text: str = "Relocated") -> bytes:
+    """Move the main part and its relationship file, preserving OPC references."""
+    output = io.BytesIO()
+    main_relationships = "word/_rels/" + main_name.removeprefix("word/") + ".rels"
+    with (
+        zipfile.ZipFile(io.BytesIO(docx_bytes(text))) as source,
+        zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as target,
+    ):
+        for name in source.namelist():
+            data = source.read(name)
+            if name in ("[Content_Types].xml", "_rels/.rels"):
+                data = data.replace(b"word/document.xml", main_name.encode())
+            name = {
+                "word/document.xml": main_name,
+                "word/_rels/document.xml.rels": main_relationships,
+            }.get(name, name)
+            target.writestr(name, data)
+    return output.getvalue()
+
+
 class FakeParser:
     def __init__(self) -> None:
         self.available = True
@@ -82,26 +123,30 @@ class FakeParser:
         self.closed = True
 
 
-def extraction_backend() -> AttachmentBackend:
+def extraction_backend(*, recovered_pdf: bool = False) -> AttachmentBackend:
     backend = AttachmentBackend()
     backend.chats = [Chat(id="1", title="Synthetic documents", type="group")]
-    backend.data = docx_bytes()
+    backend.data = damaged_pdf_bytes("length") if recovered_pdf else docx_bytes()
     backend.source = replace(
         backend.source,
         size=len(backend.data),
-        name="selected.docx",
-        mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        name="selected.pdf" if recovered_pdf else "selected.docx",
+        mime_type=(
+            "application/pdf"
+            if recovered_pdf
+            else "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ),
     )
     return backend
 
 
-def extraction_stdio_service(path: Path) -> Service:
+def extraction_stdio_service(path: Path, *, recovered_pdf: bool = False) -> Service:
     settings = Settings(
         allowed_chat_ids=["1"], allow_attachment_downloads=True, session_path=path / "session"
     )
     clock = SystemClock()
     return build_service(
-        extraction_backend(),
+        extraction_backend(recovered_pdf=recovered_pdf),
         settings,
         clock=clock,
         downloads=DownloadStore(settings.session_path, clock, root=path / "downloads"),

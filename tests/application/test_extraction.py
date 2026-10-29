@@ -173,3 +173,39 @@ async def test_extraction_does_not_remove_a_download_owned_by_another_call(tmp_p
         download = await service.download_attachment("1:10:document")
         await service.extract_attachment_text("1:10:document")
         assert (await service.read_download_resource(download.resource_uri))[0] == backend.data
+
+
+async def test_initial_extraction_checks_source_twice_then_once_per_continuation(tmp_path: Path):
+    async with extraction_context(tmp_path) as (service, backend, _, _, _, _):
+        result = await service.extract_attachment_text("1:10:document", text_limit=3)
+        assert backend.backend_calls.count("prepare_attachment") == 2
+        assert backend.downloads == 1
+        await service.extract_attachment_text(extraction_id=result.extraction_id, text_offset=3)
+        assert backend.backend_calls.count("prepare_attachment") == 3
+        assert backend.downloads == 1
+
+
+@pytest.mark.parametrize("stage", ["download", "parse"])
+@pytest.mark.parametrize("change", ["access", "identity", "protection", "authorization"])
+async def test_source_changes_during_extraction_prevent_publication(
+    tmp_path: Path, stage: str, change: str
+):
+    async with extraction_context(tmp_path) as (service, backend, settings, parser, store, _):
+        paused = backend if stage == "download" else parser
+        paused.resume = asyncio.Event()
+        task = asyncio.create_task(service.extract_attachment_text("1:10:document"))
+        await paused.entered.wait()
+        if change == "access":
+            settings.allowed_chat_ids = []
+            code = "ACCESS_DENIED"
+        elif change == "identity":
+            backend.source = replace(backend.source, identity="replacement")
+            code = "ATTACHMENT_UNAVAILABLE"
+        else:
+            code = "ATTACHMENT_PROTECTED" if change == "protection" else "AUTH_REQUIRED"
+            backend.prepare_error = ToolError(code, "Synthetic failure")
+        paused.resume.set()
+        with pytest.raises(ToolError, match=code):
+            await task
+        assert store._files.used == (0, 0) and not store._reservations
+        assert not list((tmp_path / "downloads").glob("*.bin"))

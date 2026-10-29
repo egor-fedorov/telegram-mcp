@@ -179,13 +179,12 @@ class AttachmentService:
         await self._run(lambda: self._verify(source))
 
     async def extraction_input(self, attachment_id: str) -> tuple[StoredAttachment, bytes]:
-        """Acquire verified bytes and remove only this call's unexposed download."""
+        """Read this call's authorized download; extraction revalidates before delivery."""
         result = await self.download(attachment_id)
         token = result.resource_uri.removeprefix(RESOURCE_PREFIX)
 
         async def operation() -> tuple[StoredAttachment, bytes]:
             stored = await self.store.lookup(token)
-            await self._verify(stored)
             return stored, await self.store.read(token)
 
         try:

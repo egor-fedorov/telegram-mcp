@@ -135,6 +135,12 @@ so the same stop/install/start sequence can roll back the executable. Package
 installation does not update the separately installed unit; review unit changes
 explicitly and run `daemon-reload` if you replace it.
 
+For a published version that includes document extraction (planned for 0.6), use
+`uv tool install --python 3.12 'telegram-context-mcp[extraction]==VERSION'` on both
+initial installation and every upgrade; omitting the extra can remove its dependencies.
+Only the session-owning server needs it, not `connect` or MCPB proxies. After restarting,
+check that `get_status` reports `text_extraction_available: true`.
+
 To disable autostart and remove only the unit:
 
 ```sh

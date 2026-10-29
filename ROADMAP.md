@@ -213,6 +213,17 @@ removed and the shared server resumed authorized and connected. See the
 [bounded validation record](docs/specs/m6-text-extraction.md#validation-record).
 Release preparation and publication remain separate steps.
 
+Pre-release extraction fixes add bounded tolerant PDF recovery, OPC-based DOCX main
+part resolution, a 32 MiB expanded-entry limit and a Linux-only 1 GiB worker address-space
+cap. Recovery issues, source digests and pages survive continuation across all transports;
+allocation failures and early worker exits are classified without exposing parser details.
+Access revalidation remains before delivery, with one redundant post-download request
+removed. Regression coverage includes malformed documents, native/Python memory errors,
+worker cleanup, mid-call access changes and skill/API drift. The autostart guide preserves
+the extraction extra during upgrades. Windows/macOS do not have an OS memory cap.
+Local `make check` passes Ruff, ty and 1682 tests with two platform-specific skips.
+Repeat selected-source PDF/DOCX validation on the release candidate before publication.
+
 The upcoming release also adds local `login --qr` for accounts whose login codes do
 not arrive. It uses Telegram phone approval, terminal rendering, optional 2FA, bounded
 expiry refresh and the existing session lease. Offline tests cover authorization,

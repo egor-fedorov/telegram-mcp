@@ -1,12 +1,17 @@
 """Bounded parsing of selected bytes; imported only inside an extraction worker."""
 
+import gc
 import io
 import zipfile
 from collections.abc import Iterator
 from pathlib import PurePosixPath
 from typing import Any
 
-from telegram_mcp.application.extraction_ports import MAX_DOCX_BYTES, MAX_DOCX_ENTRIES
+from telegram_mcp.application.extraction_ports import (
+    MAX_DOCX_BYTES,
+    MAX_DOCX_ENTRIES,
+    MAX_DOCX_ENTRY_BYTES,
+)
 from telegram_mcp.domain.extraction import (
     MAX_PDF_PAGES,
     MAX_TEXT_CHARACTERS,
@@ -43,9 +48,31 @@ class TextBuilder:
 
 
 def extract_pdf(data: bytes) -> ExtractedDocument:
+    from pypdf.errors import FileNotDecryptedError, PdfReadError
+
+    try:
+        return _read_pdf(data, strict=True)
+    except FileNotDecryptedError:
+        raise
+    except PdfReadError:
+        pass
+    # Release cyclic reader/page references from the failed attempt before retrying.
+    gc.collect()
+    document = _read_pdf(data, strict=False)
+    document.issues.append(
+        Issue(
+            code="DOCUMENT_RECOVERED",
+            message="The PDF required tolerant parsing. Text recovery is best effort; "
+            "complete recovery is not guaranteed.",
+        )
+    )
+    return document
+
+
+def _read_pdf(data: bytes, *, strict: bool) -> ExtractedDocument:
     from pypdf import PdfReader
 
-    reader = PdfReader(io.BytesIO(data), strict=True)
+    reader = PdfReader(io.BytesIO(data), strict=strict)
     if reader.is_encrypted:
         raise ToolError(
             "DOCUMENT_ENCRYPTED", "Encrypted PDFs are not supported; no password is accepted."
@@ -86,25 +113,40 @@ def check_package(data: bytes) -> set[str]:
         if len(entries) > MAX_DOCX_ENTRIES or sum(e.file_size for e in entries) > MAX_DOCX_BYTES:
             raise limit_error("DOCX packages are limited to 64 MiB expanded and 2048 entries.")
         names = {entry.filename for entry in entries}
-        if not {"[Content_Types].xml", "word/document.xml"} <= names:
+        if not {"[Content_Types].xml", "_rels/.rels"} <= names:
             raise ToolError("DOCUMENT_UNSUPPORTED", "The ZIP file is not a supported DOCX package.")
         if len(names) != len(entries):
             raise ToolError("DOCUMENT_INVALID", "The DOCX package has duplicate entries.")
+        for entry in entries:
+            _check_entry(entry)
         expanded = 0
         for entry in entries:
-            path = PurePosixPath(entry.filename)
-            if path.is_absolute() or ".." in path.parts or "\\" in entry.filename:
-                raise ToolError("DOCUMENT_INVALID", "The DOCX package has invalid entry paths.")
-            if entry.flag_bits & 1:
-                raise ToolError(
-                    "DOCUMENT_ENCRYPTED", "Encrypted document packages are unsupported."
-                )
-            with archive.open(entry) as stream:
-                while chunk := stream.read(min(65536, MAX_DOCX_BYTES - expanded + 1)):
-                    expanded += len(chunk)
-                    if expanded > MAX_DOCX_BYTES:
-                        raise limit_error("Expanded DOCX content exceeds 64 MiB.")
+            expanded += _expanded_size(archive, entry, MAX_DOCX_BYTES - expanded)
         return names
+
+
+def _check_entry(entry: zipfile.ZipInfo) -> None:
+    path = PurePosixPath(entry.filename)
+    if path.is_absolute() or ".." in path.parts or "\\" in entry.filename:
+        raise ToolError("DOCUMENT_INVALID", "The DOCX package has invalid entry paths.")
+    if entry.flag_bits & 1:
+        raise ToolError("DOCUMENT_ENCRYPTED", "Encrypted document packages are unsupported.")
+    if entry.file_size > MAX_DOCX_ENTRY_BYTES:
+        raise limit_error("Each expanded DOCX entry is limited to 32 MiB.")
+
+
+def _expanded_size(archive: zipfile.ZipFile, entry: zipfile.ZipInfo, remaining: int) -> int:
+    expanded = 0
+    with archive.open(entry) as stream:
+        while chunk := stream.read(
+            min(65536, remaining - expanded + 1, MAX_DOCX_ENTRY_BYTES - expanded + 1)
+        ):
+            expanded += len(chunk)
+            if expanded > MAX_DOCX_ENTRY_BYTES:
+                raise limit_error("Each expanded DOCX entry is limited to 32 MiB.")
+            if expanded > remaining:
+                raise limit_error("Expanded DOCX content exceeds 64 MiB.")
+    return expanded
 
 
 def _blocks(container: Any, depth: int = 0) -> Iterator[str]:
@@ -178,7 +220,14 @@ def extract_docx(data: bytes) -> ExtractedDocument:
     from docx import Document
 
     names = check_package(data)
-    document = Document(io.BytesIO(data))
+    try:
+        document = Document(io.BytesIO(data))
+    except ValueError as exc:
+        if "is not a Word file, content type is" in str(exc):
+            raise ToolError(
+                "DOCUMENT_UNSUPPORTED", "The package's main part is not a supported DOCX document."
+            ) from None
+        raise
     builder = TextBuilder()
     for text in _blocks(document):
         builder.append(text)
@@ -190,6 +239,9 @@ def extract_docx(data: bytes) -> ExtractedDocument:
 
 def extract_document(data: bytes) -> ExtractedDocument:
     from docx.opc.exceptions import OpcError
+
+    # lxml's binary extension does not ship type stubs.
+    from lxml import etree  # ty: ignore[unresolved-import]
     from pypdf.errors import FileNotDecryptedError, LimitReachedError, PyPdfError
 
     try:
@@ -198,6 +250,12 @@ def extract_document(data: bytes) -> ExtractedDocument:
         raise ToolError("DOCUMENT_ENCRYPTED", "Encrypted PDFs are not supported.") from None
     except LimitReachedError:
         raise limit_error("The PDF parser reached its processing limit.") from None
+    except etree.XMLSyntaxError as exc:
+        if any(entry.type == etree.ErrorTypes.ERR_NO_MEMORY for entry in exc.error_log):
+            raise limit_error("The XML parser could not allocate enough memory.") from None
+        raise ToolError(
+            "DOCUMENT_INVALID", "The document is damaged or cannot be parsed."
+        ) from None
     except (
         PyPdfError,
         OpcError,
@@ -215,10 +273,10 @@ def extract_document(data: bytes) -> ExtractedDocument:
 
 
 def _detect_and_extract(data: bytes) -> ExtractedDocument:
-    if data.startswith(b"%PDF-"):
-        return extract_pdf(data)
     if data.startswith(b"PK"):
         return extract_docx(data)
+    if b"%PDF-" in data[:1024]:
+        return extract_pdf(data)
     if data.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"):
         raise ToolError(
             "DOCUMENT_UNSUPPORTED",

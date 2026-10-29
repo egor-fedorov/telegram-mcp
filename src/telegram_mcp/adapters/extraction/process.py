@@ -9,6 +9,7 @@ from contextlib import suppress
 
 from pydantic import ValidationError
 
+from telegram_mcp.adapters.extraction.limits import MEMORY_LIMIT_EXIT_CODE
 from telegram_mcp.application.extraction_ports import MAX_RESULT_BYTES, PARSER_TIMEOUT_SECONDS
 from telegram_mcp.domain.extraction import ExtractedDocument
 from telegram_mcp.domain.models import ToolError
@@ -101,8 +102,11 @@ class DocumentParser:
 
     async def _exchange(self, process: asyncio.subprocess.Process, data: bytes) -> bytes:
         assert process.stdin is not None and process.stdout is not None
-        process.stdin.write(data)
-        await process.stdin.drain()
+        # The worker may reject startup or run out of memory before consuming stdin.
+        # Read its response/exit code rather than hiding it behind a broken pipe.
+        with suppress(BrokenPipeError, ConnectionResetError):
+            process.stdin.write(data)
+            await process.stdin.drain()
         process.stdin.close()
         with suppress(BrokenPipeError, ConnectionResetError):
             await process.stdin.wait_closed()
@@ -114,7 +118,12 @@ class DocumentParser:
                     "EXTRACTION_LIMIT_EXCEEDED", "The document worker exceeded 8 MiB of output."
                 )
             chunks.append(chunk)
-        if await process.wait() != 0:
+        returncode = await process.wait()
+        if returncode == MEMORY_LIMIT_EXIT_CODE:
+            raise ToolError(
+                "EXTRACTION_LIMIT_EXCEEDED", "The document worker could not allocate enough memory."
+            )
+        if returncode != 0:
             raise ToolError("EXTRACTION_FAILED", "The document worker stopped unexpectedly.")
         return b"".join(chunks)
 

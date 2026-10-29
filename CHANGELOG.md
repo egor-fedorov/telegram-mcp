@@ -42,6 +42,15 @@ A version entry describes its target artifact. Verify publication on
   expansion and time limits. Unsupported, encrypted, damaged and textless documents
   have distinct errors; DOCX body-only omissions and PDF pages without text are reported.
   `get_status` advertises availability without requiring the extra for ordinary tools.
+- Recover structurally damaged PDFs with one bounded tolerant retry, reported as
+  `DOCUMENT_RECOVERED`; accept PDF signatures within the first 1024 bytes and preserve
+  original source digests and page provenance. Resolve DOCX main parts through OPC
+  relationships and report macro-enabled DOCM as unsupported.
+- Cap each expanded DOCX entry at 32 MiB and Linux worker address space at 1 GiB
+  (or a stricter inherited limit). Allocation failures report `EXTRACTION_LIMIT_EXCEEDED`;
+  Windows/macOS retain the existing time and document budgets without an OS memory cap.
+- Avoid a redundant source request between attachment download and parsing while
+  retaining fresh permission and attachment checks before delivery and on continuation.
 
 ### Distribution
 
