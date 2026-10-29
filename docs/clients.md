@@ -61,7 +61,7 @@ server in Codex's MCP settings and call `get_status`. See the
 The optional [MCPB extension](mcpb.md) packages this same `connect` proxy and provides
 a configuration-file picker. Initial Windows connection and catalog checks passed;
 see the [Desktop validation record](mcpb.md#windows-report-2026-10-29) for versions and coverage.
-The first bundled release is pending.
+The [0.6.0 release](https://github.com/egor-fedorov/telegram-mcp/releases/tag/v0.6.0) includes the bundle and checksum.
 The manual setup below remains available.
 
 Open Settings → Developer → Edit Config and merge this `mcpServers` entry into

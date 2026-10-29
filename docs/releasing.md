@@ -2,10 +2,10 @@
 
 The distribution is `telegram-context-mcp`; its executable is `telegram-mcp`, with a
 `telegram-context-mcp` alias starting with the Registry integration.
-The commands below use **0.5.2 as an example**, not a published or scheduled release;
+The commands below use **0.6.1 as an example**, not a published or scheduled release;
 substitute the version being prepared. Published 0.4.0 predates Registry metadata.
 Publishing requires selected-source validation, including any changed download,
-monitoring and retrieval paths. The [0.5.1 validation record](validation-0.5.1.md) covers
+monitoring and retrieval paths. The [0.6.0 validation record](validation-0.6.md) covers
 the current release; the [0.4 migration guide](migration-0.4.md) applies to upgrades
 from 0.3. Source changes, a release
 tag, a GitHub Release, a published PyPI distribution, and an MCP Registry entry are
@@ -38,13 +38,13 @@ and [publishing guide](https://docs.pypi.org/trusted-publishers/using-a-publishe
 
 ## Prepare the release PR
 
-1. Start from current `main` on a Conventional Branch, such as `release/v0.5.2`.
+1. Start from current `main` on a Conventional Branch, such as `release/v0.6.1`.
 2. Set `project.version` in `pyproject.toml` and refresh `uv.lock`. Run
    `uv run --no-project python scripts/check_registry.py --sync-version` to update
    both versions in `server.json` from the package metadata. Keep `--version`,
    installation examples, and client pins consistent with the release.
 3. Add a dated section to [CHANGELOG.md](../CHANGELOG.md), for example
-   `## [0.5.2] - YYYY-MM-DD`, with the actual release date and migration steps.
+   `## [0.6.1] - YYYY-MM-DD`, with the actual release date and migration steps.
    Write each paragraph or list item on one source line; GitHub release notes should
    not contain manual wrapping within sentences. Keep blank lines between Markdown
    blocks and preserve intentional newlines in code samples.
@@ -75,8 +75,8 @@ an annotated version tag:
 ```sh
 git switch main
 git pull --ff-only origin main
-git tag -a v0.5.2 -m "Release 0.5.2"
-git push origin v0.5.2
+git tag -a v0.6.1 -m "Release 0.6.1"
+git push origin v0.6.1
 ```
 
 The tag starts [release.yml](../.github/workflows/release.yml). The pipeline validates
@@ -96,7 +96,7 @@ work does not publish a bundle or modify assets of an older release.
 Verify the release's wheel and source distribution on PyPI and test a clean install:
 
 ```sh
-uvx --python 3.12 --from telegram-context-mcp==0.5.2 telegram-mcp --version
+uvx --python 3.12 --from telegram-context-mcp==0.6.1 telegram-mcp --version
 ```
 
 Update any publication-pending documentation only after this check succeeds. No live
@@ -106,7 +106,7 @@ Telegram login or user account content is part of the release pipeline.
 
 The Registry identity is `io.github.egor-fedorov/telegram-mcp`. The reviewed
 [server.json](../server.json) describes a version-pinned PyPI installation, equivalent
-to `uvx --python 3.12 telegram-context-mcp@0.5.2 serve` for the example release.
+to `uvx --python 3.12 telegram-context-mcp@0.6.1 serve` for the example release.
 `telegram-context-mcp` and `telegram-mcp` invoke the same CLI. Clients still need uv
 and explicit local `login` and `configure`; the manifest contains no credentials,
 session paths or machine-specific HTTP URL. Shared-session clients should follow
@@ -140,7 +140,7 @@ manifest (these checks use the network):
 
 ```sh
 git fetch origin main --tags
-uv run --no-project python scripts/check_registry.py --tag v0.5.2 --check-pypi --require-published
+uv run --no-project python scripts/check_registry.py --tag v0.6.1 --check-pypi --require-published
 ```
 
 The version endpoint must contain the same server/package versions, PyPI identifier,
@@ -151,7 +151,7 @@ manual [installation and client instructions](../README.md#install-and-log-in).
 If only Registry publication fails, dispatch its workflow from `main`:
 
 ```sh
-gh workflow run registry.yml --ref main -f tag=v0.5.2
+gh workflow run registry.yml --ref main -f tag=v0.6.1
 ```
 
 This uses the tag's manifest, even if `main` has since advanced. It does not build,

@@ -52,13 +52,13 @@ Stop any manually started server and standalone STDIO clients using this session
    telegram_mcp_unit_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
    install -d -m 700 "$telegram_mcp_unit_dir"
    curl --fail --location \
-     https://raw.githubusercontent.com/egor-fedorov/telegram-mcp/main/contrib/systemd/telegram-mcp.service \
+     https://raw.githubusercontent.com/egor-fedorov/telegram-mcp/v0.6.0/contrib/systemd/telegram-mcp.service \
      --output "$telegram_mcp_unit_dir/telegram-mcp.service"
    ```
 
    From a checkout, copying `contrib/systemd/telegram-mcp.service` to that directory is
-   equivalent. To pin the unit itself, replace `main` in the URL with a reviewed
-   commit that contains it; the 0.5.1 tag predates this unit.
+   equivalent. The download URL pins the unit to the reviewed `v0.6.0` release;
+   review future unit changes before replacing an existing installation.
 
    Review the file before enabling it. For a custom configuration location, including
    a different `XDG_CONFIG_HOME`, change both `AssertPathExists` and the `--config`

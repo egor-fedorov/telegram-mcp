@@ -1,7 +1,7 @@
 # M6: Selected document text extraction (0.6)
 
-Status: implemented and validated for 0.6; not released. Selected-source live
-acceptance passed on 2026-10-29.
+Status: released in 0.6.0. Selected-source live acceptance and publication verification
+passed on 2026-10-29.
 
 ## Goal and decisions
 
@@ -183,8 +183,7 @@ those parsing and pagination paths remain covered by synthetic offline tests.
 
 The pre-release recovery and resource-limit fixes pass `make check`: Ruff, ty,
 1682 tests and two platform-specific skips. The added cases use synthetic documents
-and disposable workers, including a real Linux address-space limit. Repeat the two
-selected live document checks on the final release candidate before publication.
+and disposable workers, including a real Linux address-space limit.
 
 The 0.6.0 release candidate repeated those checks on 2026-10-29 after the fixes;
 both formats and all continuation checks passed with the same counts. See the

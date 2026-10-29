@@ -26,14 +26,14 @@ need a concrete contract before implementation; no delivery dates are assigned.
 | R5 | Complete for 0.4 | Named subscriptions, protected positions, permanent selected files and compact discovery |
 | M5 | Complete for 0.5 | Bounded multi-source history, archived watch batches and usable monitoring prompts |
 | R6 | Done | Feature-organized MCP and wire modules, bounded complexity, shared storage and faster tests |
-| M6 | Complete for 0.6 (unreleased) | Optional PDF/DOCX text extraction with bounded continuation and source/page provenance |
+| M6 | Released in 0.6.0 | Optional PDF/DOCX text extraction with bounded continuation and source/page provenance |
 
-The [0.5.1 changelog](CHANGELOG.md#051---2026-10-28) and
-[validation record](docs/validation-0.5.1.md) describe the current release scope.
-Publication of 0.5.1 was verified on
-[PyPI](https://pypi.org/project/telegram-context-mcp/0.5.1/),
-[GitHub Releases](https://github.com/egor-fedorov/telegram-mcp/releases/tag/v0.5.1), and the
-[MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.egor-fedorov%2Ftelegram-mcp/versions/0.5.1).
+The [0.6.0 changelog](CHANGELOG.md#060---2026-10-29) and
+[validation record](docs/validation-0.6.md) describe the current release scope.
+Publication of 0.6.0 was verified on
+[PyPI](https://pypi.org/project/telegram-context-mcp/0.6.0/),
+[GitHub Releases](https://github.com/egor-fedorov/telegram-mcp/releases/tag/v0.6.0), and the
+[MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.egor-fedorov%2Ftelegram-mcp/versions/0.6.0).
 The [0.4 migration guide](docs/migration-0.4.md) applies to upgrades from 0.3;
 [0.4](docs/validation-0.4.md) and [0.3](docs/validation-0.3.md) retain earlier validation.
 
@@ -167,7 +167,7 @@ automatic startup after reboot and login, followed by an authorized, connected
 package release is needed to adopt it.
 
 [Ship a validated MCPB bundle (#41)](https://github.com/egor-fedorov/telegram-mcp/issues/41)
-is implemented and validated, with publication pending. One `uv` bundle uses the
+is published in 0.6.0. One `uv` bundle uses the
 release wheel and locked runtime dependencies, runs only the existing `connect`
 proxy, and selects an external configuration file.
 CI covers packaging, checksums, reproducibility and extracted launches on Linux,
@@ -181,7 +181,7 @@ bounded post reads, prompt/resource UI and lifecycle/recovery have not been manu
 checked in Desktop. Initial acceptance covers installation, authorization and a
 successful catalog call; the broader scenarios are optional follow-up coverage.
 Manual macOS Desktop validation is unverified and does not block the first bundle.
-Bundle publication remains part of the next package release.
+The bundle and its checksum are attached to the 0.6.0 GitHub Release.
 
 The optional [telegram-mcp Agent Skill](skills/telegram-mcp/SKILL.md) packages existing
 reading and monitoring workflows for clients that support Agent Skills. It preserves
@@ -192,10 +192,10 @@ MIT licensed and distributed in the repository; marketplace publication is separ
 Claude Code 2.1.312 on Linux passed synthetic client checks for discovery, bounded
 continuation and acknowledgement conditions; see the installation guide for coverage.
 
-## 0.6: selected document text extraction (validated, unreleased)
+## 0.6.0: selected document text extraction (released)
 
-[M6: Selected document text extraction](docs/specs/m6-text-extraction.md) is implemented
-and validated for 0.6. The scope is optional local PDF/DOCX extraction, bounded inline
+[M6: Selected document text extraction](docs/specs/m6-text-extraction.md) is released
+in 0.6.0. The scope is optional local PDF/DOCX extraction, bounded inline
 continuation, current source authorization and document/page provenance. Results expire
 after 15 minutes; permanent extracted-text archives, OCR and voice transcription remain
 outside this stage. Offline and selected-source live acceptance are required before release.
@@ -211,7 +211,7 @@ for one DOCX and one single-page text PDF: initial extraction, continuation, rep
 source identity, PDF page provenance and the empty final slice. Temporary files were
 removed and the shared server resumed authorized and connected. See the
 [bounded validation record](docs/specs/m6-text-extraction.md#validation-record).
-Release preparation and publication remain separate steps.
+Release preparation, live validation and remote publication verification are complete.
 
 Pre-release extraction fixes add bounded tolerant PDF recovery, OPC-based DOCX main
 part resolution, a 32 MiB expanded-entry limit and a Linux-only 1 GiB worker address-space
@@ -222,15 +222,14 @@ removed. Regression coverage includes malformed documents, native/Python memory 
 worker cleanup, mid-call access changes and skill/API drift. The autostart guide preserves
 the extraction extra during upgrades. Windows/macOS do not have an OS memory cap.
 Local `make check` passes Ruff, ty and 1682 tests with two platform-specific skips.
-Repeat selected-source PDF/DOCX validation on the release candidate before publication.
 
 The 0.6.0 release candidate repeated both selected live document checks successfully
 on 2026-10-29 after the recovery/memory fixes. Continuation, replay, the empty final
 slice, original digests and PDF page provenance passed. The normal shared service
 resumed authorized and connected. The [release validation record](docs/validation-0.6.md)
-tracks artifact checks and publication, which remain separate from this live result.
+records the successful artifact checks and remote publication verification.
 
-The upcoming release also adds local `login --qr` for accounts whose login codes do
+The release also adds local `login --qr` for accounts whose login codes do
 not arrive. It uses Telegram phone approval, terminal rendering, optional 2FA, bounded
 expiry refresh and the existing session lease. Offline tests cover authorization,
 expiry, rate limits, cancellation and secret-safe errors; clean installation probes

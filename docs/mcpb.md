@@ -7,10 +7,11 @@ on the same computer. It runs `telegram-mcp connect` and shares that server's ac
 permissions, tools, resources and prompts. Closing or removing the extension leaves
 the HTTP server running. The extension does not start a daemon or perform Telegram login.
 
-**Preview:** the initial Windows Desktop check passed on the candidate identified
-in the [validation report](#windows-report-2026-10-29). The first bundled release
-is still pending. Until publication, use the reviewed PR's `mcpb` Actions artifact;
-published 0.5.1 predates this bundle.
+The first published bundle is available in the
+[0.6.0 GitHub Release](https://github.com/egor-fedorov/telegram-mcp/releases/tag/v0.6.0),
+with a SHA-256 checksum. The initial Windows Desktop check used the earlier candidate
+identified in the [validation report](#windows-report-2026-10-29); it is separate
+from automated verification of the published artifact.
 
 One archive targets Windows, macOS and Linux through the MCPB `uv` runtime. It
 contains the release wheel and locked dependencies' metadata, not an installed
@@ -29,7 +30,7 @@ version. Existing setups can reuse their configuration and session.
 
 For a new Windows setup, install [uv](https://docs.astral.sh/uv/getting-started/installation/)
 and run these commands in **PowerShell**, using the version of the selected bundle
-(0.6.0 is the first release target):
+(0.6.0 is the first bundled release):
 
 ```powershell
 $version = "0.6.0"
@@ -54,8 +55,8 @@ does not serve this loopback-only Windows extension.
 ## Install the extension
 
 1. Download the matching `telegram-mcp-VERSION.mcpb` and `.mcpb.sha256` from the
-   reviewed PR artifact or [GitHub Release](https://github.com/egor-fedorov/telegram-mcp/releases).
-   Extract the Actions artifact ZIP first. In PowerShell, compare the bundle's hash
+   [GitHub Release](https://github.com/egor-fedorov/telegram-mcp/releases).
+   For preview builds from Actions, extract the artifact ZIP first. In PowerShell, compare the bundle's hash
    with the first field in the checksum file:
 
    ```powershell

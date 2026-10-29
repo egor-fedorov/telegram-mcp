@@ -73,7 +73,7 @@ uvx --python 3.12 --from telegram-context-mcp==0.6.0 telegram-mcp --version
 ```
 
 The server is listed in the official MCP Registry as
-[`io.github.egor-fedorov/telegram-mcp`](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.egor-fedorov%2Ftelegram-mcp/versions/0.5.1).
+[`io.github.egor-fedorov/telegram-mcp`](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.egor-fedorov%2Ftelegram-mcp/versions/0.6.0).
 The entry launches a local STDIO server through
 `uvx`; it does not supply a hosted Telegram service. Complete `login` and `configure`
 locally before connecting a client. Registry publication starts with version 0.5.0. See the
@@ -103,8 +103,9 @@ cover Codex, Claude Desktop, Claude Code, Cursor, and VS Code, including a pinne
 command and executable paths for Windows.
 
 A [Claude Desktop MCPB bundle](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/mcpb.md)
-is available for preview validation. It uses the same shared server and separate
-local login; see the guide for installation and current validation coverage.
+is available in the [0.6.0 release](https://github.com/egor-fedorov/telegram-mcp/releases/tag/v0.6.0).
+It uses the same shared server and separate local login; see the guide for installation
+and current validation coverage.
 
 For one client, standalone STDIO is still available: configure that client to launch
 `telegram-mcp serve`. Use either mode for a given session. Stop the session-owning
