@@ -28,19 +28,26 @@ describes the additive changes and archive setup. Version 0.5.1 is a security pa
 Telegram's service-notification chat, which delivers login codes, is never readable,
 even with all-chat or folder access. Upgrade every installation.
 
+Version 0.6 adds optional PDF/DOCX text extraction with bounded continuation and source
+references, terminal QR login, a Claude Desktop MCPB bundle, and an optional Agent Skill.
+For document extraction, install `'telegram-context-mcp[extraction]==0.6.0'` in the
+session-owning server and enable attachment downloads. See the
+[usage guide](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/usage.md#extract-pdf-or-docx-text)
+for limits and platform coverage.
+
 ## Install and log in
 
 Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then run:
 
 ```sh
-uv tool install --python 3.12 telegram-context-mcp==0.5.1
+uv tool install --python 3.12 telegram-context-mcp==0.6.0
 telegram-mcp --version
 telegram-mcp login
 telegram-mcp configure
 telegram-mcp status
 ```
 
-These examples target release 0.5.1; check [PyPI](https://pypi.org/project/telegram-context-mcp/)
+These examples target release 0.6.0; check [PyPI](https://pypi.org/project/telegram-context-mcp/)
 for published versions. Use the [source setup](#run-from-source) for unreleased revisions.
 Upgrading from 0.3? Read the [migration guide](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/migration-0.4.md),
 then restart the server and refresh your client's tool schemas.
@@ -49,9 +56,9 @@ Obtain `api_id` and `api_hash` from [my.telegram.org](https://my.telegram.org), 
 enter them in the local login prompt with your phone number, login code, and any 2FA
 password. Do not send login codes or credentials to the model.
 
-Source builds also support `telegram-mcp login --qr`: scan the terminal QR from
-Telegram on your phone instead of entering a phone number and login code. This is
-unreleased; see the [QR login guide](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/configuration.md#qr-login).
+Version 0.6 also supports `telegram-mcp login --qr`: scan the terminal QR from
+Telegram on your phone instead of entering a phone number and login code. See the
+[QR login guide](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/configuration.md#qr-login).
 
 `configure` lets you choose folders/chats and separately enable all-chat access,
 explicit public-channel reads, or public-channel discovery. Enter keeps the current
@@ -62,7 +69,7 @@ The package name is **`telegram-context-mcp`**; the executable is **`telegram-mc
 You can also run a pinned version without installing a persistent command:
 
 ```sh
-uvx --python 3.12 --from telegram-context-mcp==0.5.1 telegram-mcp --version
+uvx --python 3.12 --from telegram-context-mcp==0.6.0 telegram-mcp --version
 ```
 
 The server is listed in the official MCP Registry as
@@ -213,6 +220,8 @@ The [0.5 validation record](https://github.com/egor-fedorov/telegram-mcp/blob/ma
 reports release checks and the scope of selected-source and client validation;
 the [0.5.1 record](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/validation-0.5.1.md)
 covers the security patch.
+The [0.6 validation record](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/validation-0.6.md)
+tracks document extraction, packaging and publication.
 
 The code is [MIT licensed](https://github.com/egor-fedorov/telegram-mcp/blob/main/LICENSE).
 This does not grant rights to Telegram content. Secret chats are unsupported; attachment

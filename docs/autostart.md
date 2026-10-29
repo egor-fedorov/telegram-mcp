@@ -20,7 +20,7 @@ Stop any manually started server and standalone STDIO clients using this session
 1. Install a persistent, pinned executable:
 
    ```sh
-   uv tool install --python 3.12 telegram-context-mcp==0.5.1
+   uv tool install --python 3.12 telegram-context-mcp==0.6.0
    uv tool dir --bin
    "$HOME/.local/bin/telegram-mcp" --version
    systemctl --user is-system-running
@@ -121,7 +121,7 @@ The service has no interactive stdin. For local `login`, `configure`, `catalog`,
 `status`, stop it first and start it afterward. Configuration changes also require
 a restart. See [troubleshooting](troubleshooting.md) for the existing error contracts.
 
-If login codes do not arrive and your phone is still authorized, the unreleased
+If login codes do not arrive and your phone is still authorized, version 0.6's
 [QR login mode](configuration.md#qr-login) can reuse this configuration and session
 while the service is stopped. It runs in your terminal, not through systemd or MCP.
 
@@ -135,7 +135,7 @@ so the same stop/install/start sequence can roll back the executable. Package
 installation does not update the separately installed unit; review unit changes
 explicitly and run `daemon-reload` if you replace it.
 
-For a published version that includes document extraction (planned for 0.6), use
+For document extraction in version 0.6 and later, use
 `uv tool install --python 3.12 'telegram-context-mcp[extraction]==VERSION'` on both
 initial installation and every upgrade; omitting the extra can remove its dependencies.
 Only the session-owning server needs it, not `connect` or MCPB proxies. After restarting,

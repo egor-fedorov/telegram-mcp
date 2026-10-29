@@ -186,5 +186,9 @@ The pre-release recovery and resource-limit fixes pass `make check`: Ruff, ty,
 and disposable workers, including a real Linux address-space limit. Repeat the two
 selected live document checks on the final release candidate before publication.
 
+The 0.6.0 release candidate repeated those checks on 2026-10-29 after the fixes;
+both formats and all continuation checks passed with the same counts. See the
+[release record](../validation-0.6.md) for packaging and publication status.
+
 References: [pypdf extraction](https://pypdf.readthedocs.io/en/stable/user/extract-text.html),
 [python-docx document iteration](https://python-docx.readthedocs.io/en/latest/api/document.html).

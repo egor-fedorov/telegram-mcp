@@ -224,6 +224,12 @@ the extraction extra during upgrades. Windows/macOS do not have an OS memory cap
 Local `make check` passes Ruff, ty and 1682 tests with two platform-specific skips.
 Repeat selected-source PDF/DOCX validation on the release candidate before publication.
 
+The 0.6.0 release candidate repeated both selected live document checks successfully
+on 2026-10-29 after the recovery/memory fixes. Continuation, replay, the empty final
+slice, original digests and PDF page provenance passed. The normal shared service
+resumed authorized and connected. The [release validation record](docs/validation-0.6.md)
+tracks artifact checks and publication, which remain separate from this live result.
+
 The upcoming release also adds local `login --qr` for accounts whose login codes do
 not arrive. It uses Telegram phone approval, terminal rendering, optional 2FA, bounded
 expiry refresh and the existing session lease. Offline tests cover authorization,

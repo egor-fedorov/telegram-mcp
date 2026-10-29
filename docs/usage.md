@@ -28,7 +28,7 @@ see the [0.5 changelog](../CHANGELOG.md#050---2026-10-27) for upgrade steps and 
 
 ### Extract PDF or DOCX text
 
-This capability is implemented for 0.6 but unreleased; published 0.5.1 does not contain it.
+This capability requires version 0.6 or later.
 Install the optional extra in the environment of the process that owns the Telegram
 session, and enable `allow_attachment_downloads` in its configuration. Existing source
 permissions still apply. An HTTP client or MCPB proxy does not need the extra.

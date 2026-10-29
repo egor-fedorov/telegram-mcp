@@ -45,6 +45,9 @@ and [publishing guide](https://docs.pypi.org/trusted-publishers/using-a-publishe
    installation examples, and client pins consistent with the release.
 3. Add a dated section to [CHANGELOG.md](../CHANGELOG.md), for example
    `## [0.5.2] - YYYY-MM-DD`, with the actual release date and migration steps.
+   Write each paragraph or list item on one source line; GitHub release notes should
+   not contain manual wrapping within sentences. Keep blank lines between Markdown
+   blocks and preserve intentional newlines in code samples.
 4. Run `make check`, build wheel and source distributions, validate metadata, and
    run `uv run --locked python scripts/smoke_distribution.py`. This installs both
    artifacts outside the checkout and checks the declared Registry executable and

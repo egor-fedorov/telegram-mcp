@@ -43,11 +43,10 @@ the server's read policy or create per-client permissions.
 
 ## QR login
 
-Available in source builds for the next release; published 0.5.1 does not have `--qr`.
-Stop the session-owning server first. From a source checkout:
+Available in version 0.6 and later. Stop the session-owning server first:
 
 ```sh
-uv run --locked telegram-mcp --config /absolute/private/config.toml login --qr
+telegram-mcp --config /absolute/private/config.toml login --qr
 ```
 
 On your phone, open Telegram **Settings > Devices > Link Desktop Device**, select
