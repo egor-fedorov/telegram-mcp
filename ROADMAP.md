@@ -213,6 +213,11 @@ reported successful QR login on Windows 11 25H2, followed by an authorized, conn
 MCP response in Claude Desktop 4.29.0. The [Windows report](docs/mcpb.md#windows-report-2026-10-29)
 records the confirmed scope; it does not establish live 2FA, expiry or failure coverage.
 
+Dependency maintenance for 0.6 includes the reviewed
+[HTTP/SSE and TLS refresh (#63)](https://github.com/egor-fedorov/telegram-mcp/pull/63).
+Validation uses the current extraction and MCPB implementation, including transport,
+clean-install and portable-bundle checks.
+
 ## Later decisions
 
 Optional Telegram writes remain a later candidate: drafts first, then separately

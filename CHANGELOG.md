@@ -8,6 +8,13 @@ A version entry describes its target artifact. Verify publication on
 
 ## [Unreleased]
 
+### Dependencies
+
+- Refresh the locked HTTP/SSE and TLS dependencies, including Starlette 1.10.0,
+  sse-starlette 3.6.0, cryptography 50.0.2 and truststore 0.10.5, with supporting
+  parser, IDNA and test-plugin updates. Dependency constraints and MCP contracts
+  are unchanged.
+
 ### Authentication
 
 - `telegram-mcp login --qr` displays a terminal QR for approval in the Telegram phone
