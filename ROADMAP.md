@@ -214,7 +214,9 @@ MCP response in Claude Desktop 4.29.0. The [Windows report](docs/mcpb.md#windows
 records the confirmed scope; it does not establish live 2FA, expiry or failure coverage.
 
 Dependency maintenance for 0.6 includes the reviewed
-[HTTP/SSE and TLS refresh (#63)](https://github.com/egor-fedorov/telegram-mcp/pull/63).
+[HTTP/SSE and TLS refresh (#63)](https://github.com/egor-fedorov/telegram-mcp/pull/63)
+and [pytest-asyncio update (#68)](https://github.com/egor-fedorov/telegram-mcp/pull/68).
+Dependabot groups pytest's supporting packages with development tools.
 Validation uses the current extraction and MCPB implementation, including transport,
 clean-install and portable-bundle checks.
 

@@ -133,8 +133,9 @@ criteria are met; distinguish offline checks from any separately performed live 
 Commit `uv.lock` alongside dependency changes. Review release notes and the lockfile
 diff, then run the appropriate compatibility checks. Dependabot opens update PRs for
 review; it does not merge them automatically. Weekly version updates separate the
-MCP packages, development tools (`pytest`, `pytest-asyncio`, `pytest-xdist`, Ruff and
-ty), and other dependencies. Telethon updates receive their own PRs. Development-tool
+MCP packages, development tools (`pytest`, `pytest-asyncio`, `pytest-xdist`, their
+supporting packages `execnet`, `iniconfig` and `pluggy`, Ruff and ty), and other
+dependencies. Telethon updates receive their own PRs. Development-tool
 and other dependency groups combine only minor/patch updates; major updates stay
 individual.
 GitHub Actions have their own weekly minor/patch group and follow the same review
