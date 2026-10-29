@@ -121,6 +121,10 @@ The service has no interactive stdin. For local `login`, `configure`, `catalog`,
 `status`, stop it first and start it afterward. Configuration changes also require
 a restart. See [troubleshooting](troubleshooting.md) for the existing error contracts.
 
+If login codes do not arrive and your phone is still authorized, the unreleased
+[QR login mode](configuration.md#qr-login) can reuse this configuration and session
+while the service is stopped. It runs in your terminal, not through systemd or MCP.
+
 ## Upgrade or remove
 
 Stop the service before changing its installed environment. Install your chosen

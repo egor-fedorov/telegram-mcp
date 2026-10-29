@@ -8,6 +8,25 @@ A version entry describes its target artifact. Verify publication on
 
 ## [Unreleased]
 
+### Authentication
+
+- `telegram-mcp login --qr` displays a terminal QR for approval in the Telegram phone
+  app, with optional 2FA and up to three expiring codes per invocation. It reuses the
+  configured session, keeps the existing phone/code flow, and requires no external QR
+  executable. Cancellation and failures release the session; rate limits report the
+  wait without sleeping. Tokens and raw authorization responses are not printed.
+
+### Extraction
+
+- Optional local PDF/DOCX text extraction through `telegram-context-mcp[extraction]`.
+  `extract_attachment_text` reads one selected attachment and returns bounded Unicode
+  text slices with source digests and physical PDF page references. Temporary results
+  expire after 15 minutes and recheck source access and media identity on every read.
+- Document parsing runs in a terminable subprocess with explicit input, page, text,
+  expansion and time limits. Unsupported, encrypted, damaged and textless documents
+  have distinct errors; DOCX body-only omissions and PDF pages without text are reported.
+  `get_status` advertises availability without requiring the extra for ordinary tools.
+
 ### Distribution
 
 - Optional Linux systemd user unit and installation/lifecycle guide for the shared

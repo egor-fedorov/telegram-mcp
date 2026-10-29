@@ -7,11 +7,14 @@ from telegram_mcp.adapters.config import ConfiguredPolicyProvider, Settings
 from telegram_mcp.adapters.cursors import CursorStore
 from telegram_mcp.adapters.downloads import DownloadStore
 from telegram_mcp.adapters.exports import ExportStore
+from telegram_mcp.adapters.extraction.process import DocumentParser
+from telegram_mcp.adapters.extraction.store import ExtractionStore
 from telegram_mcp.adapters.telegram import TelegramBackend
 from telegram_mcp.adapters.watches import WatchStore
 from telegram_mcp.application.archive_ports import ArchivePort
 from telegram_mcp.application.attachment_ports import DownloadStorePort
 from telegram_mcp.application.change_ports import CheckpointStorePort, ExportStorePort
+from telegram_mcp.application.extraction_ports import DocumentParserPort, ExtractionStorePort
 from telegram_mcp.application.ports import Backend, Clock, CursorPort, ExecutionLimits
 from telegram_mcp.application.service import Service
 from telegram_mcp.application.watch_ports import WatchStorePort
@@ -28,6 +31,8 @@ def build_service(
     exports: ExportStorePort | None = None,
     watches: WatchStorePort | None = None,
     archive: ArchivePort | None = None,
+    document_parser: DocumentParserPort | None = None,
+    extractions: ExtractionStorePort | None = None,
 ) -> Service:
     clock = clock if clock is not None else SystemClock()
     limits = ExecutionLimits(
@@ -55,6 +60,10 @@ def build_service(
         exports=exports if exports is not None else ExportStore(settings.session_path, clock),
         watches=watches if watches is not None else WatchStore(settings.session_path),
         archive=archive if archive is not None else ArchiveStore(settings.archive_directory, clock),
+        document_parser=document_parser if document_parser is not None else DocumentParser(),
+        extractions=extractions
+        if extractions is not None
+        else ExtractionStore(settings.session_path, clock),
     )
 
 

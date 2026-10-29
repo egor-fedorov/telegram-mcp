@@ -29,6 +29,7 @@ from telegram_mcp.adapters.wire.common import (
 )
 from telegram_mcp.adapters.wire.discovery import DiscoveryResult, PublicChannel
 from telegram_mcp.adapters.wire.encoding import encode
+from telegram_mcp.adapters.wire.extraction import ExtractionResult, PageSpan
 from telegram_mcp.adapters.wire.messages import (
     AlbumResult,
     Attachment,
@@ -76,6 +77,7 @@ __all__ = [
     "Entity",
     "ExportFile",
     "ExportHistoryResult",
+    "ExtractionResult",
     "Folder",
     "FolderResult",
     "FormattedText",
@@ -85,6 +87,7 @@ __all__ = [
     "Message",
     "MessageResult",
     "Page",
+    "PageSpan",
     "PollAnswerResult",
     "PollData",
     "PollOption",

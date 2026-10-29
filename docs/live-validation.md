@@ -76,6 +76,32 @@ uv run --locked python scripts/probe_telegram.py \
 
 The value above is illustrative; use the actual ID returned for the selected post.
 
+### Selected PDF/DOCX extraction
+
+Install the optional extra in the probe environment. With the session-owning server
+stopped, run once for an explicitly approved text PDF and once for an approved DOCX:
+
+```sh
+uv run --locked --extra extraction python scripts/probe_telegram.py \
+  --chat @selected_channel \
+  --attachment-id=-1001234567890:123:document --extract
+```
+
+Use each selected post's actual `attachments[].id`; do not guess its attachment kind.
+`--extract` requires `--attachment-id` and cannot be combined with message, topic,
+monitoring or M4 checks. It checks only the selected source, authorization and document:
+first delivery, Unicode-offset continuation, immutable source digest/expiry, replay,
+and PDF page provenance or the absence of DOCX page numbers. It performs no history
+sweep, search or archive write. The existing configuration must explicitly enable
+attachment downloads; this flag does not enable them.
+
+Extraction inputs and snapshots use the probe's disposable private directory, removed
+on exit. Reports contain counts and issue codes, never document text or names.
+`AUTH_REQUIRED` means no successful live extraction has been established: finish
+interactive login separately and rerun after authorization is restored. Restart the
+normal session-owning server after the probe finishes. Before publishing 0.6, record
+successful PDF and DOCX runs and their continuation checks separately from offline tests.
+
 The script clones settings in memory, replaces the allowlist with the selected
 canonical IDs, and disables folder grants, unrestricted access, public-channel
 read exceptions, and discovery. It does not save configuration changes. The
@@ -95,6 +121,7 @@ allowlist. Normal session and lease files are still used by the Telegram client.
 | Album | Only when an explicit message has an album ID; five history slots in each direction, at most eleven members including the anchor |
 | Optional forums | Three topics per selected forum, then five messages from its first returned topic |
 | Optional attachment | One explicit attachment, at most 20 MiB; resource read and permanent-copy size/SHA-256 checks |
+| Extraction-only mode | One explicit PDF or DOCX, at most 20 MiB; three slices totaling at most 258 text characters, one parse, and fresh source rechecks |
 | Optional M4 changes | One baseline of at most 100 recent messages, checkpoint-store reopen, then at most two continuation calls with `limit=5`; a recheck can observe at most 100 known IDs |
 | Optional M4 export | One-day range, at most two JSONL parts and five fetched records; resource/copy size/SHA-256 and manifest/summary checks |
 | Reconnect | Disconnect the probe's own client, then check status and five history messages in the same process |

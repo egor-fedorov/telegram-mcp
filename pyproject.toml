@@ -22,6 +22,8 @@ dependencies = [
   "tzdata>=2025.2; sys_platform == 'win32'",
   "starlette>=1.6,<2",
   "uvicorn>=0.52.4,<1",
+  "qrcode>=8.2,<9",
+  "colorama>=0.4.6,<1 ; sys_platform == 'win32'",
 ]
 classifiers = [
   "Development Status :: 4 - Beta",
@@ -46,6 +48,12 @@ Repository = "https://github.com/egor-fedorov/telegram-mcp"
 Issues = "https://github.com/egor-fedorov/telegram-mcp/issues"
 Roadmap = "https://github.com/egor-fedorov/telegram-mcp/blob/main/ROADMAP.md"
 Changelog = "https://github.com/egor-fedorov/telegram-mcp/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+extraction = [
+    "pypdf>=6.21.4,<7",
+    "python-docx>=1.2,<2",
+]
 
 [dependency-groups]
 dev = [

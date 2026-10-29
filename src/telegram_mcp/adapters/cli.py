@@ -14,7 +14,7 @@ from pathlib import Path
 
 from pydantic import SecretStr, ValidationError
 
-from telegram_mcp.adapters import checkpoint_cli
+from telegram_mcp.adapters import checkpoint_cli, qr_code
 from telegram_mcp.adapters.config import (
     Settings,
     config_path,
@@ -31,12 +31,18 @@ from telegram_mcp.domain.models import Chat, Folder, ToolError
 
 
 async def login(
-    settings: Settings, path: Path, authenticate: Callable[..., Awaitable[None]]
+    settings: Settings,
+    path: Path,
+    authenticate: Callable[..., Awaitable[None]],
+    *,
+    qr: bool = False,
 ) -> None:
     if not sys.stdin.isatty():
         raise ToolError(
             "INTERACTIVE_LOGIN_REQUIRED", "Run login yourself in an interactive terminal."
         )
+    if qr:
+        qr_code.require_terminal()
     settings = settings.model_copy(deep=True)
     if settings.api_id is None:
         value = (await asyncio.to_thread(input, "Telegram api_id (my.telegram.org): ")).strip()
@@ -52,6 +58,7 @@ async def login(
         phone=lambda: input("Phone number: "),
         code=lambda: getpass.getpass("Telegram login code: "),
         password=lambda: getpass.getpass("Telegram 2FA password: "),
+        show_qr=qr_code.show_qr if qr else None,
     )
     save_settings(settings, path)
     print(f"Session saved. Configuration: {path}")
@@ -195,11 +202,16 @@ def main(dependencies: CliDependencies) -> None:
     parser.add_argument(
         "--transport", choices=["stdio", "http"], help="Transport for serve (default: stdio)"
     )
+    parser.add_argument(
+        "--qr", action="store_true", help="Use a terminal QR code for interactive login"
+    )
     checkpoint_cli.add_arguments(parser)
     args = parser.parse_args()
     checkpoint_cli.validate_arguments(parser, args)
     if args.transport is not None and args.command != "serve":
         parser.error("--transport is supported only with serve")
+    if args.qr and args.command != "login":
+        parser.error("--qr is supported only with login")
     logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
     try:
         path = (args.config or config_path()).expanduser()
@@ -217,7 +229,7 @@ def main(dependencies: CliDependencies) -> None:
         elif args.command == "connect":
             asyncio.run(dependencies.connect(settings))
         elif args.command == "login":
-            asyncio.run(login(settings, path, dependencies.authenticate))
+            asyncio.run(login(settings, path, dependencies.authenticate, qr=args.qr))
         elif args.command == "configure":
             asyncio.run(configure(settings, path, dependencies.backend_factory))
         else:

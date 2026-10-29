@@ -41,6 +41,34 @@ The server reads its configuration on startup. Restart it after editing permissi
 port, or paths. A proxy's settings select the endpoint and token; they do not override
 the server's read policy or create per-client permissions.
 
+## QR login
+
+Available in source builds for the next release; published 0.5.1 does not have `--qr`.
+Stop the session-owning server first. From a source checkout:
+
+```sh
+uv run --locked telegram-mcp --config /absolute/private/config.toml login --qr
+```
+
+On your phone, open Telegram **Settings > Devices > Link Desktop Device**, select
+the intended account, and scan the latest QR displayed in the terminal. No phone
+number or login code is requested. The usual `api_id` and `api_hash` are still required;
+login prompts for them if missing. If Telegram requires a 2FA password, enter it in
+the local non-echoing prompt. A rejected password ends this attempt with
+`AUTH_PASSWORD_INVALID`.
+
+The command reuses the configured session and preserves access settings. An already
+authorized session succeeds without generating a QR or changing accounts. Expired
+QR codes refresh automatically, with at most three codes per invocation; `Ctrl+C`
+cancels. A Telegram rate limit stops immediately and reports the required wait.
+Restart the server after login, then check MCP `get_status`.
+
+Run this yourself in a Unicode terminal with interactive input and output, such as
+Windows Terminal. Rendering uses the bundled Python dependency; no `qrencode`, image
+viewer or separate executable is required. Login does not write QR images or print
+the underlying login URL. Do not share or redirect the QR, which authorizes account
+access. Ordinary `login` keeps the phone/code flow; QR mode does not fall back to it.
+
 ## Choose the permitted sources
 
 ```toml

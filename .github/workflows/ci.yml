@@ -32,13 +32,13 @@ jobs:
           python-version: "3.12"
           enable-cache: true
       - name: Install locked dependencies
-        run: uv sync --locked --group dev
+        run: uv sync --locked --group dev --extra extraction
       - name: Check formatting
-        run: uv run --locked ruff format --check .
+        run: uv run --locked --extra extraction ruff format --check .
       - name: Check lint
-        run: uv run --locked ruff check .
+        run: uv run --locked --extra extraction ruff check .
       - name: Check types
-        run: uv run --locked ty check
+        run: uv run --locked --extra extraction ty check
 
   build:
     name: Build distributions
@@ -120,9 +120,9 @@ jobs:
           python-version: ${{ matrix.python }}
           enable-cache: true
       - name: Install locked dependencies
-        run: uv sync --locked --group dev
+        run: uv sync --locked --group dev --extra extraction
       - name: Run autonomous tests
-        run: uv run --locked pytest -n auto
+        run: uv run --locked --extra extraction pytest -n auto
       - name: Download distributions
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:

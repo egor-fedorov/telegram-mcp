@@ -48,7 +48,7 @@ async def test_topic_history_mcp_schema_and_unchanged_chat_wide_defaults(mode: s
     )
     async with Client(server, mode=mode) as client:
         listing = await client.list_tools()
-        assert len(listing.tools) == 22
+        assert len(listing.tools) == 23
         tools = {tool.name: tool for tool in listing.tools}
         for name in ("get_history", "get_pinned_messages"):
             tool = tools[name]

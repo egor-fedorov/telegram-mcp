@@ -2,7 +2,7 @@
 
 import json
 import tempfile
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Self
@@ -18,9 +18,61 @@ from telegram_mcp.application.ports import Batch, MessageOffset, TopicBatch, Top
 from telegram_mcp.application.requests import HistoryRead, MessageRead, SearchRead
 from telegram_mcp.domain.models import Chat, ForumTopic, MessageRef, ToolError
 from tests.support.downloads import AttachmentBackend
+from tests.support.extraction import docx_bytes, pdf_bytes
 from tests.support.fakes import FakeBackend, msg
 
 SECRET = "private-secret-text"
+
+
+@pytest.mark.parametrize("kind", ["docx", "mixed-pdf"])
+async def test_extraction_probe_is_selected_bounded_and_redacted(
+    tmp_path: Path, capsys, kind: str
+) -> None:
+    backend = ArtifactProbeFake()
+    backend.attachment.data = (
+        docx_bytes(SECRET + " 😀") if kind == "docx" else pdf_bytes([SECRET, None, "Last"])
+    )
+    backend.attachment.source = replace(
+        backend.attachment.source, size=len(backend.attachment.data), name="private-name.docx"
+    )
+    settings = Settings(allow_attachment_downloads=True, session_path=tmp_path / "session")
+    original = settings.model_dump()
+    checks = await probe(
+        settings,
+        chats=["1"],
+        message_refs=[],
+        attachment_id="1:10:document",
+        extract=True,
+        backend_factory=backend.factory,
+        emit=print_check,
+    )
+    assert [c.check for c in checks] == [
+        "selected_sources",
+        "status",
+        "extraction_and_continuation",
+    ]
+    assert all(c.status == "passed" for c in checks[:2])
+    expected_issues = [] if kind == "docx" else ["DOCUMENT_PAGES_WITHOUT_TEXT"]
+    assert checks[-1].issue_codes == expected_issues
+    assert checks[-1].status == ("failed" if expected_issues else "passed")
+    assert backend.attachment.downloads == 1 and not backend.requests
+    assert settings.model_dump() == original and backend.closed
+    output = capsys.readouterr().out
+    assert SECRET not in output and "private-name" not in output and "😀" not in output
+
+
+async def test_extraction_probe_does_not_enable_download_permission(tmp_path: Path) -> None:
+    backend = ArtifactProbeFake()
+    checks = await probe(
+        Settings(session_path=tmp_path / "session"),
+        chats=["1"],
+        message_refs=[],
+        attachment_id="1:10:document",
+        extract=True,
+        backend_factory=backend.factory,
+    )
+    assert checks[-1].issue_codes == ["DOWNLOADS_DISABLED"]
+    assert backend.attachment.downloads == 0
 
 
 class ProbeFake(FakeBackend):

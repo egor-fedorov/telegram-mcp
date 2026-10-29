@@ -49,6 +49,10 @@ Obtain `api_id` and `api_hash` from [my.telegram.org](https://my.telegram.org), 
 enter them in the local login prompt with your phone number, login code, and any 2FA
 password. Do not send login codes or credentials to the model.
 
+Source builds also support `telegram-mcp login --qr`: scan the terminal QR from
+Telegram on your phone instead of entering a phone number and login code. This is
+unreleased; see the [QR login guide](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/configuration.md#qr-login).
+
 `configure` lets you choose folders/chats and separately enable all-chat access,
 explicit public-channel reads, or public-channel discovery. Enter keeps the current
 value. By default, no message sources are permitted. `status` should report
@@ -123,6 +127,7 @@ do not paste it into client configuration. This is a local, single-user integrat
 | `get_context` | Messages before/after an anchor and a chain of parent replies |
 | `get_thread` | Comments on a channel post or replies in a group thread |
 | `download_attachment` | One selected attachment up to 20 MiB as a temporary local file and MCP resource |
+| `extract_attachment_text` | Optional local PDF/DOCX text extraction with bounded continuation and PDF page references |
 | `get_changes` | New messages and recent observed revisions in one chat, with restartable checkpoints |
 | `create_watch` / `list_watches` | Save and discover named chat/folder subscriptions |
 | `get_watch_changes` / `ack_watch_changes` | Poll and acknowledge a durable batch without per-chat tokens; optionally save it first |

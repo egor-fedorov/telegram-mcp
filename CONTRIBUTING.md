@@ -13,7 +13,7 @@ environment. The supported runtime range is Python 3.12–3.15 on Windows, macOS
 Linux. From the project directory:
 
 ```sh
-uv sync --locked --python 3.12
+uv sync --locked --python 3.12 --extra extraction
 make check
 ```
 
@@ -27,17 +27,19 @@ For documentation-only changes, check links, examples, and formatting.
 On Windows without Make, run the same checks directly:
 
 ```sh
-uv run --locked ruff format --check .
-uv run --locked ruff check .
-uv run --locked ty check
-uv run --locked pytest -n auto
+uv run --locked --extra extraction ruff format --check .
+uv run --locked --extra extraction ruff check .
+uv run --locked --extra extraction ty check
+uv run --locked --extra extraction pytest -n auto
 ```
 
 Ruff enforces a maximum McCabe complexity of 15 with no exceptions. Split a function
 into named steps instead of raising the limit or adding `# noqa: C901`.
 
 CI checks formatting/types, builds wheel and source distributions, and runs tests
-plus clean-install smoke checks. The matrix covers Python 3.12–3.15 on Linux and
+with the extraction extra. Clean base-package probes also verify operation without
+the optional document parsers. CI includes clean-install smoke checks.
+The matrix covers Python 3.12–3.15 on Linux and
 3.12/3.15 on macOS and Windows. The required `checks` job succeeds only when its
 dependencies succeed. No Telegram credentials or publishing secrets are needed.
 

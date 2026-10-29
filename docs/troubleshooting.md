@@ -61,6 +61,14 @@ Run `telegram-mcp login` yourself in an interactive terminal after stopping the
 session-owning process. A missing or revoked Telegram session cannot be repaired by
 retrying a tool or supplying login codes to the model.
 
+If login codes do not arrive but your phone is still authorized, source builds offer
+[QR login](configuration.md#qr-login). Stop the server and use the same configuration.
+`QR_LOGIN_EXPIRED` means none of the three codes was approved in time; rerun when the
+phone is ready. `QR_TERMINAL_UNSUPPORTED` needs a Unicode terminal, while
+`INTERACTIVE_LOGIN_REQUIRED` means input or output is redirected. For `RATE_LIMITED`,
+wait the reported seconds before another attempt. `QR_LOGIN_FAILED` is a sanitized
+Telegram/protocol failure; retry later rather than repeatedly requesting tokens.
+
 `get_status` probes Telegram authorization afresh:
 
 | `authorized` | Meaning |

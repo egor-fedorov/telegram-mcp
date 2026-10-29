@@ -48,6 +48,21 @@ def smoke(artifact: Path, python: str, version: str) -> None:
             env=env,
             timeout=90,
         )
+        subprocess.run(
+            ["uv", "pip", "install", "--python", str(interpreter), f"{artifact}[extraction]"],
+            check=True,
+            cwd=root,
+            env=env,
+        )
+        extraction_probe = root / "probe_extraction_package.py"
+        shutil.copyfile(Path(__file__).with_name(extraction_probe.name), extraction_probe)
+        subprocess.run(
+            [str(interpreter), "-I", str(extraction_probe)],
+            check=True,
+            cwd=root,
+            env=env,
+            timeout=60,
+        )
 
 
 def main() -> None:

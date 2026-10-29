@@ -68,6 +68,12 @@ The aggregate backend protocol is confined to assembly and local command wiring.
 - `AttachmentService` uses `AttachmentPort` and `DownloadStorePort` for selected-file
   downloads and resource reads, with fresh access checks, a bounded deadline,
   serialized downloads and FloodWait cooldowns.
+- `ExtractionService` obtains verified bytes through the attachment use case, parses
+  them through an optional worker port and stores immutable, bounded text snapshots.
+  It revalidates the current source before every delivery. Parser adapters live in a
+  disposable process; cancellation kills and reaps it, without holding the attachment
+  lock while parsing. The separate extraction cache reuses `TemporaryFiles` and its
+  quota, expiry, private-file and integrity rules.
 
 `ConfiguredPolicyProvider` reads current in-memory settings on every call, so policy
 changes between calls revoke access before saved output is returned. It does not reload

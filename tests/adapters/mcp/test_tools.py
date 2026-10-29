@@ -29,6 +29,7 @@ EXPECTED_TOOLS = {
     "get_context",
     "get_thread",
     "download_attachment",
+    "extract_attachment_text",
     "get_changes",
     "export_history",
     "create_watch",
@@ -58,6 +59,7 @@ async def test_mcp_tool_schemas_and_real_dispatch(mode: str) -> None:
                 t.name
                 not in {
                     "download_attachment",
+                    "extract_attachment_text",
                     "get_changes",
                     "export_history",
                     "create_watch",
