@@ -1,6 +1,7 @@
 # M6: Selected document text extraction (0.6)
 
-Status: implementation in progress; not released. Live acceptance remains pending.
+Status: implemented and validated for 0.6; not released. Selected-source live
+acceptance passed on 2026-10-29.
 
 ## Goal and decisions
 
@@ -123,6 +124,36 @@ check on unselected sources.
 One focused feature PR includes the specification and implementation, followed by
 make check, diff review and the required checks job. Release preparation/publication
 is separate from merging implementation. No permanent-state migration is needed.
+
+## Validation record
+
+Code revision `4355dd7` passed `make check` (Ruff, ty, 1549 tests and two platform-specific
+skips), clean wheel/source installations without and with the extra, and the full
+[GitHub OS/Python matrix](https://github.com/egor-fedorov/telegram-mcp/actions/runs/40849705762).
+
+On 2026-10-29, bounded live validation used exactly two maintainer-selected Telegram
+messages on Linux, Python 3.12.15, Telethon 1.45.0, pypdf 6.21.4, python-docx 1.2.0
+and lxml 6.1.3. The earlier attempt stopped at `AUTH_REQUIRED`; the successful run
+followed interactive reauthorization by the maintainer.
+
+| Format | Input bytes | Extracted Unicode characters | Physical PDF pages | Issues |
+| --- | --- | --- | --- | --- |
+| DOCX | 10,257 | 3,538 | Not applicable | None |
+| PDF | 74,381 | 6,341 | 1 | None |
+
+Each document used one initial extraction, continuation from offset one, a replay
+of the first 129 characters and an empty final slice at the total length. Checks
+confirmed the selected message reference, stable source digest and expiry, and PDF
+page provenance without inventing DOCX page numbers. Access/download permissions were
+limited in memory to the selected sources for the probe; saved configuration was not
+changed. No catalog, global search, archive write or unselected-source read was used.
+Temporary inputs and snapshots were removed. The shared HTTP service was restarted
+and its status confirmed `authorized=true`, `connected=true`.
+
+The public record contains counts and outcomes only. No document content, file names,
+source selectors or credentials are retained. This check does not claim manual visual
+comparison, live multi-page coverage, or live encrypted/damaged-document coverage;
+those parsing and pagination paths remain covered by synthetic offline tests.
 
 References: [pypdf extraction](https://pypdf.readthedocs.io/en/stable/user/extract-text.html),
 [python-docx document iteration](https://python-docx.readthedocs.io/en/latest/api/document.html).
