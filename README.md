@@ -95,6 +95,10 @@ Telegram session. Closing a client leaves the shared server running.
 cover Codex, Claude Desktop, Claude Code, Cursor, and VS Code, including a pinned `uvx`
 command and executable paths for Windows.
 
+A [Claude Desktop MCPB bundle](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/mcpb.md)
+is available for preview validation. It uses the same shared server and separate
+local login; see the guide for installation and current validation coverage.
+
 For one client, standalone STDIO is still available: configure that client to launch
 `telegram-mcp serve`. Use either mode for a given session. Stop the session-owning
 process before running local `login`, `configure`, `catalog`, or `status`; use the

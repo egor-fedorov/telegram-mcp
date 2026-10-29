@@ -95,11 +95,17 @@ jobs:
         with:
           name: release-notes
           path: .
-      - name: Create the release with the exact PyPI artifacts
+      - name: Download the validated MCPB and checksum
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: mcpb
+          path: dist/mcpb
+      - name: Create the release with the exact validated artifacts
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: >-
-          gh release create "$RELEASE_TAG" dist/* --verify-tag
+          gh release create "$RELEASE_TAG" dist/*.whl dist/*.tar.gz
+          dist/mcpb/*.mcpb dist/mcpb/*.sha256 --verify-tag
           --title "$RELEASE_TAG" --notes-file release-notes.md

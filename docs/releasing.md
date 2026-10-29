@@ -49,6 +49,11 @@ and [publishing guide](https://docs.pypi.org/trusted-publishers/using-a-publishe
    run `uv run --locked python scripts/smoke_distribution.py`. This installs both
    artifacts outside the checkout and checks the declared Registry executable and
    STDIO arguments, ownership marker, CLI and transports without Telegram credentials.
+   Build the MCPB using `scripts/build_mcpb.py --validate`, verify it with `--check`,
+   and run `scripts/smoke_mcpb.py` on that artifact through `uv run --locked python`.
+   Follow the [Desktop acceptance checks](mcpb.md#build-and-validation) before the
+   first bundle publication; record Windows results and the unverified macOS UI
+   coverage explicitly. Update the bundle guide's version examples with the release.
 5. Record release-specific validation, following the previous
    [0.3 validation record](validation-0.3.md): response/schema size checks and a bounded
    [selected-source live probe](live-validation.md). Live validation requires explicit
@@ -72,11 +77,18 @@ git push origin v0.5.2
 ```
 
 The tag starts [release.yml](../.github/workflows/release.yml). The pipeline validates
-the tag/version/changelog, builds the package, and publishes to PyPI through the
+the tag/version/changelog, builds the package and MCPB, and publishes to PyPI through the
 `pypi` Trusted Publisher. Only after successful package publication does it start
 the GitHub Release and MCP Registry jobs. Those jobs are independent, so a Registry
 outage does not prevent GitHub Release creation. Follow each job to completion;
 a pushed tag alone does not confirm publication.
+
+The `distributions` artifact contains only the wheel and source distribution, which
+are uploaded to PyPI. A separate `mcpb` artifact contains the validated `.mcpb` and
+its `.mcpb.sha256`; both are attached to the GitHub Release without rebuilding. The
+wheel embedded in the bundle is byte-identical to the wheel in `distributions`.
+Verify all four release files, the bundle checksum and version. Merging packaging
+work does not publish a bundle or modify assets of an older release.
 
 Verify the release's wheel and source distribution on PyPI and test a clean install:
 

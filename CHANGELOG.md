@@ -8,6 +8,13 @@ A version entry describes its target artifact. Verify publication on
 
 ## [Unreleased]
 
+### Dependencies
+
+- Refresh the locked HTTP/SSE and TLS dependencies, including Starlette 1.10.0,
+  sse-starlette 3.6.0, cryptography 50.0.2 and truststore 0.10.5, with supporting
+  parser, IDNA and test-plugin updates. Dependency constraints and MCP contracts
+  are unchanged.
+
 ### Authentication
 
 - `telegram-mcp login --qr` displays a terminal QR for approval in the Telegram phone
@@ -33,6 +40,14 @@ A version entry describes its target artifact. Verify publication on
   HTTP server. It runs a persistent installed executable, restarts after crashes,
   and preserves the existing local authentication and session ownership model.
   The unit works with published 0.5.1; no package upgrade is required to adopt it.
+- Preview Claude Desktop MCPB packaging with a shared-server `connect` launcher,
+  external configuration-file selection, the matching release wheel and locked
+  runtime dependencies. CI checks reproducible archives and isolated launches on
+  Linux, Windows and macOS; GitHub releases include the bundle and SHA-256 separately
+  from the PyPI artifacts. Initial Windows Desktop connection and catalog checks
+  passed on Windows 11 25H2 with Claude Desktop 4.29.0. Additional Desktop UI/lifecycle
+  scenarios and macOS Desktop remain manually unverified. The first bundled release
+  is pending. See the [bundle guide](docs/mcpb.md).
 
 ## [0.5.1] - 2026-10-28
 
