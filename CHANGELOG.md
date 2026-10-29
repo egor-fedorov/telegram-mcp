@@ -33,6 +33,14 @@ A version entry describes its target artifact. Verify publication on
   HTTP server. It runs a persistent installed executable, restarts after crashes,
   and preserves the existing local authentication and session ownership model.
   The unit works with published 0.5.1; no package upgrade is required to adopt it.
+- Preview Claude Desktop MCPB packaging with a shared-server `connect` launcher,
+  external configuration-file selection, the matching release wheel and locked
+  runtime dependencies. CI checks reproducible archives and isolated launches on
+  Linux, Windows and macOS; GitHub releases include the bundle and SHA-256 separately
+  from the PyPI artifacts. Initial Windows Desktop connection and catalog checks
+  passed on Windows 11 25H2 with Claude Desktop 4.29.0. Additional Desktop UI/lifecycle
+  scenarios and macOS Desktop remain manually unverified. The first bundled release
+  is pending. See the [bundle guide](docs/mcpb.md).
 
 ## [0.5.1] - 2026-10-28
 
