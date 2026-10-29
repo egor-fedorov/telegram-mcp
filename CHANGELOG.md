@@ -38,8 +38,9 @@ A version entry describes its target artifact. Verify publication on
   runtime dependencies. CI checks reproducible archives and isolated launches on
   Linux, Windows and macOS; GitHub releases include the bundle and SHA-256 separately
   from the PyPI artifacts. Initial Windows Desktop connection and catalog checks
-  passed; remaining Desktop acceptance is pending. macOS Desktop has not been manually
-  validated. See the [bundle guide](docs/mcpb.md).
+  passed on Windows 11 25H2 with Claude Desktop 4.29.0. Additional Desktop UI/lifecycle
+  scenarios and macOS Desktop remain manually unverified. The first bundled release
+  is pending. See the [bundle guide](docs/mcpb.md).
 
 ## [0.5.1] - 2026-10-28
 

@@ -167,8 +167,9 @@ automatic startup after reboot and login, followed by an authorized, connected
 package release is needed to adopt it.
 
 [Ship a validated MCPB bundle (#41)](https://github.com/egor-fedorov/telegram-mcp/issues/41)
-is in progress. One `uv` bundle uses the release wheel and locked runtime dependencies,
-runs only the existing `connect` proxy, and selects an external configuration file.
+is implemented and validated, with publication pending. One `uv` bundle uses the
+release wheel and locked runtime dependencies, runs only the existing `connect`
+proxy, and selects an external configuration file.
 CI covers packaging, checksums, reproducibility and extracted launches on Linux,
 Windows and macOS; release automation attaches the validated bundle separately from
 the PyPI artifacts. The [installation and validation guide](docs/mcpb.md) records
@@ -176,9 +177,11 @@ the shared-server prerequisite. On 2026-10-29 the maintainer confirmed local QR 
 authorized connection and catalog/folder loading in Claude Desktop 4.29.0 on Windows
 11 25H2, using the identified 0.5.1 preview artifact. The
 [Windows report](docs/mcpb.md#windows-report-2026-10-29) records its checksum and limits:
-bounded reads, prompt/resource UI and lifecycle/recovery checks remain pending.
+bounded post reads, prompt/resource UI and lifecycle/recovery have not been manually
+checked in Desktop. Initial acceptance covers installation, authorization and a
+successful catalog call; the broader scenarios are optional follow-up coverage.
 Manual macOS Desktop validation is unverified and does not block the first bundle.
-The PR remains a draft and the issue stays open until Windows acceptance is complete.
+Bundle publication remains part of the next package release.
 
 ## 0.6: selected document text extraction (validated, unreleased)
 

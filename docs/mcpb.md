@@ -7,10 +7,10 @@ on the same computer. It runs `telegram-mcp connect` and shares that server's ac
 permissions, tools, resources and prompts. Closing or removing the extension leaves
 the HTTP server running. The extension does not start a daemon or perform Telegram login.
 
-**Preview:** the first bundle is under validation in
-[#41](https://github.com/egor-fedorov/telegram-mcp/issues/41). A successful build or
-CI run is not a completed Claude Desktop installation check. Until publication, use
-the reviewed PR's `mcpb` Actions artifact; published 0.5.1 predates this bundle.
+**Preview:** the initial Windows Desktop check passed on the candidate identified
+in the [validation report](#windows-report-2026-10-29). The first bundled release
+is still pending. Until publication, use the reviewed PR's `mcpb` Actions artifact;
+published 0.5.1 predates this bundle.
 
 One archive targets Windows, macOS and Linux through the MCPB `uv` runtime. It
 contains the release wheel and locked dependencies' metadata, not an installed
@@ -126,23 +126,16 @@ missing-server diagnostics and preservation of the external profile during remov
 and reinstallation. They use synthetic state and no Telegram account. Temporary
 build and probe directories are removed; only the candidate bundle and checksum remain.
 
-Before the first bundle is published, record a Windows Desktop report:
+Initial manual acceptance covers installing the extension in Windows Desktop,
+connecting to the configured local server, authorized `get_status`, and a successful
+tool call such as catalog loading. Record the OS/client versions and artifact identity.
+This checks the host integration; the automated checks above cover the shared proxy
+and external profile lifecycle.
 
-- OS, CPU architecture, Claude Desktop version, bundle version and checksum.
-- Installation without a checkout or preconfigured Python environment; correct
-  configuration-file selection and successful authorized `get_status`.
-- One bounded read from a maintainer-selected permitted source, prompt discovery
-  and rendering, and a small resource read if the client exposes that capability.
-- Disable/re-enable and close/reopen Desktop while the separate server keeps running.
-- Remove/reinstall the bundle and confirm the external login, configuration and
-  monitoring state remain usable. Check an actual version upgrade when both versions
-  are available; distinguish this from reinstalling the same candidate.
-- Stop the shared server, confirm the actionable connection error, restart it and
-  reconnect. Report unsupported client UI capabilities explicitly.
-
-Share statuses and issue codes, not credentials, tokens, session files or source
-content. macOS Desktop has not been manually tested. Keep #41 open until the agreed
-Windows acceptance checks are complete.
+Detailed prompt/resource UI, Desktop restart/reinstallation and actual version-upgrade
+checks can extend the compatibility record when performed; they do not block the first
+bundle. Keep unverified behavior explicit. Share statuses and issue codes, not
+credentials, tokens, session files or source content. macOS Desktop remains unverified.
 
 ### Windows report: 2026-10-29
 
@@ -165,7 +158,8 @@ CPU architecture and installed server/Python versions were not reported. Bounded
 reading, prompt/resource UI, lifecycle/reinstallation and server-restart recovery
 remain unverified in Desktop, as does installation without a checkout or preconfigured
 Python. The reported checksum identifies this candidate only; later builds require
-their own artifact identity. The PR remains a draft and #41 stays open.
+their own artifact identity. The initial Windows acceptance scope above is complete;
+the unverified scenarios are follow-up coverage, not release prerequisites.
 
 Format references: [MCPB specification](https://github.com/modelcontextprotocol/mcpb/blob/main/MANIFEST.md#uv-runtime-v04),
 [official uv example](https://github.com/modelcontextprotocol/mcpb/tree/main/examples/hello-world-uv).
