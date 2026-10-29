@@ -140,6 +140,11 @@ a named watch into a source-linked digest, saving each batch before acknowledgin
 They do not add permissions. See
 [monitoring prompts](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/usage.md#monitoring-prompts).
 
+An optional [Agent Skill](https://github.com/egor-fedorov/telegram-mcp/tree/main/skills/telegram-mcp)
+guides tool selection, bounded reading, watch acknowledgements and selected attachments.
+Install it in your client separately from the server; see the
+[skill setup](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/clients.md#agent-skill).
+
 ## First tasks
 
 - Ask the client to list the folders you permitted and read a selected conversation

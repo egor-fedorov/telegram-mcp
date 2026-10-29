@@ -183,6 +183,15 @@ successful catalog call; the broader scenarios are optional follow-up coverage.
 Manual macOS Desktop validation is unverified and does not block the first bundle.
 Bundle publication remains part of the next package release.
 
+The optional [telegram-mcp Agent Skill](skills/telegram-mcp/SKILL.md) packages existing
+reading and monitoring workflows for clients that support Agent Skills. It preserves
+period budgets, recoverable acknowledgement and content trust rules, and detects the
+optional extraction capability. [Installation](docs/clients.md#agent-skill) is separate
+from the server and uses the same configured account and permissions. The skill is
+MIT licensed and distributed in the repository; marketplace publication is separate.
+Claude Code 2.1.312 on Linux passed synthetic client checks for discovery, bounded
+continuation and acknowledgement conditions; see the installation guide for coverage.
+
 ## 0.6: selected document text extraction (validated, unreleased)
 
 [M6: Selected document text extraction](docs/specs/m6-text-extraction.md) is implemented

@@ -8,6 +8,13 @@ A version entry describes its target artifact. Verify publication on
 
 ## [Unreleased]
 
+### Agent Skill
+
+- Add an optional MIT-licensed `telegram-mcp` Agent Skill for source-linked reading,
+  bounded digests, watch acknowledgement and selected attachments, with client
+  installation instructions. It uses existing MCP tools and does not change server
+  permissions or install automatically with the Python package.
+
 ### Dependencies
 
 - Refresh the locked HTTP/SSE and TLS dependencies, including Starlette 1.10.0,

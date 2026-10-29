@@ -241,6 +241,63 @@ Without prompt support, use the
 and trust rules typed as an ordinary request. Prompts do not add permissions; tools,
 access policy and acknowledgements behave exactly as when called directly.
 
+## Agent Skill
+
+The optional [telegram-mcp skill](../skills/telegram-mcp/SKILL.md) teaches an agent
+when to use each workflow, how to bound reading, and when to acknowledge watch batches.
+It follows the [Agent Skills format](https://agentskills.io/specification) and is MIT
+licensed. The directory contains only instructions and a license; it runs through the
+existing MCP tools. Installation does not connect a server, authorize Telegram, or
+change read permissions. Complete the MCP setup above first.
+
+Copy the whole `skills/telegram-mcp` directory from a reviewed checkout into your
+client's skills directory. The final path must end in `telegram-mcp/SKILL.md`:
+
+| Client | Personal installation directory | Official instructions |
+| --- | --- | --- |
+| Claude Code | `~/.claude/skills/telegram-mcp/` | [Skills](https://code.claude.com/docs/en/skills) |
+| Cursor | `~/.cursor/skills/telegram-mcp/` | [Skills](https://cursor.com/docs/skills) |
+| VS Code with the Copilot harness | `~/.copilot/skills/telegram-mcp/` | [Agent Skills](https://code.visualstudio.com/docs/agent-customization/agent-skills) |
+
+For Claude Code, run these commands **in your terminal, from the repository root**.
+On Linux or macOS:
+
+```sh
+mkdir -p "$HOME/.claude/skills/telegram-mcp"
+cp skills/telegram-mcp/SKILL.md skills/telegram-mcp/LICENSE "$HOME/.claude/skills/telegram-mcp/"
+```
+
+On Windows, in PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force "$HOME\.claude\skills\telegram-mcp" | Out-Null
+Copy-Item .\skills\telegram-mcp\* -Destination "$HOME\.claude\skills\telegram-mcp" -Recurse -Force
+```
+
+Start a new Claude Code session and enter `/telegram-mcp` followed by the task **in
+Claude's chat**, for example: `/telegram-mcp Summarize the last seven days in my Jobs
+folder, at most 20 sources and 100 messages.` Claude can also select the skill for a
+matching ordinary request. For a project-only installation, use
+`.claude/skills/telegram-mcp/` in that project instead of the personal directory.
+Other clients control discovery and invocation through their own skill UI.
+
+Use the server's advertised capabilities: reading and watches work with 0.5.1, while
+PDF/DOCX extraction needs a server exposing `extract_attachment_text` and its optional
+extra. The skill works without MCP prompt UI; selecting `period_digest` or
+`watch_digest` still uses that prompt's rendered workflow. Shared clients continue to
+consume the same named watches.
+
+On 2026-10-29, Claude Code 2.1.312 on Linux loaded a project-local copy and selected
+it for an ordinary request. Synthetic MCP checks covered an empty page with a cursor,
+the period message budget, saved batches before acknowledgement, `ARCHIVE_DISABLED`,
+an oversized pending batch, and ignoring a post's request to delete a watch. These
+checks used no Telegram account. Cursor and Copilot paths follow their documentation;
+their client UI has not been tested with this skill.
+
+To update, review and copy the skill files again; to uninstall, remove only the
+installed `telegram-mcp` skill directory. PyPI upgrades and MCPB installation do not
+install or update this separate client skill. Marketplace publication is separate.
+
 ## Executable paths and custom configuration
 
 Graphical applications may not inherit your terminal's `PATH`. Find `uvx` with
