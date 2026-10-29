@@ -72,7 +72,7 @@ async def authorize_qr(
 ) -> Any:
     try:
         return await _authorize(client, show_qr, password, timeout_seconds)
-    except ToolError:
+    except (ToolError, EOFError):
         raise
     except (
         errors.FloodWaitError,

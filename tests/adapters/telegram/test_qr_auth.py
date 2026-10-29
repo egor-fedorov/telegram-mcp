@@ -112,6 +112,20 @@ async def test_flood_wait_is_reported_without_sleeping_or_retrying(stage: str) -
     assert qr.handlers == 0
 
 
+async def test_closed_password_input_preserves_the_cli_input_error() -> None:
+    qr = FakeQR("password")
+    client = qr_client([qr])
+    with pytest.raises(EOFError):
+        await qr_auth.authorize_qr(
+            client,
+            show_qr=scan_codes([qr]),
+            password=Mock(side_effect=EOFError()),
+            timeout_seconds=1,
+        )
+    client.sign_in.assert_not_called()
+    assert qr.handlers == 0
+
+
 @pytest.mark.parametrize(
     ("error", "code"),
     [
