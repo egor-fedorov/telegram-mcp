@@ -18,6 +18,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from scripts.probe_artifacts import check_attachment, check_changes_and_exports
+from scripts.probe_extraction import check_extraction
 from scripts.probe_monitoring import check_monitoring
 from telegram_mcp.adapters.archive import ArchiveStore
 from telegram_mcp.adapters.checkpoints import CheckpointStore
@@ -26,6 +27,8 @@ from telegram_mcp.adapters.config import ConfiguredPolicyProvider, Settings, loa
 from telegram_mcp.adapters.cursors import CursorStore
 from telegram_mcp.adapters.downloads import DownloadStore
 from telegram_mcp.adapters.exports import ExportStore
+from telegram_mcp.adapters.extraction.process import DocumentParser
+from telegram_mcp.adapters.extraction.store import ExtractionStore
 from telegram_mcp.adapters.telegram import TelegramBackend
 from telegram_mcp.adapters.watches import WatchStore
 from telegram_mcp.application.attachment_ports import (
@@ -96,6 +99,18 @@ KNOWN_CODES = frozenset(
         "WATCH_STORAGE_ERROR",
         "WATCH_BATCH_MISMATCH",
         "VALIDATION_MISMATCH",
+        "EXTRACTION_UNAVAILABLE",
+        "EXTRACTION_EXPIRED",
+        "EXTRACTION_LIMIT_EXCEEDED",
+        "EXTRACTION_STORAGE_FULL",
+        "EXTRACTION_TIMEOUT",
+        "EXTRACTION_FAILED",
+        "DOCUMENT_UNSUPPORTED",
+        "DOCUMENT_ENCRYPTED",
+        "DOCUMENT_INVALID",
+        "DOCUMENT_NO_TEXT",
+        "DOCUMENT_CONTENT_OMITTED",
+        "DOCUMENT_PAGES_WITHOUT_TEXT",
     }
 )
 STOP_CODES = frozenset(
@@ -368,11 +383,14 @@ async def probe(
     attachment_id: str | None = None,
     m4: bool = False,
     monitoring: bool = False,
+    extract: bool = False,
     backend_factory: Callable[[Settings], ProbeBackend] = LiveBackend,
     emit: Callable[[Check], None] = lambda _: None,
 ) -> list[Check]:
     """Run only selected reads; temporary probe data is removed on every exit path."""
     validate_selectors(chats, message_refs, query, monitoring=monitoring)
+    if extract and (attachment_id is None or monitoring or m4 or topics or message_refs):
+        raise ToolError("INVALID_ARGUMENT", "--extract requires --attachment-id and --chat only.")
     if monitoring and (message_refs or topics or attachment_id or m4):
         raise ToolError("INVALID_ARGUMENT", "--monitoring is a separate metadata-only probe.")
     restricted = settings.model_copy(
@@ -425,8 +443,16 @@ async def probe(
                 ExportStore(restricted.session_path, clock, root=root / "exports"),
                 WatchStore(restricted.session_path, root=root / "watches"),
                 ArchiveStore(root / "archive", clock),
+                DocumentParser(),
+                ExtractionStore(restricted.session_path, clock, root=root / "extractions"),
             )
             await recorder.call("status", service.get_status())
+            if extract:
+                assert attachment_id is not None
+                await recorder.call(
+                    "extraction_and_continuation", check_extraction(service, attachment_id)
+                )
+                return recorder.checks
             if monitoring:
                 await check_monitoring(service, backend, list(selected), recorder)
                 return recorder.checks
@@ -591,6 +617,12 @@ def parser() -> argparse.ArgumentParser:
         help="Download and verify exactly this selected attachment (up to 20 MiB).",
     )
     result.add_argument(
+        "--extract",
+        action="store_true",
+        help="Check only the selected PDF/DOCX attachment and text continuation; "
+        "requires the extraction extra.",
+    )
+    result.add_argument(
         "--m4",
         action="store_true",
         help="Check durable changes and two bounded one-day export parts per selected source.",
@@ -624,6 +656,7 @@ def main(argv: list[str] | None = None) -> int:
                 attachment_id=args.attachment_id,
                 m4=args.m4,
                 monitoring=args.monitoring,
+                extract=args.extract,
                 emit=print_check,
             )
         )

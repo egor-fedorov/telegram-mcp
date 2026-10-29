@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import importlib.util
 import json
 import os
 import socket
@@ -54,6 +55,10 @@ async def probe_client(
     assert status is not None
     assert status["authorized"] is False
     assert status["error"]["code"] == "AUTH_REQUIRED"
+    assert status["text_extraction_available"] is False
+    assert status["text_extraction_formats"] == []
+    missing = await client.call_tool("extract_attachment_text", {"attachment_id": "1:1:document"})
+    assert missing.is_error and "EXTRACTION_UNAVAILABLE" in str(missing.content)
 
 
 async def probe_stdio(
@@ -145,6 +150,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", required=True)
     args = parser.parse_args()
+    assert importlib.util.find_spec("pypdf") is None
+    assert importlib.util.find_spec("docx") is None
     assert telegram_mcp.__file__ is not None
     assert Path(telegram_mcp.__file__).resolve().is_relative_to(Path(sys.prefix).resolve())
     metadata = distribution("telegram-context-mcp")

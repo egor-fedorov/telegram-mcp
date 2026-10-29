@@ -26,6 +26,7 @@ need a concrete contract before implementation; no delivery dates are assigned.
 | R5 | Complete for 0.4 | Named subscriptions, protected positions, permanent selected files and compact discovery |
 | M5 | Complete for 0.5 | Bounded multi-source history, archived watch batches and usable monitoring prompts |
 | R6 | Done | Feature-organized MCP and wire modules, bounded complexity, shared storage and faster tests |
+| M6 | In progress for 0.6 | Optional PDF/DOCX text extraction with bounded continuation and source/page provenance |
 
 The [0.5.1 changelog](CHANGELOG.md#051---2026-10-28) and
 [validation record](docs/validation-0.5.1.md) describe the current release scope.
@@ -169,11 +170,24 @@ package release is needed to adopt it.
 remains the next independent distribution task, reusing the shared-server setup
 and session-ownership model.
 
-## Later decisions
+## 0.6: selected document text extraction (in progress)
 
-A candidate for 0.6 is optional text extraction from text-based PDF and DOCX
-attachments, with bounded work and document provenance. OCR and voice transcription
-need separate decisions about engines, dependencies and local versus external processing.
+[M6: Selected document text extraction](docs/specs/m6-text-extraction.md) is in progress
+for 0.6. The agreed scope is optional local PDF/DOCX extraction, bounded inline
+continuation, current source authorization and document/page provenance. Results expire
+after 15 minutes; permanent extracted-text archives, OCR and voice transcription remain
+outside this stage. Offline and selected-source live acceptance are required before release.
+
+Implemented: `extract_attachment_text`, the optional `extraction` extra, isolated
+parser processes, private expiring snapshots and access rechecks before every delivery.
+The test suite covers real synthetic documents, limits, cancellation and all three
+transports; clean wheel/source probes check installations both without and with the
+extra. Local `make check` passes Ruff, ty and 1549 tests with two platform-specific
+skips. The live probe has an explicit `--extract` mode. Selected-source live validation
+is pending: the first attempt stopped at `AUTH_REQUIRED` before document access.
+CI review and release preparation remain separate steps.
+
+## Later decisions
 
 Optional Telegram writes remain a later candidate: drafts first, then separately
 authorized sending, with editing/deletion considered afterward. The

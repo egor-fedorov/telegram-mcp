@@ -17,6 +17,8 @@ from telegram_mcp.application.catalog import CatalogService
 from telegram_mcp.application.change_ports import CheckpointStorePort, ExportStorePort
 from telegram_mcp.application.changes import ChangesService
 from telegram_mcp.application.discovery import DiscoveryService
+from telegram_mcp.application.extraction import ExtractionService
+from telegram_mcp.application.extraction_ports import DocumentParserPort, ExtractionStorePort
 from telegram_mcp.application.global_search import GlobalSearchPager
 from telegram_mcp.application.history_export import HistoryExportService
 from telegram_mcp.application.incremental import IncrementalContext
@@ -43,6 +45,7 @@ from telegram_mcp.domain.changes import (
     ExportFormat,
     ExportHistoryResult,
 )
+from telegram_mcp.domain.extraction import ExtractionResult
 from telegram_mcp.domain.models import (
     AlbumResult,
     ChatPage,
@@ -78,6 +81,8 @@ class Service:
         exports: ExportStorePort,
         watches: WatchStorePort,
         archive: ArchivePort,
+        document_parser: DocumentParserPort,
+        extractions: ExtractionStorePort,
     ):
         self._runtime: RuntimePort = backend
         self._policies = policy_provider
@@ -101,6 +106,7 @@ class Service:
         self._attachments = AttachmentService(
             backend, access, policy_provider, downloads, clock, archive
         )
+        self._extractions = ExtractionService(self._attachments, document_parser, extractions)
         self._catalog = CatalogService(backend, access, cursors, clock)
         self._discovery = DiscoveryService(backend, policy_provider)
         preparation = QueryPreparation(backend, backend, access, cursors, clock)
@@ -116,6 +122,12 @@ class Service:
         self._messages = MessageReader(backend, backend, access, self._queries, limits)
 
     async def close(self) -> None:
+        try:
+            await self._extractions.close()
+        finally:
+            await self._close_readers()
+
+    async def _close_readers(self) -> None:
         # Nested finally blocks close everything in order and chain every failure.
         try:
             await self._attachments.close()
@@ -196,9 +208,21 @@ class Service:
     async def read_download_resource(self, uri: str) -> tuple[bytes, str]:
         return await self._attachments.read_resource(uri)
 
+    async def extract_attachment_text(
+        self,
+        attachment_id: str | None = None,
+        extraction_id: str | None = None,
+        text_offset: int = 0,
+        text_limit: int = 12000,
+    ) -> ExtractionResult:
+        return await self._extractions.extract(
+            attachment_id, extraction_id, text_offset, text_limit
+        )
+
     async def get_status(self) -> dict[str, object]:
         status = await self._runtime.status()
         policy = self._policies.current()
+        extraction_available = self._extractions.parser.available
         return {
             **status,
             "mode": "read_only",
@@ -206,6 +230,8 @@ class Service:
             "allow_public_channel_reads": policy.allow_public_channel_reads,
             "allow_public_channel_discovery": policy.allow_public_channel_discovery,
             "allow_attachment_downloads": policy.allow_attachment_downloads,
+            "text_extraction_available": extraction_available,
+            "text_extraction_formats": ["pdf", "docx"] if extraction_available else [],
             "archive_enabled": self._archive.enabled,
             "attachment_max_bytes": MAX_ATTACHMENT_BYTES,
             "download_ttl_seconds": DOWNLOAD_TTL_SECONDS,

@@ -15,6 +15,7 @@ from telegram_mcp.application.attachment_ports import (
     AttachmentKind,
     AttachmentPort,
     DownloadStorePort,
+    StoredAttachment,
 )
 from telegram_mcp.application.ports import Clock, PolicyProvider
 from telegram_mcp.application.retry import RetryState
@@ -60,6 +61,9 @@ class AttachmentService:
             raise ToolError(
                 "DOWNLOADS_DISABLED", "Enable allow_attachment_downloads in local configuration."
             )
+
+    def ensure_enabled(self) -> None:
+        self._enabled()
 
     async def _run[T](self, operation: Callable[[], Awaitable[T]]) -> T:
         self._enabled()
@@ -158,15 +162,36 @@ class AttachmentService:
             ):
                 raise ToolError("DOWNLOAD_UNAVAILABLE", "Unknown or expired download resource.")
             stored = await self.store.lookup(token)
-            ref, kind = parse_attachment_id(stored.result.attachment_id)
-            await self._authorize(ref)
-            current = await self.backend.prepare_attachment(ref, kind)
-            if current.identity != stored.identity:
-                raise ToolError("ATTACHMENT_UNAVAILABLE", "The source attachment has changed.")
-            self._enabled()
+            await self._verify(stored)
             return await self.store.read(token), stored.result.mime_type
 
         return await self._run(operation)
+
+    async def _verify(self, stored: StoredAttachment) -> None:
+        ref, kind = parse_attachment_id(stored.result.attachment_id)
+        await self._authorize(ref)
+        current = await self.backend.prepare_attachment(ref, kind)
+        if current.identity != stored.identity:
+            raise ToolError("ATTACHMENT_UNAVAILABLE", "The source attachment has changed.")
+        self._enabled()
+
+    async def revalidate(self, source: StoredAttachment) -> None:
+        await self._run(lambda: self._verify(source))
+
+    async def extraction_input(self, attachment_id: str) -> tuple[StoredAttachment, bytes]:
+        """Acquire verified bytes and remove only this call's unexposed download."""
+        result = await self.download(attachment_id)
+        token = result.resource_uri.removeprefix(RESOURCE_PREFIX)
+
+        async def operation() -> tuple[StoredAttachment, bytes]:
+            stored = await self.store.lookup(token)
+            await self._verify(stored)
+            return stored, await self.store.read(token)
+
+        try:
+            return await self._run(operation)
+        finally:
+            await self.store.discard_resource(token)
 
     async def close(self) -> None:
         self._closed = True

@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from typing_extensions import get_type_hints, is_typeddict
 
 from telegram_mcp.adapters import wire
-from telegram_mcp.domain import changes, models, watches
+from telegram_mcp.domain import changes, extraction, models, watches
 
 # Compact responses move message chats into one response-level map and bound scope IDs.
 CHATS = {"chats"}
@@ -27,7 +27,7 @@ PROJECTIONS: dict[str, tuple[set[str], set[str]]] = {
 
 def domain_models() -> dict[str, type[BaseModel]]:
     found: dict[str, type[BaseModel]] = {}
-    for module in (models, changes, watches):
+    for module in (models, changes, extraction, watches):
         for name, value in vars(module).items():
             if inspect.isclass(value) and issubclass(value, BaseModel):
                 found.setdefault(name, value)

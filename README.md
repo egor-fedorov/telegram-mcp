@@ -119,6 +119,7 @@ do not paste it into client configuration. This is a local, single-user integrat
 | `get_context` | Messages before/after an anchor and a chain of parent replies |
 | `get_thread` | Comments on a channel post or replies in a group thread |
 | `download_attachment` | One selected attachment up to 20 MiB as a temporary local file and MCP resource |
+| `extract_attachment_text` | Optional local PDF/DOCX text extraction with bounded continuation and PDF page references |
 | `get_changes` | New messages and recent observed revisions in one chat, with restartable checkpoints |
 | `create_watch` / `list_watches` | Save and discover named chat/folder subscriptions |
 | `get_watch_changes` / `ack_watch_changes` | Poll and acknowledge a durable batch without per-chat tokens; optionally save it first |

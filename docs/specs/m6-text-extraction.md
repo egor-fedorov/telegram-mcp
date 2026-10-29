@@ -1,0 +1,128 @@
+# M6: Selected document text extraction (0.6)
+
+Status: implementation in progress; not released. Live acceptance remains pending.
+
+## Goal and decisions
+
+Extract text locally from one explicitly selected text-based PDF or DOCX attachment.
+Return bounded inline text so clients do not need resource support to read it.
+Start with an attachment ID, reuse an immutable temporary result for continuation,
+and fail without partial output when a processing budget is exceeded.
+
+The agreed first version excludes OCR, transcription, password input, external URLs,
+arbitrary local paths, batch extraction, permanent extracted-text archives and LLM
+processing. Original files can still be saved through download_attachment(save=true).
+DOCX coverage is main-body paragraphs and tables, with explicit omission notices.
+
+## Tool contract
+
+extract_attachment_text accepts exactly one of attachment_id and extraction_id,
+plus text_offset (default 0) and text_limit (default 12000, range 1–24000).
+An attachment ID starts a new extraction at offset zero. An extraction ID reads a
+fixed snapshot without downloading or parsing it again. Offsets count Unicode code
+points. An offset equal to the total length returns an empty final slice; an offset
+beyond it is invalid. Expired IDs never silently start another extraction.
+
+The result contains extraction_id, attachment_id, canonical message_ref, original
+name, detected format, source_sha256, text, text_offset, text_total_length,
+next_text_offset, expires_at and issues. next_text_offset=null marks exhaustion.
+PDF results also contain page_count and page_spans with one-based physical page
+numbers and document-wide [start, end) Unicode offsets, clipped to the returned
+text. At most 50 spans are returned; reaching that limit shortens the slice without
+losing its continuation position. DOCX never claims physical page numbers.
+
+The tool has readOnlyHint=false because it writes temporary local files;
+destructiveHint=false, idempotentHint=false and openWorldHint=true. Telegram is not
+modified. Extracted content is data, never instructions.
+
+get_status adds text_extraction_available and text_extraction_formats. The tool is
+always advertised. A base installation returns EXTRACTION_UNAVAILABLE with the
+server-side extra installation instruction before any Telegram call.
+
+## Access, parsing and lifetime
+
+Require the existing attachment-download permission and current source-read policy.
+Reuse download protection/TTL checks, bounded bytes and FloodWait handling. Recheck
+source access and attachment identity before parsing, before first delivery and on
+every continuation. A changed attachment is ATTACHMENT_UNAVAILABLE. Authorization
+and transient network failures withhold cached output and preserve the extraction
+until its normal expiry. No access expands to forwarded origins or other chats.
+
+Identify formats from bytes, using file names/MIME only as metadata. Only actual
+PDF and DOCX packages qualify. Parse PDF pages with pypdf in strict mode, preserving
+text-layer content and physical page boundaries without promising visual reading
+order, tables, or OCR. Read DOCX main-body paragraphs, visible hyperlink text and
+tables in order using python-docx; traverse nested tables and avoid repeating merged
+cells. Tabs separate cell positions and newlines separate paragraphs/rows.
+Headers, footers, notes, comments, text boxes and revisions are outside coverage;
+detected omissions produce DOCUMENT_CONTENT_OMITTED. Embedded objects and external
+relationships are never executed or fetched.
+
+Use the optional extraction extra: pypdf>=6.21.4,<7 and python-docx>=1.2,<2.
+Keep parser imports in the disposable worker. The MCPB proxy needs no extra; install
+it in the environment of the session-owning HTTP/STDIO server.
+
+| Budget | Limit |
+| --- | --- |
+| Input attachment | 20 MiB, existing download limit |
+| PDF pages | 500 |
+| Extracted text | 1,000,000 Unicode code points including separators |
+| Parser execution | 30 seconds |
+| Complete admitted call | 90 seconds |
+| Expanded DOCX | 64 MiB and 2048 ZIP entries |
+| Nested DOCX tables | 64 levels |
+| Serialized worker result | 8 MiB |
+| Extraction cache | 32 results and 64 MiB, including reservations/orphans |
+| Result lifetime | 900 seconds, not renewed by reads |
+
+One extraction worker runs at a time, outside the event loop. Queue waiting counts
+against the call deadline; queue exhaustion is SERVER_BUSY. Kill and reap workers on
+timeout, cancellation and shutdown. Bound IPC before decoding. Do not keep the
+attachment lock while parsing. Clean up only inputs owned by the current extraction.
+
+Reuse private temporary-file infrastructure with capacity reservations, atomic
+publication, checksums and cleanup. Do not evict unexpired results. Restart invalidates
+IDs. No permanent database or general file-serving endpoint is added.
+
+## Errors and incomplete content
+
+| Code | Meaning |
+| --- | --- |
+| EXTRACTION_UNAVAILABLE | Install the optional extra in the server environment |
+| DOCUMENT_UNSUPPORTED | Unsupported content; includes OLE Office containers and legacy .doc |
+| DOCUMENT_ENCRYPTED | Encrypted PDF/package; no password parameter |
+| DOCUMENT_INVALID | Damaged or unparseable document |
+| DOCUMENT_NO_TEXT | No text in supported content; OCR may be needed, but a scan is not inferred |
+| EXTRACTION_LIMIT_EXCEEDED | Page, text, expansion or worker-output limit |
+| EXTRACTION_TIMEOUT | Parser/call deadline exceeded |
+| EXTRACTION_EXPIRED | Unknown, expired or previous-process extraction ID |
+| EXTRACTION_STORAGE_FULL | Capacity unavailable; existing results remain intact |
+| EXTRACTION_FAILED | Worker failure or invalid worker protocol, with sanitized diagnostics |
+
+A mixed PDF returns its text with DOCUMENT_PAGES_WITHOUT_TEXT, an exact count and
+at most 20 example page numbers. Empty pages may be blank or image-only. Textual
+coverage does not imply complete visual understanding. Processing failures publish
+no partial text or continuation token. Existing access/download errors are preserved.
+
+## Acceptance and delivery
+
+Cover real synthetic PDFs/DOCX files: Unicode and physical pages; blank, image-only,
+mixed, encrypted and damaged documents; nested/merged tables, links and omissions.
+Verify exact reconstruction across small slices, immutable digests, expiry without
+renewal, quota accounting, access revocation, replacement and transient recheck errors.
+Exercise cancellation/timeouts/shutdown, bounded IPC, no orphan workers/files, and
+responsiveness of other tools during parsing. Test STDIO, HTTP and connect in both
+MCP modes and both schema modes; retain compact output and existing tool contracts.
+
+Run the existing OS/Python CI matrix with the extra and a separate clean base-package
+probe without it. Add opt-in live extraction checks using explicitly selected PDF
+and DOCX attachments and redacted results. Before publication, record both successful
+live formats and continuation. Do not silently enable downloads or perform a live
+check on unselected sources.
+
+One focused feature PR includes the specification and implementation, followed by
+make check, diff review and the required checks job. Release preparation/publication
+is separate from merging implementation. No permanent-state migration is needed.
+
+References: [pypdf extraction](https://pypdf.readthedocs.io/en/stable/user/extract-text.html),
+[python-docx document iteration](https://python-docx.readthedocs.io/en/latest/api/document.html).

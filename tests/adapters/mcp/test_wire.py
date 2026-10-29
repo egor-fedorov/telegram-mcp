@@ -106,7 +106,7 @@ async def test_all_fourteen_tools_have_typed_self_contained_mirrored_responses(m
     }
     async with Client(server, mode=mode) as client:
         tools = (await client.list_tools()).tools
-        assert len(tools) == len(calls) + 8 == 22
+        assert len(tools) == len(calls) + 9 == 23
         for tool in tools:
             schema = tool.output_schema
             assert schema is not None

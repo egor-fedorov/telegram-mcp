@@ -4,6 +4,10 @@ Proposed contracts are review material, not implemented features. Completed cont
 describe delivery at each milestone; later changes are recorded in the
 [changelog](../../CHANGELOG.md) and [roadmap](../../ROADMAP.md).
 
+## In progress
+
+- [M6: Selected document text extraction (0.6)](m6-text-extraction.md)
+
 ## Completed
 
 - [M1: Public-channel discovery](m1-public-channel-discovery.md)

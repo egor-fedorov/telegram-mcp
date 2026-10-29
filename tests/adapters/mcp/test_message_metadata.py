@@ -34,13 +34,14 @@ async def test_metadata_mcp_schemas_preserve_read_only_surface_without_actor_lis
     server = create_server(Service(FakeBackend(), Settings()), schema_mode="full")
     async with Client(server, mode=mode) as client:
         listing = await client.list_tools()
-        assert len(listing.tools) == 22
+        assert len(listing.tools) == 23
         for tool in listing.tools:
             assert tool.annotations is not None
             assert tool.annotations.read_only_hint == (
                 tool.name
                 not in {
                     "download_attachment",
+                    "extract_attachment_text",
                     "get_changes",
                     "export_history",
                     "create_watch",

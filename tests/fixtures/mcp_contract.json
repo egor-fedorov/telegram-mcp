@@ -654,6 +654,30 @@
       "title": "MessageRef",
       "type": "object"
     },
+    "PageSpan": {
+      "additionalProperties": false,
+      "properties": {
+        "end": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "page_number": {
+          "maximum": 500,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "start": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "page_number",
+        "start",
+        "end"
+      ],
+      "type": "object"
+    },
     "PollAnswerResult": {
       "additionalProperties": false,
       "properties": {
@@ -1604,6 +1628,146 @@
           "complete",
           "date_to",
           "next_checkpoint",
+          "issues"
+        ],
+        "type": "object"
+      }
+    },
+    "extract_attachment_text": {
+      "annotations": {
+        "destructive_hint": false,
+        "idempotent_hint": false,
+        "open_world_hint": true,
+        "read_only_hint": false,
+        "title": null
+      },
+      "input": {
+        "properties": {
+          "attachment_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Attachment Id"
+          },
+          "extraction_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Extraction Id"
+          },
+          "text_limit": {
+            "default": 12000,
+            "maximum": 24000,
+            "minimum": 1,
+            "title": "Text Limit",
+            "type": "integer"
+          },
+          "text_offset": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Text Offset",
+            "type": "integer"
+          }
+        },
+        "title": "extract_attachment_textArguments",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "attachment_id": {
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "extraction_id": {
+            "type": "string"
+          },
+          "format": {
+            "enum": [
+              "pdf",
+              "docx"
+            ],
+            "type": "string"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/$defs/Issue"
+            },
+            "type": "array"
+          },
+          "message_ref": {
+            "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "next_text_offset": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "page_count": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_spans": {
+            "items": {
+              "$ref": "#/$defs/PageSpan"
+            },
+            "type": "array"
+          },
+          "source_sha256": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "text_offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "text_total_length": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "extraction_id",
+          "attachment_id",
+          "message_ref",
+          "name",
+          "format",
+          "source_sha256",
+          "text",
+          "text_offset",
+          "text_total_length",
+          "next_text_offset",
+          "page_spans",
+          "expires_at",
           "issues"
         ],
         "type": "object"
@@ -2664,6 +2828,19 @@
           "mode": {
             "const": "read_only",
             "type": "string"
+          },
+          "text_extraction_available": {
+            "type": "boolean"
+          },
+          "text_extraction_formats": {
+            "items": {
+              "enum": [
+                "pdf",
+                "docx"
+              ],
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -2674,6 +2851,8 @@
           "allow_public_channel_reads",
           "allow_public_channel_discovery",
           "allow_attachment_downloads",
+          "text_extraction_available",
+          "text_extraction_formats",
           "archive_enabled",
           "attachment_max_bytes",
           "download_ttl_seconds",

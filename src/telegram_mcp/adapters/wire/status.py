@@ -18,6 +18,8 @@ class Status(TypedDict):
     allow_public_channel_reads: bool
     allow_public_channel_discovery: bool
     allow_attachment_downloads: bool
+    text_extraction_available: bool
+    text_extraction_formats: list[Literal["pdf", "docx"]]
     archive_enabled: bool
     attachment_max_bytes: Annotated[int, Field(gt=0)]
     download_ttl_seconds: Annotated[int, Field(gt=0)]

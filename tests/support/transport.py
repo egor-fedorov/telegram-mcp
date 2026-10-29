@@ -15,7 +15,9 @@ from mcp.client.streamable_http import streamable_http_client
 from telegram_mcp.adapters.checkpoints import CheckpointStore
 from telegram_mcp.adapters.clock import SystemClock
 from telegram_mcp.adapters.config import Settings, save_settings
+from telegram_mcp.adapters.downloads import DownloadStore
 from telegram_mcp.adapters.exports import ExportStore
+from telegram_mcp.adapters.extraction.store import ExtractionStore
 from telegram_mcp.adapters.http_token import load_token
 from telegram_mcp.adapters.transport import create_http_app, endpoint
 from telegram_mcp.adapters.watches import WatchStore
@@ -42,6 +44,7 @@ async def running_server(
     *,
     schema_mode: Literal["compact", "full"] = "compact",
     archive: bool = False,
+    allow_attachment_downloads: bool = False,
 ) -> AsyncGenerator[tuple[Settings, FakeBackend]]:
     backend = backend if backend is not None else FakeBackend([msg("1", 1), msg("1", 2)])
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
@@ -53,11 +56,18 @@ async def running_server(
             http_token_path=tmp_path / "mcp.token",
             mcp_schema_mode=schema_mode,
             archive_directory=tmp_path / "archive" if archive else None,
+            allow_attachment_downloads=allow_attachment_downloads,
         )
         app = create_http_app(
             build_service(
                 backend,
                 settings,
+                downloads=DownloadStore(
+                    settings.session_path, SystemClock(), root=tmp_path / "downloads"
+                ),
+                extractions=ExtractionStore(
+                    settings.session_path, SystemClock(), root=tmp_path / "extractions"
+                ),
                 checkpoints=CheckpointStore(
                     settings.session_path, SystemClock(), root=tmp_path / "checkpoints"
                 ),

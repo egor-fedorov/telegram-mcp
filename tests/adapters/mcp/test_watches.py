@@ -16,7 +16,7 @@ async def test_named_delivery_and_discovery_across_client_sessions(tmp_path, mod
         server = create_server(env.service, owns_service=False, schema_mode=schema_mode)
         async with Client(server, mode=mode) as client:
             listing = await client.list_tools()
-            assert len(listing.tools) == 22
+            assert len(listing.tools) == 23
             assert all(
                 (tool.output_schema is None) == (schema_mode == "compact") for tool in listing.tools
             )
