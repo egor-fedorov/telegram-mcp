@@ -191,6 +191,13 @@ removed and the shared server resumed authorized and connected. See the
 [bounded validation record](docs/specs/m6-text-extraction.md#validation-record).
 Release preparation and publication remain separate steps.
 
+The upcoming release also adds local `login --qr` for accounts whose login codes do
+not arrive. It uses Telegram phone approval, terminal rendering, optional 2FA, bounded
+expiry refresh and the existing session lease. Offline tests cover authorization,
+expiry, rate limits, cancellation and secret-safe errors; clean installation probes
+exercise rendering without an external executable. A fresh live login through this
+CLI remains a manual check; the existing authorized service is left undisturbed.
+
 ## Later decisions
 
 Optional Telegram writes remain a later candidate: drafts first, then separately

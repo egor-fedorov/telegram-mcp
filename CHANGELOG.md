@@ -8,6 +8,14 @@ A version entry describes its target artifact. Verify publication on
 
 ## [Unreleased]
 
+### Authentication
+
+- `telegram-mcp login --qr` displays a terminal QR for approval in the Telegram phone
+  app, with optional 2FA and up to three expiring codes per invocation. It reuses the
+  configured session, keeps the existing phone/code flow, and requires no external QR
+  executable. Cancellation and failures release the session; rate limits report the
+  wait without sleeping. Tokens and raw authorization responses are not printed.
+
 ### Extraction
 
 - Optional local PDF/DOCX text extraction through `telegram-context-mcp[extraction]`.

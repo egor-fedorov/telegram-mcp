@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import importlib.util
+import io
 import json
 import os
 import socket
@@ -10,6 +11,7 @@ import subprocess
 import sys
 from importlib.metadata import distribution
 from pathlib import Path
+from unittest.mock import patch
 
 import httpx2
 from mcp.client import Client
@@ -18,6 +20,31 @@ from mcp.client.streamable_http import streamable_http_client
 
 import telegram_mcp
 from telegram_mcp.adapters.version import get_version
+
+
+def probe_qr_login(executable: Path) -> None:
+    from telegram_mcp.adapters.qr_code import show_qr
+
+    class Terminal(io.StringIO):
+        encoding = "utf-8"
+
+        def isatty(self):
+            return True
+
+    output = Terminal()
+    with patch.object(sys, "stdin", Terminal()), patch.object(sys, "stdout", output):
+        show_qr("tg://login?token=synthetic-package-token")
+    assert "synthetic-package-token" not in output.getvalue()
+    assert any(character in output.getvalue() for character in "\u2580\u2584\u2588")
+    result = subprocess.run(
+        [str(executable), "--config", str(Path.cwd() / "qr.toml"), "login", "--qr"],
+        input="",
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert result.returncode == 1 and "INTERACTIVE_LOGIN_REQUIRED" in result.stderr
+    assert not result.stdout and not (Path.cwd() / "qr.toml").exists()
 
 
 async def probe_client(
@@ -170,6 +197,7 @@ def main() -> None:
     version = subprocess.check_output([str(executable), "--version"], text=True, timeout=15)
     assert version.strip() == f"telegram-mcp {args.version}"
     subprocess.run([str(executable), "--help"], check=True, capture_output=True, timeout=15)
+    probe_qr_login(executable)
     contract = json.loads(Path(__file__).with_name("mcp_contract.json").read_text(encoding="utf-8"))
     registry_executable = executable.with_name(
         package["identifier"] + (".exe" if os.name == "nt" else "")
