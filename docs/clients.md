@@ -58,8 +58,9 @@ server in Codex's MCP settings and call `get_status`. See the
 ## Claude Desktop
 
 The optional [MCPB extension](mcpb.md) packages this same `connect` proxy and provides
-a configuration-file picker. Its first release is pending Windows Desktop validation;
-the manual setup below remains available.
+a configuration-file picker. Initial Windows connection and catalog checks passed;
+its first release awaits the remaining [Desktop acceptance checks](mcpb.md#windows-report-2026-10-29).
+The manual setup below remains available.
 
 Open Settings → Developer → Edit Config and merge this `mcpServers` entry into
 `claude_desktop_config.json`. Restart Claude Desktop after saving.

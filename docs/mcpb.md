@@ -141,8 +141,31 @@ Before the first bundle is published, record a Windows Desktop report:
   reconnect. Report unsupported client UI capabilities explicitly.
 
 Share statuses and issue codes, not credentials, tokens, session files or source
-content. Windows Desktop results are pending; macOS Desktop has not been manually
-tested. Keep #41 open until the agreed Windows acceptance checks are recorded.
+content. macOS Desktop has not been manually tested. Keep #41 open until the agreed
+Windows acceptance checks are complete.
+
+### Windows report: 2026-10-29
+
+The maintainer tested the preview on **Windows 11 25H2** with **Claude Desktop 4.29.0**.
+The installed `telegram-mcp-0.5.1.mcpb` came from
+[Actions run 40758992755, artifact 12846173766](https://github.com/egor-fedorov/telegram-mcp/actions/runs/40758992755/artifacts/12846173766),
+built at commit `e75e14cbef5f7749223cfceed5011f7242993de0`. The downloaded bundle's
+SHA-256 matches its included checksum:
+`3c9a12894196302be78ed59760a47dad3838bd0442ed72c5dc2c20c2686af54b`.
+
+- The extension connected to the local shared server. `get_status` returned
+  `authorized: true`, `connected: true`, and `mode: read_only`.
+- Local login, including QR approval, succeeded. QR login used the separate local
+  setup; the preview bundle predates `login --qr` and does not perform authorization.
+- The catalog completed with 499 dialogs after an initial `CATALOG_LOADING` response;
+  folder listing returned 10 folders. Folder names and source content are omitted.
+
+The maintainer confirmed that this report covers login, status and the catalog only.
+CPU architecture and installed server/Python versions were not reported. Bounded post
+reading, prompt/resource UI, lifecycle/reinstallation and server-restart recovery
+remain unverified in Desktop, as does installation without a checkout or preconfigured
+Python. The reported checksum identifies this candidate only; later builds require
+their own artifact identity. The PR remains a draft and #41 stays open.
 
 Format references: [MCPB specification](https://github.com/modelcontextprotocol/mcpb/blob/main/MANIFEST.md#uv-runtime-v04),
 [official uv example](https://github.com/modelcontextprotocol/mcpb/tree/main/examples/hello-world-uv).

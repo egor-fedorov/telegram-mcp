@@ -172,9 +172,13 @@ runs only the existing `connect` proxy, and selects an external configuration fi
 CI covers packaging, checksums, reproducibility and extracted launches on Linux,
 Windows and macOS; release automation attaches the validated bundle separately from
 the PyPI artifacts. The [installation and validation guide](docs/mcpb.md) records
-the shared-server prerequisite. Windows Claude Desktop acceptance remains pending;
-manual macOS Desktop validation is explicitly unverified and does not block the
-first bundle. The issue stays open until the Windows report is recorded.
+the shared-server prerequisite. On 2026-10-29 the maintainer confirmed local QR login,
+authorized connection and catalog/folder loading in Claude Desktop 4.29.0 on Windows
+11 25H2, using the identified 0.5.1 preview artifact. The
+[Windows report](docs/mcpb.md#windows-report-2026-10-29) records its checksum and limits:
+bounded reads, prompt/resource UI and lifecycle/recovery checks remain pending.
+Manual macOS Desktop validation is unverified and does not block the first bundle.
+The PR remains a draft and the issue stays open until Windows acceptance is complete.
 
 ## 0.6: selected document text extraction (validated, unreleased)
 
@@ -201,8 +205,10 @@ The upcoming release also adds local `login --qr` for accounts whose login codes
 not arrive. It uses Telegram phone approval, terminal rendering, optional 2FA, bounded
 expiry refresh and the existing session lease. Offline tests cover authorization,
 expiry, rate limits, cancellation and secret-safe errors; clean installation probes
-exercise rendering without an external executable. A fresh live login through this
-CLI remains a manual check; the existing authorized service is left undisturbed.
+exercise rendering without an external executable. On 2026-10-29 the maintainer
+reported successful QR login on Windows 11 25H2, followed by an authorized, connected
+MCP response in Claude Desktop 4.29.0. The [Windows report](docs/mcpb.md#windows-report-2026-10-29)
+records the confirmed scope; it does not establish live 2FA, expiry or failure coverage.
 
 ## Later decisions
 

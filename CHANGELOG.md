@@ -37,8 +37,9 @@ A version entry describes its target artifact. Verify publication on
   external configuration-file selection, the matching release wheel and locked
   runtime dependencies. CI checks reproducible archives and isolated launches on
   Linux, Windows and macOS; GitHub releases include the bundle and SHA-256 separately
-  from the PyPI artifacts. Windows Desktop acceptance remains pending; macOS Desktop
-  has not been manually validated. See the [bundle guide](docs/mcpb.md).
+  from the PyPI artifacts. Initial Windows Desktop connection and catalog checks
+  passed; remaining Desktop acceptance is pending. macOS Desktop has not been manually
+  validated. See the [bundle guide](docs/mcpb.md).
 
 ## [0.5.1] - 2026-10-28
 

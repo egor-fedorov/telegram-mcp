@@ -43,7 +43,7 @@ def launch_config(extension: Path, config: Path) -> tuple[str, list[str]]:
 
 async def check_client(client: Client, expected_version: str) -> None:
     assert client.server_info and client.server_info.version == expected_version
-    assert len((await client.list_tools()).tools) == 22
+    assert len((await client.list_tools()).tools) == 23
     response = await client.call_tool("get_status", {})
     assert not response.is_error and response.structured_content
     assert response.structured_content["authorized"] is False
