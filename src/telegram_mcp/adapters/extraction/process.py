@@ -131,18 +131,28 @@ class DocumentParser:
         return ExtractedDocument.model_validate(result)
 
     @staticmethod
-    async def _stop(process: asyncio.subprocess.Process) -> None:
+    async def _stop(process: asyncio.subprocess.Process, *, drain: bool = True) -> None:
         if process.returncode is None:
             with suppress(ProcessLookupError):
                 process.kill()
         # Keep ownership through repeated cancellation until the child is reaped.
-        waiter = asyncio.create_task(process.wait())
+        waiter = asyncio.create_task(DocumentParser._reap(process, drain=drain))
         while not waiter.done():
             with suppress(asyncio.CancelledError):
                 await asyncio.shield(waiter)
         waiter.result()
 
+    @staticmethod
+    async def _reap(process: asyncio.subprocess.Process, *, drain: bool) -> None:
+        # A full stdout reader can pause its pipe and delay Process.wait() even
+        # after the child is killed. Drain remaining bytes without accumulating them.
+        if drain and process.stdout is not None:
+            while await process.stdout.read(65536):
+                pass
+        await process.wait()
+
     async def close(self) -> None:
         self._closed = True
         for process in list(self._processes):
-            await self._stop(process)
+            # extract() owns stdout and drains it in its finally block.
+            await self._stop(process, drain=False)

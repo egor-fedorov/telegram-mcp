@@ -36,7 +36,7 @@ async def test_damaged_file_errors_are_sanitized(data: bytes) -> None:
         await parser.close()
 
 
-def replace_worker(monkeypatch, script: str):
+def replace_worker(monkeypatch, script: str, *, spawn_delay: float = 0):
     original = asyncio.create_subprocess_exec
     processes = []
     started = asyncio.Event()
@@ -45,6 +45,8 @@ def replace_worker(monkeypatch, script: str):
         process = await original(sys.executable, "-c", script, **kwargs)
         processes.append(process)
         started.set()
+        if spawn_delay:
+            await asyncio.sleep(spawn_delay)
         return process
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
@@ -75,10 +77,12 @@ async def test_stalled_worker_is_killed_and_reaped(monkeypatch, stop: str) -> No
     await parser.close()
 
 
-async def test_unbounded_worker_output_is_stopped_before_decoding(monkeypatch) -> None:
+async def test_full_worker_pipe_is_drained_and_reaped_after_output_limit(monkeypatch) -> None:
     monkeypatch.setattr(worker, "MAX_RESULT_BYTES", 128)
     processes, _ = replace_worker(
-        monkeypatch, "import sys; sys.stdin.buffer.read(); sys.stdout.write('x'*10000)"
+        monkeypatch,
+        "import sys; sys.stdout.buffer.write(b'x' * (32 * 1024 * 1024)); sys.stdout.flush()",
+        spawn_delay=0.2,
     )
     parser = worker.DocumentParser()
     with pytest.raises(ToolError, match="EXTRACTION_LIMIT_EXCEEDED"):
