@@ -28,6 +28,7 @@ class ToolCallGate:
         self._active = 0
         self._waiters: deque[asyncio.Future[None]] = deque()
         self._tasks: set[asyncio.Task[Any]] = set()
+        self._held: set[asyncio.Task[Any]] = set()
         self._closed = False
 
     def _release(self) -> None:
@@ -38,7 +39,7 @@ class ToolCallGate:
                 return
         self._active -= 1
 
-    async def run[T](self, operation: Callable[[], Awaitable[T]]) -> T:
+    async def _acquire(self) -> None:
         if self._closed:
             raise _closed()
         if self._active < self.capacity and not self._waiters:
@@ -59,9 +60,13 @@ class ToolCallGate:
                 if isinstance(exc, TimeoutError):
                     raise _busy() from None
                 raise
+
+    async def run[T](self, operation: Callable[[], Awaitable[T]]) -> T:
+        await self._acquire()
         task = asyncio.current_task()
         if task is not None:
             self._tasks.add(task)
+            self._held.add(task)
         try:
             if self._closed:
                 raise _closed()
@@ -69,7 +74,27 @@ class ToolCallGate:
         finally:
             if task is not None:
                 self._tasks.discard(task)
-            self._release()
+                if task in self._held:
+                    self._held.discard(task)
+                    self._release()
+            else:
+                self._release()
+
+    async def while_waiting[T](self, operation: Callable[[], Awaitable[T]]) -> T:
+        """Release admission while a human decides, then reacquire before remote work."""
+        task = asyncio.current_task()
+        if task not in self._held:
+            return await operation()
+        if len(self._tasks) - len(self._held) >= self.max_waiters:
+            raise _busy()
+        self._held.remove(task)
+        self._release()
+        try:
+            return await operation()
+        finally:
+            if not self._closed and not task.cancelling():
+                await self._acquire()
+                self._held.add(task)
 
     async def close(self) -> None:
         self._closed = True

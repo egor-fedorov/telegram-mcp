@@ -15,6 +15,7 @@ class PublicChannel(TypedDict):
     username: str
     url: str
     participants_count: NotRequired[Count]
+    membership: Literal["joined", "not_joined", "unknown"]
 
 
 @with_config(CONFIG)

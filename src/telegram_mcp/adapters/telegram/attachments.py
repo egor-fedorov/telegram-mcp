@@ -5,6 +5,7 @@ from typing import Any
 
 from telethon import errors, types, utils
 
+from telegram_mcp.adapters.telegram.buttons import normalize_markup
 from telegram_mcp.adapters.telegram.runtime import TelegramRuntime
 from telegram_mcp.application.attachment_ports import (
     DOWNLOAD_TIMEOUT_SECONDS,
@@ -13,6 +14,7 @@ from telegram_mcp.application.attachment_ports import (
     AttachmentSource,
     AttachmentWriter,
 )
+from telegram_mcp.domain.auth_notifications import authentication_notice
 from telegram_mcp.domain.models import MessageRef, ToolError
 
 _REFERENCE_ERRORS = (
@@ -147,6 +149,19 @@ class AttachmentGateway:
             or str(utils.get_peer_id(raw.peer_id)) != ref.chat_id
         ):
             raise _unavailable()
+        if authentication_notice(
+            " ".join(
+                (
+                    raw.message or "",
+                    str(raw.entities),
+                    str(normalize_markup(raw.reply_markup)),
+                    str(getattr(raw.media, "webpage", None)),
+                )
+            )
+        ):
+            raise ToolError(
+                "AUTH_NOTIFICATION_FILTERED", "Authentication notices are not available."
+            )
         return _source(ref, kind, raw)
 
     async def download_attachment(self, source: AttachmentSource, writer: AttachmentWriter) -> None:

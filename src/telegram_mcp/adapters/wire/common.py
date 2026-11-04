@@ -1,6 +1,6 @@
 """Shared response pieces: chats, issues, scopes and saved files."""
 
-from typing import Annotated, Any, NotRequired
+from typing import Annotated, Any, Literal, NotRequired
 
 from pydantic import AwareDatetime, ConfigDict, Field, with_config
 from typing_extensions import TypedDict
@@ -55,6 +55,7 @@ class ChatMetadata(ChatSummary):
 @with_config(CONFIG)
 class Chat(ChatMetadata):
     id: ChatID
+    membership: NotRequired[Literal["joined", "not_joined", "unknown"]]
 
 
 @with_config(CONFIG)

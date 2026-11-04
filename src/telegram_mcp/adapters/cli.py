@@ -14,7 +14,7 @@ from pathlib import Path
 
 from pydantic import SecretStr, ValidationError
 
-from telegram_mcp.adapters import checkpoint_cli, qr_code
+from telegram_mcp.adapters import checkpoint_cli, outbound_cli, qr_code
 from telegram_mcp.adapters.config import (
     Settings,
     config_path,
@@ -189,15 +189,25 @@ class CliDependencies:
     connect: Callable[[Settings], Coroutine[object, object, None]]
 
 
-def main(dependencies: CliDependencies) -> None:
+def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="telegram-mcp", description="Local read-only Telegram MCP server"
+        prog="telegram-mcp", description="Local Telegram MCP server (read-only by default)"
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {get_version()}")
     parser.add_argument("--config", type=Path, help="Configuration TOML path")
     parser.add_argument(
         "command",
-        choices=["serve", "connect", "login", "configure", "status", "catalog", "checkpoints"],
+        choices=[
+            "serve",
+            "connect",
+            "login",
+            "configure",
+            "status",
+            "catalog",
+            "checkpoints",
+            "files",
+            "operations",
+        ],
     )
     parser.add_argument(
         "--transport", choices=["stdio", "http"], help="Transport for serve (default: stdio)"
@@ -206,17 +216,30 @@ def main(dependencies: CliDependencies) -> None:
         "--qr", action="store_true", help="Use a terminal QR code for interactive login"
     )
     checkpoint_cli.add_arguments(parser)
+    parser.add_argument("--file-id", help="Registered file to remove with files remove")
     args = parser.parse_args()
-    checkpoint_cli.validate_arguments(parser, args)
+    if args.command in ("files", "operations"):
+        outbound_cli.validate_arguments(parser, args)
+    else:
+        checkpoint_cli.validate_arguments(parser, args)
+        if args.file_id is not None:
+            parser.error("--file-id requires files remove")
     if args.transport is not None and args.command != "serve":
         parser.error("--transport is supported only with serve")
     if args.qr and args.command != "login":
         parser.error("--qr is supported only with login")
+    return args
+
+
+def main(dependencies: CliDependencies) -> None:
+    args = parse_arguments()
     logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
     try:
         path = (args.config or config_path()).expanduser()
         settings = load_settings(path)
-        if args.command == "checkpoints":
+        if args.command in ("files", "operations"):
+            outbound_cli.run(settings, args)
+        elif args.command == "checkpoints":
             checkpoint_cli.run(settings, args)
         elif args.command == "serve":
             service = dependencies.service_factory(dependencies.backend_factory(settings), settings)

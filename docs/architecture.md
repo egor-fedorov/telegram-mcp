@@ -246,3 +246,22 @@ Run `make check` and require GitHub CI before squash merge. Automated checks are
 [bounded live validation](live-validation.md) uses separately selected sources.
 Add cohesive use cases and adapters where needed; keep distinct pagination algorithms
 explicit rather than building a universal flag-driven query method.
+
+## Outbound extension (unreleased)
+
+Outbound use cases retain the same dependency direction. `WritePolicy` is separate
+from read scope. `OutboundContext` checks capability, ordinary read access and explicit
+recipient IDs; file, draft, send and callback services depend on narrow ports.
+`OperationJournal` owns durable intent, confirmation and receipt transitions.
+`OutboundStore` uses a private account-bound SQLite database; bounded files, draft
+snapshots, operation rows and cooldowns are written in worker threads. Idempotency
+keys are never evicted. Native Telegram gateways use public TL types and the existing
+runtime. `SafeTelegramClient` disables implicit mutation/reconnect retries and permits
+one retry only for an explicit list of read RPC types.
+
+MCP confirmation remains an adapter concern: legacy elicitation temporarily releases
+admission capacity, while modern input-required rounds use expiring one-use challenges
+bound to the exact operation. The application sees a confirmation callback or a pending
+round, not MCP types. HTTP enables sessions/SSE for writes; the STDIO bridge isolates
+confirmation-capable upstream calls and forwards modern round state without mixing
+clients. Default read-only tool discovery remains compact and unchanged in size.

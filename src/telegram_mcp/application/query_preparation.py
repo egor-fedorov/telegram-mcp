@@ -65,6 +65,7 @@ class QuerySpec:
                 read.sender_id if isinstance(read, SearchRead) else None,
                 read.filters.content_type,
                 read.filters.has_link,
+                read.filters.direction,
                 "oldest_first" if read.filters.oldest_first else "newest_first",
                 read.thread_id if isinstance(read, ThreadRead) else None,
                 self.selection.source_ref,

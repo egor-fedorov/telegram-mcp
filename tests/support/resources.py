@@ -30,6 +30,8 @@ def synthetic_bytes(size: int) -> bytes:
 class ResourceService:
     """Isolate the public transport seam from Telegram and application storage tests."""
 
+    writes_enabled = False
+
     def __init__(self, directory: Path, size: int = 1024) -> None:
         self.payload = synthetic_bytes(size)
         self.directory = directory

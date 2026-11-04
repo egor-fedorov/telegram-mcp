@@ -293,7 +293,7 @@ async def test_discovery_distinguishes_unknown_counts_server_limits_and_local_tr
         "exhaustive",
     }
     for item in result.model_dump()["channels"]:
-        assert set(item) == {"id", "title", "username", "url", "participants_count"}
+        assert set(item) == {"id", "title", "username", "url", "participants_count", "membership"}
 
 
 @pytest.mark.parametrize("tool", ["search", "similar"])

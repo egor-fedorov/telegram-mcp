@@ -180,6 +180,7 @@ def watch_info(state: WatchState) -> WatchInfo:
 
 def batch_jsonl(name: str, pending: PendingDelivery) -> bytes:
     """Deterministic versioned JSONL of one pending delivery, excluding any archive receipt."""
+    pending = PendingDelivery.model_validate(pending.model_dump())
     result = pending.result
     header = {
         "type": "watch_batch",

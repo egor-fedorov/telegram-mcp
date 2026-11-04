@@ -21,6 +21,7 @@ from telegram_mcp.adapters.extraction.store import ExtractionStore
 from telegram_mcp.adapters.http_token import load_token
 from telegram_mcp.adapters.transport import create_http_app, endpoint
 from telegram_mcp.adapters.watches import WatchStore
+from telegram_mcp.application.outbound_ports import OutboundPort
 from telegram_mcp.bootstrap import build_service
 from tests.support.fakes import FakeBackend, msg
 from tests.support.resources import (
@@ -45,6 +46,7 @@ async def running_server(
     schema_mode: Literal["compact", "full"] = "compact",
     archive: bool = False,
     allow_attachment_downloads: bool = False,
+    outbound_backend: OutboundPort | None = None,
 ) -> AsyncGenerator[tuple[Settings, FakeBackend]]:
     backend = backend if backend is not None else FakeBackend([msg("1", 1), msg("1", 2)])
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
@@ -57,11 +59,18 @@ async def running_server(
             mcp_schema_mode=schema_mode,
             archive_directory=tmp_path / "archive" if archive else None,
             allow_attachment_downloads=allow_attachment_downloads,
+            allow_drafts=outbound_backend is not None,
+            allow_send_messages=outbound_backend is not None,
+            allow_send_files=outbound_backend is not None,
+            allow_bot_callbacks=outbound_backend is not None,
+            allowed_write_chat_ids=[chat.id for chat in backend.chats] if outbound_backend else [],
+            allowed_upload_directories=[tmp_path],
         )
         app = create_http_app(
             build_service(
                 backend,
                 settings,
+                outbound_backend=outbound_backend,
                 downloads=DownloadStore(
                     settings.session_path, SystemClock(), root=tmp_path / "downloads"
                 ),

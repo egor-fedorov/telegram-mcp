@@ -6,6 +6,23 @@ A version entry describes its target artifact. Verify publication on [PyPI](http
 
 ## [Unreleased]
 
+### Reading
+
+- Preserve message button rows, text, types and URLs without exposing callback payloads. Message revisions include button changes and remain stable across text continuation and volatile counters. Add the raw Telegram outgoing flag, selected-source direction filters and channel membership metadata.
+- Omit recognized English/Russian authentication notices before message delivery, checkpoint/watch payload persistence and new exports; omit associated entities, previews, buttons and attachments. Deny direct downloads, extraction and imports of those notices. The classifier is conservative, not a guarantee against every credential format; existing permanent archives are not rewritten.
+
+### Optional outbound workflows
+
+- Add separately enabled native drafts, message/file sending and private-bot callbacks. Recipients require ordinary read access and an explicit write allowlist; all capabilities default off. Outbound tools appear only when a write capability is enabled. Sending and callbacks require client form confirmation; replacing a user draft also requires confirmation and its current revision.
+- Register immutable files from selected Telegram attachments or allowed local directories, retaining name, MIME type, size and SHA-256. Support one file with a caption in drafts and sends. Local maintenance lists/removes files and inspects operation receipts without contacting Telegram.
+- Persist account-bound idempotency keys and random IDs before sending. Repeated keys replay receipts, conflicting requests fail, uncertain sends retain their random ID, and uncertain callbacks never re-execute. Preserve deduplication records without FIFO eviction and refuse new operations at quota. Persist scoped Telegram cooldowns across restart.
+- Support legacy elicitation and modern MCP confirmation rounds through STDIO, authenticated HTTP and `connect`. Confirmation waits release tool capacity; permission, recipient, content and account checks run again before dispatch. Telegram mutations have no automatic RPC/reconnect replay; explicitly selected reads retain one bounded server-error retry.
+- Live outbound validation and publication remain pending. No version tag or package release accompanies this change.
+
+### Documentation
+
+- Document outbound permissions, operation recovery and client limitations; update the optional Agent Skill. Add compact Glama, mcprush and XERJ Corpus Hub directory badges.
+
 ## [0.6.0] - 2026-10-29
 
 ### Extraction

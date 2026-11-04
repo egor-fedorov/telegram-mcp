@@ -281,6 +281,7 @@ class FakeBackend:
             and (filters.date_to is None or m.sent_at < filters.date_to)
             and (filters.content_type is None or m.content_type == filters.content_type)
             and (filters.has_link is None or m.has_link == filters.has_link)
+            and (filters.direction == "all" or m.outgoing is (filters.direction == "outgoing"))
         ]
         next_offset = (
             GlobalOffset(
@@ -487,6 +488,7 @@ class FakeBackend:
             and (date_to is None or m.sent_at < date_to)
             and (content_type is None or m.content_type == content_type)
             and (filters.has_link is None or m.has_link == filters.has_link)
+            and (filters.direction == "all" or m.outgoing is (filters.direction == "outgoing"))
         ]
         return Batch(
             filtered, raw[-1].message_ref.message_id if raw else offset, len(candidates) <= limit

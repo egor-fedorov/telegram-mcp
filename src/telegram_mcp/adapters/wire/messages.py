@@ -146,6 +146,20 @@ class WebPage(TypedDict):
 
 
 @with_config(CONFIG)
+class MessageButton(TypedDict):
+    button_id: str
+    text: str
+    type: str
+    url: NotRequired[str]
+
+
+@with_config(CONFIG)
+class ReplyMarkup(TypedDict):
+    type: Literal["inline", "keyboard", "hide", "force_reply"]
+    rows: list[list[MessageButton]]
+
+
+@with_config(CONFIG)
 class Message(TypedDict):
     message_ref: MessageKey
     sender: NotRequired[Sender]
@@ -171,6 +185,10 @@ class Message(TypedDict):
     text_offset: int
     text_total_length: int
     next_text_offset: int | None
+    outgoing: NotRequired[bool]
+    reply_markup: NotRequired[ReplyMarkup]
+    revision: NotRequired[str]
+    omission_reason: NotRequired[Literal["AUTH_NOTIFICATION_FILTERED"]]
 
 
 @with_config(CONFIG)

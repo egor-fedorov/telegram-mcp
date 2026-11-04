@@ -12,6 +12,7 @@ from telegram_mcp.domain import changes, models, watches
 # distinguish exhaustion, unavailable anchors and unverified authorization.
 _NULL_CONTROLS = {
     "authorized",
+    "confirmation_supported",
     "next_cursor",
     "next_checkpoint",
     "next_text_offset",
@@ -56,7 +57,10 @@ def _project_scope(scope: models.Scope) -> dict[str, Any]:
 
 
 def _project_model(value: models.Model, chats: dict[str, Any]) -> dict[str, Any]:
+    if isinstance(value, changes.Change):
+        value = changes.Change.model_validate(value.model_dump())
     if isinstance(value, models.Message):
+        value = models.Message.model_validate(value.model_dump())
         _remember_chat(value.chat, chats)
     data: dict[str, Any] = {}
     for name in type(value).model_fields:

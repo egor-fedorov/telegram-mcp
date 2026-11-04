@@ -42,6 +42,35 @@ def read_copy(file_path: str) -> tuple[list[dict], dict]:
     return records, metadata
 
 
+async def test_reopened_auth_notice_rebuilds_archive_without_overwriting_old_copy(
+    tmp_path, monkeypatch
+):
+    settings = archive_settings(tmp_path)
+    with monkeypatch.context() as old_version:
+        old_version.setattr("telegram_mcp.domain.models.authentication_notice", lambda _: False)
+        backend = FakeBackend([msg("1", 1, "Your login code: 123456")])
+        async with incremental_fixture(tmp_path, settings=settings, backend=backend) as env:
+            await env.service.create_watch("jobs", chat_refs=["1"], date_from=BASE)
+            original = await env.service.get_watch_changes("jobs", save=True)
+            assert original.saved_file and original.batch_id
+            original_data = file_bytes(original.saved_file.local_path)
+            assert b"123456" in original_data
+    async with incremental_fixture(tmp_path, settings=settings, backend=backend) as env:
+        replay = await env.service.get_watch_changes("jobs")
+        assert replay.saved_file is None and replay.issues[0].code == "ARCHIVE_COPY_INVALID"
+        assert replay.changes[0].message is not None
+        assert replay.changes[0].message.omission_reason == "AUTH_NOTIFICATION_FILTERED"
+        with pytest.raises(ToolError, match="ARCHIVE_COPY_INVALID"):
+            await env.service.ack_watch_changes("jobs", original.batch_id)
+        rebuilt = await env.service.get_watch_changes("jobs", save=True)
+        assert (
+            rebuilt.saved_file and rebuilt.saved_file.local_path != original.saved_file.local_path
+        )
+        assert b"123456" not in file_bytes(rebuilt.saved_file.local_path)
+        assert file_bytes(original.saved_file.local_path) == original_data
+        await env.service.ack_watch_changes("jobs", original.batch_id)
+
+
 async def test_saved_batch_is_independently_readable_before_acknowledgement(tmp_path):
     async with incremental_fixture(tmp_path, settings=archive_settings(tmp_path)) as env:
         await env.service.create_watch("jobs", chat_refs=["1"], date_from=BASE)

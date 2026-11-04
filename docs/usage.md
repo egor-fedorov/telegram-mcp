@@ -894,3 +894,28 @@ payload. `list_folders` returns an object with a `folders` array.
   and a 120-second FIFO queue timeout. `SERVER_BUSY` means overflow or timeout; retry
   after its five-second delay. Downloads remain serialized; watch calls serialize
   only for the same name. Cancellation removes queued work without executing it.
+
+## Message buttons, direction and membership (unreleased)
+
+`Message.outgoing` comes from Telegram's outgoing flag; authorship is not a substitute.
+`search_messages` accepts `direction="all"` (default), `incoming` or `outgoing`; keep it
+unchanged on continuation. An empty query with a non-default direction requires an
+explicit chat or folder selector. Other date/content/link/sender predicates still apply.
+
+`reply_markup` preserves keyboard kind, row layout, button text/type/URL and opaque
+button IDs. Callback data remains inside the server. The message `revision` is derived
+before text slicing and detects button payload changes while ignoring volatile counts.
+URL buttons do not authorize visiting a site or sending a CV. Optional callback tools
+are described in [outbound workflows](outbound.md).
+
+Channel metadata includes `membership`: `joined`, `not_joined` or `unknown`. It reflects
+Telegram's full channel metadata, not presence in a folder; incomplete entities yield
+`unknown`. Discovery neither joins the channel nor grants read/write access.
+
+Recognized authentication notices are replaced with an empty placeholder marked
+`omission_reason="AUTH_NOTIFICATION_FILTERED"`; this does not mean deletion. Entities,
+previews, buttons and attachments are omitted too, including on persisted-batch replay.
+Downloads, imports and extraction are refused for those sources. The English/Russian
+classifier needs authentication context plus a credential-shaped value; it is not a
+universal secret detector and performs no OCR. Existing permanent archives are not
+rewritten. Telegram service notifications (`777000`) remain completely inaccessible.

@@ -319,3 +319,14 @@ scope, and cursors; changing a proxy's allowlist does not create a separate poli
 The first `uvx` launch may need to download Python or dependencies. Run the pinned
 `--version` command in a terminal first if the client startup timeout is too short.
 For connection and authorization errors, see [troubleshooting](troubleshooting.md).
+
+## Optional outbound confirmation (unreleased)
+
+Enabling a write capability makes the HTTP server sessionful with SSE; restart the
+server, proxies and client discovery after changing configuration. STDIO, HTTP and
+`connect` support legacy form elicitation and modern MCP multi-round confirmation.
+`get_status.confirmation_supported` reports the current client's advertised form
+capability. Actual UI behavior still requires checking in that client: some clients
+may decline, lack a form UI, or automatically answer. Use explicit human approval.
+A client without form support cannot send or invoke callbacks. Ordinary read tools
+remain usable. See [outbound workflows](outbound.md) for permissions and recovery.

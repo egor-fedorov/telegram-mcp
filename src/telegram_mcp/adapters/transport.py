@@ -65,8 +65,8 @@ def create_http_app(
         hosts.append(HOST)
         origins.append(f"http://{HOST}")
     app = server.streamable_http_app(
-        stateless_http=True,
-        json_response=True,
+        stateless_http=not service.writes_enabled,
+        json_response=not service.writes_enabled,
         host=HOST,
         transport_security=TransportSecuritySettings(
             allowed_hosts=hosts,

@@ -16,7 +16,8 @@ from tests.support.paths import FIXTURES_DIR
 @pytest.mark.parametrize("mode", ["auto", "legacy"])
 async def test_mcp_contract_matches_versioned_fixture(mode: str) -> None:
     async with Client(
-        create_server(Service(FakeBackend(), Settings()), schema_mode="full"), mode=mode
+        create_server(Service(FakeBackend(), Settings(allow_drafts=True)), schema_mode="full"),
+        mode=mode,
     ) as client:
         listing = await client.list_tools()
         definitions = {}
@@ -45,7 +46,9 @@ async def advertised_listing(mode: str) -> dict[str, object]:
     Python 3.13 strips docstring indentation at compile time, so descriptions are
     compared after the same cleanup on every supported version.
     """
-    async with Client(create_server(Service(FakeBackend(), Settings())), mode=mode) as client:
+    async with Client(
+        create_server(Service(FakeBackend(), Settings(allow_drafts=True))), mode=mode
+    ) as client:
         tools = (await client.list_tools()).tools
         prompts = (await client.list_prompts()).prompts
         templates = (await client.list_resource_templates()).resource_templates

@@ -68,6 +68,9 @@ def _message_markdown(message: Message, heading: str) -> str:
             "album_id",
             "web_page",
             "poll",
+            "reply_markup",
+            "outgoing",
+            "omission_reason",
         },
     )
     metadata = {key: value for key, value in metadata.items() if value != []}
@@ -132,6 +135,7 @@ class ExportPart:
             }
             rendered = _message_markdown(value, "Message") if self.format == "markdown" else ""
         elif isinstance(value, Change):
+            value = Change.model_validate(value.model_dump())
             if value.message is not None:
                 value = value.model_copy(
                     update={"message": clip(value.message, len(value.message.text))}

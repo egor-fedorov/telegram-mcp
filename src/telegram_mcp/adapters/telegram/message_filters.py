@@ -7,8 +7,12 @@ from telegram_mcp.domain.models import Message
 
 
 def matches_filters(message: Message, filters: ReadFilters) -> bool:
+    direction_matches = filters.direction == "all" or message.outgoing is (
+        filters.direction == "outgoing"
+    )
     return (
-        (filters.content_type is None or message.content_type == filters.content_type)
+        direction_matches
+        and (filters.content_type is None or message.content_type == filters.content_type)
         and (filters.has_link is None or message.has_link is filters.has_link)
         and (filters.date_from is None or message.sent_at >= filters.date_from)
         and (filters.date_to is None or message.sent_at < filters.date_to)

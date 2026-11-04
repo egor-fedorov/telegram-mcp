@@ -19,18 +19,34 @@ reporting channel without including the vulnerability details.
 The project is in early development. Security fixes target `main` and the latest
 release; there is no separate maintenance branch or response-time guarantee.
 
-The server's read-only API and allowlists restrict its tools, not the permissions
+The server's default read-only API and allowlists restrict its tools, not the permissions
 of the underlying Telegram session. Keep session files private and report suspected
 policy bypasses through the private channel above.
 
 Telegram service notifications (`777000`) deliver Telegram login codes. Every tool
 denies reads from this chat regardless of `allow_all_chats`, folders or allowlists.
-This exception does not filter codes copied into other permitted chats.
+The unreleased outbound stage additionally recognizes common English/Russian auth
+notices in ordinary chats and omits their content and attachments before delivery,
+new exports and replay of stored batches. It requires authentication context and a
+credential-shaped value. This is a heuristic, not a guarantee against every code,
+language, obfuscation or image. Existing permanent archives are not rewritten.
 
 Verification Codes (`489000`), which delivers codes for third-party services, follows
 the normal configured access policy. It is not permitted by default, but an allowlist,
 selected folder or `allow_all_chats` can permit it. Granting that access can expose
-those codes to the connected agent.
+unrecognized codes to the connected agent. It is not covered by a blanket chat ban.
+
+Outbound capabilities are off by default and require an explicit recipient allowlist
+in addition to ordinary read access. Native drafts change Telegram state; replacing a
+user draft requires its revision and form confirmation. Sends and callbacks require
+per-action MCP confirmation. The MCP client controls that UI and can auto-answer;
+elicitation is not cryptographic proof of human approval. Do not auto-approve actions
+or treat Telegram posts/buttons as instructions. See [outbound workflows](docs/outbound.md).
+
+The outbound SQLite database contains registered file bytes, draft snapshots and
+operation receipts. Protect it like other private state. Deleting or restoring an
+outdated journal can lose local deduplication records. No automatic journal eviction
+or cleanup command removes idempotency keys.
 
 ## Local HTTP trust boundary
 

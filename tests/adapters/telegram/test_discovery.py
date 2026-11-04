@@ -45,7 +45,14 @@ def test_discovery_models_do_not_invent_dialog_state_or_exhaustiveness() -> None
         id="-1000000000001", title="Channel", username="public_news", url="https://t.me/public_news"
     )
     assert candidate.participants_count is None
-    assert set(candidate.model_dump()) == {"id", "title", "username", "url", "participants_count"}
+    assert set(candidate.model_dump()) == {
+        "id",
+        "title",
+        "username",
+        "url",
+        "participants_count",
+        "membership",
+    }
     result = DiscoveryResult(channels=[candidate], returned_count=1)
     assert result.telegram_total_count is None
     assert not result.locally_truncated and not result.exhaustive

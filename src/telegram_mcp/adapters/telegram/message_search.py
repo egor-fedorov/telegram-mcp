@@ -110,7 +110,10 @@ class MessageSearch:
             and (
                 oldest
                 or not request.query
-                and not isinstance(selected_filter, types.InputMessagesFilterEmpty)
+                and (
+                    not isinstance(selected_filter, types.InputMessagesFilterEmpty)
+                    or filters.direction != "all"
+                )
             )
         ):
             return await self._read_anchor(client, entity, chat_id, boundary, offset, oldest)
@@ -201,9 +204,26 @@ class MessageSearch:
         sender: Any,
         offset_id: int,
         limit: int,
-    ) -> functions.messages.SearchRequest:
+    ) -> functions.messages.SearchRequest | functions.messages.GetHistoryRequest:
         filters = request.filters
         oldest = filters.oldest_first
+        if (
+            not request.query
+            and filters.direction != "all"
+            and isinstance(selected_filter, types.InputMessagesFilterEmpty)
+        ):
+            # Telegram Search rejects an empty unfiltered query. History is still
+            # paged by ID; the ordinary local predicates apply to each returned row.
+            return functions.messages.GetHistoryRequest(
+                peer=entity,
+                offset_id=offset_id,
+                offset_date=None,
+                add_offset=-limit if oldest else 0,
+                limit=limit,
+                max_id=0,
+                min_id=0,
+                hash=0,
+            )
         return functions.messages.SearchRequest(
             peer=entity,
             q=request.query,

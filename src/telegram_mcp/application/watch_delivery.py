@@ -53,7 +53,9 @@ class WatchDelivery:
         result = pending.result.model_copy(update={"saved_file": saved})
         if saved is None or verified:
             return result
-        if await self.context.archive.verify(saved, batch_source(state.name, pending)):
+        if current_copy(state.name, pending) and await self.context.archive.verify(
+            saved, batch_source(state.name, pending)
+        ):
             return result
         issue = Issue(
             code="ARCHIVE_COPY_INVALID",
@@ -75,7 +77,7 @@ class WatchDelivery:
         source = batch_source(state.name, pending)
         saved = pending.saved_copy
         if saved is not None:
-            if await archive.verify(saved, source):
+            if current_copy(state.name, pending) and await archive.verify(saved, source):
                 return
             pending.archive = None  # Rebuild a missing or damaged copy from the batch.
         if pending.archive is None:
@@ -124,8 +126,9 @@ class WatchDelivery:
                 "get_watch_changes with save=true before acknowledging; no position changed.",
             )
         saved = pending.saved_copy
-        if saved is not None and not await self.context.archive.verify(
-            saved, batch_source(state.name, pending)
+        if saved is not None and (
+            not current_copy(state.name, pending)
+            or not await self.context.archive.verify(saved, batch_source(state.name, pending))
         ):
             raise ToolError(
                 "ARCHIVE_COPY_INVALID",
@@ -137,6 +140,14 @@ class WatchDelivery:
         state.last_acknowledged = batch_id
         self.store.save(state, binding)
         return WatchAcknowledgement(name=state.name, batch_id=batch_id)
+
+
+def current_copy(name: str, pending: PendingDelivery) -> bool:
+    """Do not advertise a pre-upgrade archive containing now-filtered content."""
+    saved = pending.saved_copy
+    return (
+        saved is not None and saved.sha256 == hashlib.sha256(batch_jsonl(name, pending)).hexdigest()
+    )
 
 
 def batch_source(name: str, pending: PendingDelivery) -> ArchiveSource:

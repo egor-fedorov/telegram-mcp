@@ -1,9 +1,11 @@
 """Public data contracts, independent of Telegram's generated classes."""
 
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
+
+from telegram_mcp.domain.auth_notifications import authentication_notice
 
 ChatType = Literal["private", "group", "channel", "bot", "saved"]
 ContentType = Literal["text", "photo", "video", "voice", "audio", "document", "other"]
@@ -29,6 +31,9 @@ class Chat(Model):
     marked_unread: bool = False
     matched_folder_ids: list[int] = Field(default_factory=list)
     pinned_in_folder_ids: list[int] = Field(default_factory=list)
+    membership: Literal["joined", "not_joined", "unknown"] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 class PublicChannel(Model):
@@ -37,6 +42,7 @@ class PublicChannel(Model):
     username: str
     url: str
     participants_count: int | None = Field(default=None, ge=0)
+    membership: Literal["joined", "not_joined", "unknown"] = "unknown"
 
 
 class DiscoveryResult(Model):
@@ -227,6 +233,18 @@ class WebPage(Model):
     pending_until: AwareDatetime | None = None
 
 
+class MessageButton(Model):
+    button_id: str
+    text: str
+    type: str
+    url: str | None = None
+
+
+class ReplyMarkup(Model):
+    type: Literal["inline", "keyboard", "hide", "force_reply"]
+    rows: list[list[MessageButton]] = Field(default_factory=list)
+
+
 class Message(Model):
     message_ref: MessageRef
     chat: Chat
@@ -253,6 +271,31 @@ class Message(Model):
     text_offset: int = 0
     text_total_length: int = 0
     next_text_offset: int | None = None
+    outgoing: bool | None = Field(default=None, exclude_if=lambda value: value is None)
+    reply_markup: ReplyMarkup | None = Field(default=None, exclude_if=lambda value: value is None)
+    revision: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    omission_reason: Literal["AUTH_NOTIFICATION_FILTERED"] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+
+    @model_validator(mode="after")
+    def filter_authentication_notice(self) -> Self:
+        # Also runs when reopening persisted batches. No credential-derived hash survives.
+        fields = (
+            self.text,
+            str(self.entities),
+            str(self.web_page),
+            str(self.reply_markup),
+            str(self.poll),
+        )
+        if self.omission_reason or authentication_notice("\n".join(fields)):
+            safe = {"message_ref", "chat", "sent_at", "outgoing", "omission_reason"}
+            for name, field in type(self).model_fields.items():
+                if name not in safe:
+                    setattr(self, name, field.get_default(call_default_factory=True))
+            self.content_type = "other"
+            self.omission_reason = "AUTH_NOTIFICATION_FILTERED"
+        return self
 
 
 class Issue(Model):
@@ -349,11 +392,14 @@ def is_retryable(code: str) -> bool:
 
 
 class ToolError(Exception):
-    def __init__(self, code: str, message: str, retry_after: int | None = None):
+    def __init__(
+        self, code: str, message: str, retry_after: int | None = None, *, scope: str | None = None
+    ):
         super().__init__(f"{code}: {message}")
         self.code = code
         self.detail = message
         self.retry_after = retry_after
+        self.scope = scope
 
     @property
     def retryable(self) -> bool:

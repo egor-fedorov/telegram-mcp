@@ -1,20 +1,25 @@
 """Expose the shared loopback server to clients that launch STDIO subprocesses."""
 
 from collections.abc import AsyncGenerator, Awaitable, Callable
-from contextlib import asynccontextmanager
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
 import httpx2
 from mcp.client import Client
+from mcp.client.session import ElicitationFnT
 from mcp.client.streamable_http import streamable_http_client
 from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
 from mcp.shared.exceptions import MCPError
 from mcp_types import (
     INTERNAL_ERROR,
+    INVALID_REQUEST,
     CallToolRequestParams,
     CallToolResult,
     CompleteRequestParams,
+    ElicitRequestFormParams,
+    ErrorData,
     GetPromptRequestParams,
+    InputRequiredResult,
     PaginatedRequestParams,
     ReadResourceRequestParams,
     TextContent,
@@ -35,7 +40,46 @@ def unavailable() -> ToolError:
     )
 
 
-def create_bridge(upstream: Client) -> Server:
+def confirmation_callback(downstream) -> ElicitationFnT | None:
+    capabilities = downstream.session.client_capabilities
+    form = capabilities.elicitation if capabilities is not None else None
+    if form is None or (form.form is None and form.model_fields_set):
+        return None
+
+    async def elicit(context, params):
+        if not isinstance(params, ElicitRequestFormParams):
+            return ErrorData(code=INVALID_REQUEST, message="Only form confirmation is supported")
+        return await downstream.session.elicit_form(
+            params.message,
+            params.requested_schema,
+            related_request_id=downstream.request_id,
+        )
+
+    return elicit
+
+
+async def confirmed_call(
+    client: Client, context, params: CallToolRequestParams
+) -> CallToolResult | InputRequiredResult:
+    if context.protocol_version >= "2026-07-28":
+        await client.list_tools()
+        return await client.session.call_tool(
+            params.name,
+            params.arguments,
+            meta=params.meta,
+            input_responses=params.input_responses,
+            request_state=params.request_state,
+            allow_input_required=True,
+        )
+    return await client.call_tool(params.name, params.arguments, meta=params.meta)
+
+
+def create_bridge(
+    upstream: Client,
+    *,
+    confirmation_client: Callable[[ElicitationFnT | None], AbstractAsyncContextManager[Client]]
+    | None = None,
+) -> Server:
     async def forward[R](call: Callable[[], Awaitable[R]]) -> R:
         try:
             return await call()
@@ -69,8 +113,21 @@ def create_bridge(upstream: Client) -> Server:
     async def read_resource(_context, params: ReadResourceRequestParams):
         return await forward(lambda: upstream.read_resource(params.uri))
 
-    async def call_tool(_context, params: CallToolRequestParams) -> CallToolResult:
+    async def call_tool(
+        _context, params: CallToolRequestParams
+    ) -> CallToolResult | InputRequiredResult:
         try:
+            if confirmation_client is not None and params.name in {
+                "update_draft",
+                "send_message",
+                "send_file",
+                "invoke_button",
+                "get_status",
+            }:
+                # Each confirmation-capable call owns an upstream session. Its closure binds
+                # only this downstream request, including under concurrent client calls.
+                async with confirmation_client(confirmation_callback(_context)) as isolated:
+                    return await confirmed_call(isolated, _context, params)
             return await upstream.call_tool(params.name, params.arguments, meta=params.meta)
         except MCPError:
             raise
@@ -118,7 +175,9 @@ def create_bridge(upstream: Client) -> Server:
 
 
 @asynccontextmanager
-async def shared_client(settings: Settings) -> AsyncGenerator[Client]:
+async def shared_client(
+    settings: Settings, elicitation_callback: ElicitationFnT | None = None
+) -> AsyncGenerator[Client]:
     token = load_token(settings.http_token_path)
     try:
         async with httpx2.AsyncClient(
@@ -127,7 +186,10 @@ async def shared_client(settings: Settings) -> AsyncGenerator[Client]:
             trust_env=False,
         ) as http:
             async with Client(
-                streamable_http_client(endpoint(settings), http_client=http), cache=None
+                streamable_http_client(endpoint(settings), http_client=http),
+                cache=None,
+                elicitation_callback=elicitation_callback,
+                read_timeout_seconds=300,
             ) as upstream:
                 yield upstream
     except ToolError:
@@ -138,6 +200,8 @@ async def shared_client(settings: Settings) -> AsyncGenerator[Client]:
 
 async def connect(settings: Settings) -> None:
     async with shared_client(settings) as upstream:
-        proxy = create_bridge(upstream)
+        proxy = create_bridge(
+            upstream, confirmation_client=lambda callback: shared_client(settings, callback)
+        )
         async with stdio_server() as (read_stream, write_stream):
             await proxy.run(read_stream, write_stream, proxy.create_initialization_options())

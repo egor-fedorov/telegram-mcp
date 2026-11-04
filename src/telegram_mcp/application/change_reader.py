@@ -81,7 +81,8 @@ async def _start_pass(
                     state,
                     item.message.message_ref.message_id,
                     item.revision,
-                    requires_recheck=item.message.poll is not None,
+                    requires_recheck=item.message.poll is not None
+                    or item.message.reply_markup is not None,
                 )
             state.position = state.upper_id
             state.phase = "idle"
@@ -124,7 +125,9 @@ async def _recheck(
             observed.revision if observed else old.revision,
             observed is not None,
             requires_recheck=(
-                observed.message.poll is not None if observed else old.requires_recheck
+                (observed.message.poll is not None or observed.message.reply_markup is not None)
+                if observed
+                else old.requires_recheck
             ),
         )
         state.recheck_index += 1
@@ -188,7 +191,7 @@ async def _read_new(
             state,
             message.message_ref.message_id,
             observed.revision,
-            requires_recheck=message.poll is not None,
+            requires_recheck=message.poll is not None or message.reply_markup is not None,
         )
         return True
 

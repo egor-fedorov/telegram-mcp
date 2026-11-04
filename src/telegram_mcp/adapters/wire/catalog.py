@@ -13,7 +13,7 @@ class ChatDetails(TypedDict):
     chat: Chat
     description: NotRequired[str]
     linked_chat_id: NotRequired[ChatID]
-    server_can_send: Literal[False]
+    server_can_send: bool
 
 
 @with_config(CONFIG)

@@ -13,7 +13,11 @@ from telegram_mcp.domain.models import ToolError
 
 
 def add_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("checkpoint_action", nargs="?", choices=["status", "prune"])
+    parser.add_argument(
+        "checkpoint_action",
+        nargs="?",
+        choices=["status", "prune", "list", "remove", "prune-payloads"],
+    )
     parser.add_argument("--chat-id", help="Limit checkpoint cleanup to one canonical chat ID")
     parser.add_argument(
         "--all", action="store_true", help="Explicitly select all checkpoint sources"
@@ -33,7 +37,7 @@ def validate_arguments(parser: argparse.ArgumentParser, args: argparse.Namespace
     if args.command != "checkpoints":
         if args.checkpoint_action is not None or flags:
             parser.error("Checkpoint arguments require the checkpoints command")
-    elif args.checkpoint_action is None:
+    elif args.checkpoint_action not in ("status", "prune"):
         parser.error("Use checkpoints status or checkpoints prune")
     elif args.checkpoint_action == "status" and flags:
         parser.error("Cleanup options require checkpoints prune")

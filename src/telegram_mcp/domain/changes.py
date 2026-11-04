@@ -14,6 +14,8 @@ ChangeOutput = Literal["inline", "jsonl", "markdown"]
 
 def content_revision(message: Message, media_identity: str = "") -> str:
     """Ignore delivery slices, chat profiles, counters, reactions and poll votes."""
+    if message.omission_reason:
+        return hashlib.sha256((message.message_ref.key + ":filtered").encode()).hexdigest()
     data = message.model_dump(
         mode="json",
         include={
@@ -29,6 +31,7 @@ def content_revision(message: Message, media_identity: str = "") -> str:
             "attachments",
             "album_id",
             "poll",
+            "reply_markup",
         },
         exclude_none=True,
     )
@@ -95,6 +98,12 @@ class Change(Model):
     revision: str
     observed_at: AwareDatetime
     message: Message | None = None
+
+    @model_validator(mode="after")
+    def filtered_revision(self) -> Self:
+        if self.message is not None and self.message.omission_reason:
+            self.revision = content_revision(self.message)
+        return self
 
 
 class ExportFile(Model):

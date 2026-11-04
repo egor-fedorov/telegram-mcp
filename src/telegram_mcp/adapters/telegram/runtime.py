@@ -1,17 +1,19 @@
 """One Telegram client, connection lifecycle, and translation of transport failures."""
 
 import asyncio
+import inspect
 import math
 import sqlite3
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from typing import Any, TypeVar
 
-from telethon import TelegramClient, errors, functions
+from telethon import errors, functions
 
 from telegram_mcp.adapters.clock import SystemClock
 from telegram_mcp.adapters.config import Settings
 from telegram_mcp.adapters.session import SessionLease
+from telegram_mcp.adapters.telegram.safe_client import SafeTelegramClient
 from telegram_mcp.adapters.version import get_version
 from telegram_mcp.application.ports import Clock
 from telegram_mcp.domain.models import ToolError
@@ -24,7 +26,7 @@ class TelegramRuntime:
         self,
         settings: Settings,
         *,
-        client_factory: Callable[..., Any] = TelegramClient,
+        client_factory: Callable[..., Any] = SafeTelegramClient,
         client: Any = None,
         clock: Clock | None = None,
     ):
@@ -41,6 +43,46 @@ class TelegramRuntime:
         self._retry_at = 0.0
         self._retry_error: ToolError | None = None
         self._closed = False
+        self._write_cooldowns: dict[str, float] = {}
+
+    def require_write_ready(self, scope: str) -> None:
+        remaining = (
+            max(self._write_cooldowns.get(scope, 0), self._write_cooldowns.get("account", 0))
+            - self.clock.monotonic()
+        )
+        if remaining > 0:
+            raise ToolError(
+                "RATE_LIMITED",
+                "Telegram requires a wait before this action.",
+                math.ceil(remaining),
+                scope="account"
+                if self._write_cooldowns.get("account", 0) > self.clock.monotonic()
+                else scope,
+            )
+
+    def cooldowns(self) -> list[dict[str, object]]:
+        return [
+            {"scope": scope, "retry_after_seconds": math.ceil(until - self.clock.monotonic())}
+            for scope, until in self._write_cooldowns.items()
+            if until > self.clock.monotonic()
+        ]
+
+    async def write_call(self, request: Awaitable[T], *, scope: str) -> T:
+        try:
+            self.require_write_ready(scope)
+        except ToolError:
+            if inspect.iscoroutine(request):
+                request.close()
+            raise
+        try:
+            return await self.call(request)
+        except ToolError as exc:
+            if exc.code == "SLOW_MODE":
+                self._write_cooldowns[scope] = self.clock.monotonic() + (exc.retry_after or 1)
+                raise ToolError("RATE_LIMITED", exc.detail, exc.retry_after, scope=scope) from None
+            if exc.code == "RATE_LIMITED":
+                self._write_cooldowns["account"] = self.clock.monotonic() + (exc.retry_after or 1)
+            raise
 
     async def call(self, request: Awaitable[T], *, timeout_seconds: float | None = None) -> T:
         try:
@@ -55,6 +97,18 @@ class TelegramRuntime:
         ) as exc:
             raise ToolError(
                 "RATE_LIMITED", f"Telegram requests a wait of {exc.seconds} seconds.", exc.seconds
+            ) from None
+        except errors.SlowModeWaitError as exc:
+            raise ToolError(
+                "SLOW_MODE", "Telegram slow mode requires a wait.", exc.seconds
+            ) from None
+        except errors.RandomIdDuplicateError:
+            raise ToolError(
+                "SEND_UNCERTAIN", "This random_id is still being processed; retain the same key."
+            ) from None
+        except errors.BotResponseTimeoutError:
+            raise ToolError(
+                "CALLBACK_UNCERTAIN", "The bot did not answer; the callback may have executed."
             ) from None
         except (errors.UnauthorizedError, errors.AuthKeyDuplicatedError):
             self.generation += 1
@@ -129,10 +183,11 @@ class TelegramRuntime:
                     api_id,
                     api_hash,
                     flood_sleep_threshold=0,
-                    request_retries=1,
+                    request_retries=0,
                     connection_retries=1,
                     retry_delay=1,
                     raise_last_call_error=True,
+                    auto_reconnect=False,
                     device_model="Telegram Context MCP",
                     app_version=get_version(),
                 )

@@ -1,5 +1,6 @@
 """Thin application facade assembled from independently testable use cases."""
 
+from collections.abc import Callable
 from datetime import datetime
 from typing import Literal
 
@@ -13,17 +14,23 @@ from telegram_mcp.application.attachment_ports import (
     DownloadStorePort,
 )
 from telegram_mcp.application.attachments import AttachmentService
+from telegram_mcp.application.callbacks import CallbackService
 from telegram_mcp.application.catalog import CatalogService
 from telegram_mcp.application.change_ports import CheckpointStorePort, ExportStorePort
 from telegram_mcp.application.changes import ChangesService
 from telegram_mcp.application.discovery import DiscoveryService
+from telegram_mcp.application.drafts import DraftService
 from telegram_mcp.application.extraction import ExtractionService
 from telegram_mcp.application.extraction_ports import DocumentParserPort, ExtractionStorePort
+from telegram_mcp.application.files import FileService
 from telegram_mcp.application.global_search import GlobalSearchPager
 from telegram_mcp.application.history_export import HistoryExportService
 from telegram_mcp.application.incremental import IncrementalContext
 from telegram_mcp.application.message_pager import MessagePager
 from telegram_mcp.application.messages import MessageReader
+from telegram_mcp.application.outbound_access import OutboundContext
+from telegram_mcp.application.outbound_journal import OperationJournal
+from telegram_mcp.application.outbound_ports import Confirm, OutboundPort, OutboundStorePort
 from telegram_mcp.application.ports import (
     Backend,
     Clock,
@@ -36,6 +43,7 @@ from telegram_mcp.application.ports import (
 from telegram_mcp.application.progressive_search import ProgressivePager
 from telegram_mcp.application.queries import QueryService
 from telegram_mcp.application.query_preparation import QueryPreparation
+from telegram_mcp.application.sending import SendService
 from telegram_mcp.application.topics import TopicPager, TopicService
 from telegram_mcp.application.watch_ports import WatchStorePort
 from telegram_mcp.application.watches import WatchService
@@ -57,7 +65,17 @@ from telegram_mcp.domain.models import (
     MessageRef,
     MessageResult,
     Page,
+    ToolError,
     TopicPage,
+)
+from telegram_mcp.domain.outbound import (
+    CallbackReceipt,
+    Draft,
+    DraftList,
+    FileList,
+    RegisteredFile,
+    SendReceipt,
+    WritePolicy,
 )
 from telegram_mcp.domain.watches import (
     WatchAcknowledgement,
@@ -83,12 +101,17 @@ class Service:
         archive: ArchivePort,
         document_parser: DocumentParserPort,
         extractions: ExtractionStorePort,
+        write_policy: Callable[[], WritePolicy] = WritePolicy,
+        outbound_backend: OutboundPort | None = None,
+        outbound_store: OutboundStorePort | None = None,
     ):
         self._runtime: RuntimePort = backend
         self._policies = policy_provider
         self._limits = limits
         self._clock = clock
         self._archive = archive
+        self._write_policy = write_policy
+        self._outbound_store = outbound_store
         access = AccessFactory(backend, policy_provider)
         self._incremental = IncrementalContext(
             backend=backend,
@@ -120,10 +143,111 @@ class Service:
             backend, access, cursors, clock, TopicPager(backend, cursors, clock)
         )
         self._messages = MessageReader(backend, backend, access, self._queries, limits)
+        self._outbound: OutboundContext | None = None
+        if outbound_backend is not None and outbound_store is not None:
+            self._outbound = OutboundContext(
+                outbound_backend, outbound_store, access, backend, write_policy, clock
+            )
+            self._files = FileService(self._outbound, self._attachments)
+            self._drafts = DraftService(self._outbound, self._files)
+            self._journal = OperationJournal(self._outbound)
+            self._sending = SendService(self._outbound, self._files, self._journal, backend)
+            self._callbacks = CallbackService(self._outbound, self._journal, backend)
+
+    @property
+    def writes_enabled(self) -> bool:
+        return self._write_policy().enabled
+
+    def _require_outbound(self) -> None:
+        if self._outbound is None:
+            raise ToolError(
+                "WRITES_DISABLED", "Outbound features are not available on this backend."
+            )
+
+    async def register_file(
+        self, attachment_id: str | None = None, path: str | None = None
+    ) -> RegisteredFile:
+        self._require_outbound()
+        return await self._files.register(attachment_id, path)
+
+    async def list_files(self) -> FileList:
+        self._require_outbound()
+        return await self._files.list()
+
+    async def get_draft(self, chat_ref: str) -> Draft:
+        self._require_outbound()
+        return await self._drafts.get(chat_ref)
+
+    async def list_drafts(self, limit: int = 30, cursor: str | None = None) -> DraftList:
+        self._require_outbound()
+        return await self._drafts.list(limit, cursor)
+
+    async def create_draft(self, chat_ref: str, text: str, file_id: str | None = None) -> Draft:
+        self._require_outbound()
+        return await self._drafts.write(chat_ref, text, file_id, None, None)
+
+    async def update_draft(
+        self,
+        chat_ref: str,
+        text: str,
+        expected_revision: str,
+        file_id: str | None = None,
+        confirm: Confirm | None = None,
+    ) -> Draft:
+        self._require_outbound()
+        return await self._drafts.write(chat_ref, text, file_id, expected_revision, confirm)
+
+    async def send_message(
+        self,
+        chat_ref: str,
+        text: str,
+        idempotency_key: str,
+        reply_to: str | None = None,
+        confirm: Confirm | None = None,
+    ) -> SendReceipt:
+        self._require_outbound()
+        return await self._sending.send(
+            chat_ref, text, idempotency_key, reply_to=reply_to, confirm=confirm
+        )
+
+    async def send_file(
+        self,
+        chat_ref: str,
+        file_id: str,
+        caption: str,
+        idempotency_key: str,
+        reply_to: str | None = None,
+        confirm: Confirm | None = None,
+    ) -> SendReceipt:
+        self._require_outbound()
+        return await self._sending.send(
+            chat_ref, caption, idempotency_key, file_id, reply_to, confirm
+        )
+
+    async def get_send_status(self, operation_id: str) -> SendReceipt | CallbackReceipt:
+        self._require_outbound()
+        return await self._journal.status(operation_id)
+
+    async def invoke_button(
+        self,
+        message_ref: str,
+        button_id: str,
+        expected_revision: str,
+        idempotency_key: str,
+        confirm: Confirm | None = None,
+    ) -> CallbackReceipt:
+        self._require_outbound()
+        return await self._callbacks.invoke(
+            message_ref, button_id, expected_revision, idempotency_key, confirm
+        )
 
     async def close(self) -> None:
         try:
-            await self._extractions.close()
+            try:
+                await self._extractions.close()
+            finally:
+                if self._outbound_store is not None:
+                    await self._outbound_store.close()
         finally:
             await self._close_readers()
 
@@ -223,9 +347,24 @@ class Service:
         status = await self._runtime.status()
         policy = self._policies.current()
         extraction_available = self._extractions.parser.available
+        cooldowns = status.get("cooldowns", [])
+        if self._outbound is not None and self.writes_enabled and status.get("authorized") is True:
+            try:
+                stored = await self._journal.cooldowns()
+                cooldowns = [*cooldowns, *stored] if isinstance(cooldowns, list) else stored
+            except ToolError:
+                pass
         return {
             **status,
-            "mode": "read_only",
+            "mode": "read_write" if self.writes_enabled else "read_only",
+            "allow_drafts": self._write_policy().allow_drafts,
+            "allow_send_messages": self._write_policy().allow_send_messages,
+            "allow_send_files": self._write_policy().allow_send_files,
+            "allow_bot_callbacks": self._write_policy().allow_bot_callbacks,
+            "allowed_write_chat_ids": list(self._write_policy().allowed_write_chat_ids),
+            "confirmation_required": True,
+            "confirmation_supported": None,
+            "cooldowns": cooldowns,
             "allow_all_chats": policy.allow_all_chats,
             "allow_public_channel_reads": policy.allow_public_channel_reads,
             "allow_public_channel_discovery": policy.allow_public_channel_discovery,
@@ -258,7 +397,16 @@ class Service:
         )
 
     async def get_chat(self, chat_ref: str) -> dict[str, object]:
-        return await self._catalog.get_chat(chat_ref=chat_ref)
+        result = await self._catalog.get_chat(chat_ref=chat_ref)
+        policy = self._write_policy()
+        if self._outbound is not None and (policy.allow_send_messages or policy.allow_send_files):
+            capability = "allow_send_messages" if policy.allow_send_messages else "allow_send_files"
+            try:
+                await self._outbound.recipient(chat_ref, capability)
+                result["server_can_send"] = True
+            except ToolError:
+                result["server_can_send"] = False
+        return result
 
     async def search_public_channels(self, query: str, limit: int = 20) -> DiscoveryResult:
         return await self._discovery.search_public_channels(query=query, limit=limit)
@@ -316,6 +464,7 @@ class Service:
         sender_id: str | None = None,
         content_type: ContentType | None = None,
         has_link: bool | None = None,
+        direction: Literal["all", "incoming", "outgoing"] = "all",
         limit: int = 30,
         cursor: str | None = None,
         order: Literal["newest_first", "oldest_first"] = "newest_first",
@@ -330,6 +479,7 @@ class Service:
             sender_id=sender_id,
             content_type=content_type,
             has_link=has_link,
+            direction=direction,
             limit=limit,
             cursor=cursor,
             order=order,

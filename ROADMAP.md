@@ -27,6 +27,7 @@ need a concrete contract before implementation; no delivery dates are assigned.
 | M5 | Complete for 0.5 | Bounded multi-source history, archived watch batches and usable monitoring prompts |
 | R6 | Done | Feature-organized MCP and wire modules, bounded complexity, shared storage and faster tests |
 | M6 | Released in 0.6.0 | Optional PDF/DOCX text extraction with bounded continuation and source/page provenance |
+| M7 | Implemented; live validation and release pending | Buttons/direction/membership, auth-notice omission and opt-in drafts, reusable files, confirmed sends and bot callbacks |
 
 The [0.6.0 changelog](CHANGELOG.md#060---2026-10-29) and
 [validation record](docs/validation-0.6.md) describe the current release scope.
@@ -245,14 +246,28 @@ Dependabot groups pytest's supporting packages with development tools.
 Validation uses the current extraction and MCPB implementation, including transport,
 clean-install and portable-bundle checks.
 
+## M7: outbound workflows (unreleased 0.7)
+
+The agreed stage is implemented in one focused PR: button metadata and revisions,
+outgoing filters, channel membership, conservative authentication-notice omission,
+immutable reusable files, native drafts with one attachment/caption, durable idempotent
+sends and confirmed private-bot callbacks. OCR is excluded. The
+[outbound guide](docs/outbound.md) records permission, confirmation, storage and
+recovery contracts, including limitations inherited from Telegram and MCP clients.
+The documentation proposal in [PR #32](https://github.com/egor-fedorov/telegram-mcp/pull/32)
+was used as design input, not merged as implementation.
+
+Autonomous validation covers synthetic Telegram RPCs, restart recovery and actual
+STDIO/HTTP/connect transports with test confirmation clients. Before release, validate
+native file drafts, one text/file send, duplicate receipts and callbacks on explicitly
+selected test recipients; check form acceptance/refusal in the intended real client.
+No live outbound action, user service reconfiguration or package publication is part
+of the implementation validation. Follow the release procedure after these checks.
+
 ## Later decisions
 
-Optional Telegram writes remain a later candidate: drafts first, then separately
-authorized sending, with editing/deletion considered afterward. The
-[sending proposal in PR #32](https://github.com/egor-fedorov/telegram-mcp/pull/32) is a
-discussion input, not the M5 contract. Confirmation defaults, client/bridge support,
-existing draft preservation and recovery after an uncertain send need decisions
-before implementation. No 0.7 scope is committed.
+OCR and voice transcription, editing/deleting sent messages and administration remain
+separate decisions with explicit permission contracts.
 
 Broader change journals, multi-source exports, saved searches, local text/semantic
 indexes, scheduled monitoring, administration and isolated account profiles also

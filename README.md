@@ -4,14 +4,17 @@
 
 [![CI](https://github.com/egor-fedorov/telegram-mcp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/egor-fedorov/telegram-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/egor-fedorov/telegram-mcp/blob/main/LICENSE)
+[![Glama | Listed](https://glama.ai/mcp/servers/egor-fedorov/telegram-mcp/badges/score.svg)](https://glama.ai/mcp/servers/egor-fedorov/telegram-mcp)
+[![mcprush | Listed](https://mcprush.com/badge/telegram-context-mcp/score.svg)](https://mcprush.com/to/telegram-context-mcp?ref=badge)
+[![XERJ Corpus Hub | Selected](https://img.shields.io/badge/XERJ_Corpus_Hub-Selected-596579.svg)](https://hub.xerj.org/corpus/egor-fedorov--telegram-mcp)
 
 Read Telegram through your own account from an MCP client. Find permitted conversations,
 search and read original posts, navigate topics and replies, and inspect albums, reactions,
 and polls. Connect several local clients to one session-owning process, or run standalone STDIO.
 
 Supports Windows, macOS, and Linux with Python 3.12–3.15. The server uses Telethon and
-preserves original text, dates, links, entities, and available metadata. It does not send
-messages, join channels, or mark messages read. Version 0.4 adds
+preserves original text, dates, links, entities, and available metadata. It is read-only
+by default, never joins channels or marks messages read. Version 0.4 adds
 opt-in selected attachment downloads, durable change checkpoints, named subscriptions,
 and JSONL/Markdown exports with optional permanent copies. Subscriptions poll only
 when requested and retain a batch until acknowledged. It also bounds scope previews,
@@ -34,6 +37,12 @@ For document extraction, install `'telegram-context-mcp[extraction]==0.6.0'` in 
 session-owning server and enable attachment downloads. See the
 [usage guide](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/usage.md#extract-pdf-or-docx-text)
 for limits and platform coverage.
+
+The unreleased 0.7 work adds message buttons, outgoing search, channel membership,
+authentication-notice omission, and opt-in native drafts, reusable files, confirmed
+sends and private-bot callbacks. These features require a source checkout until a
+release is published. See [outbound workflows](docs/outbound.md) for permissions,
+client confirmation requirements, recovery and validation limits.
 
 ## Install and log in
 
@@ -227,6 +236,7 @@ tracks document extraction, packaging and publication.
 The code is [MIT licensed](https://github.com/egor-fedorov/telegram-mcp/blob/main/LICENSE).
 This does not grant rights to Telegram content. Secret chats are unsupported; attachment
 downloads require a separate opt-in. Permanent copies require an archive directory
-and `save=true`; sending messages, administration and continuous archiving remain future work.
+and `save=true`; administration and continuous archiving remain future work. Outbound
+actions are an unreleased, separately permitted feature described in the guide above.
 Use source material you are entitled to share with your chosen model and follow
 [Telegram's content terms](https://telegram.org/tos/content-licensing).

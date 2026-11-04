@@ -14,6 +14,7 @@ class ReadFilters:
     content_type: ContentType | None = None
     oldest_first: bool = False
     has_link: bool | None = None
+    direction: Literal["all", "incoming", "outgoing"] = "all"
 
 
 @dataclass(frozen=True)

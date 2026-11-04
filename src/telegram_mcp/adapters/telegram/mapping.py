@@ -1,15 +1,17 @@
 """Pure conversion of Telegram payloads to application contracts."""
 
 from datetime import UTC, datetime
-from typing import Any, TypeGuard
+from typing import Any, Literal, TypeGuard
 
 from telethon import types, utils
 
+from telegram_mcp.adapters.telegram.buttons import normalize_markup
 from telegram_mcp.adapters.telegram.metadata import (
     normalize_entities,
     normalize_poll,
     normalize_reactions,
 )
+from telegram_mcp.domain.changes import content_revision
 from telegram_mcp.domain.models import (
     Attachment,
     Chat,
@@ -61,7 +63,14 @@ def public_channel_from_entity(entity: Any) -> PublicChannel | None:
         username=username,
         url=f"https://t.me/{username}",
         participants_count=entity.participants_count,
+        membership=channel_membership(entity),
     )
+
+
+def channel_membership(entity: Any) -> Literal["joined", "not_joined", "unknown"]:
+    if not isinstance(entity, types.Channel) or entity.min:
+        return "unknown"
+    return "not_joined" if entity.left else "joined"
 
 
 def is_supported_forum(entity: Any) -> bool:
@@ -125,6 +134,7 @@ def chat_from_entity(
         unread_count=int(dialog.unread_count if dialog else 0),
         unread_mentions_count=int(getattr(dialog, "unread_mentions_count", 0)),
         marked_unread=bool(dialog and getattr(dialog.dialog, "unread_mark", False)),
+        membership=channel_membership(entity) if isinstance(entity, types.Channel) else None,
     )
 
 
@@ -304,7 +314,7 @@ def normalize_message(raw: Any, chat: Chat, *, entities: dict[int, Any] | None =
             native_id, _ = utils.resolve_id(int(chat.id))
             link = f"https://t.me/c/{native_id}/{raw.id}"
     text = getattr(raw, "message", None) or ""
-    return Message(
+    message = Message(
         message_ref=ref,
         chat=chat,
         sender=sender,
@@ -332,4 +342,13 @@ def normalize_message(raw: Any, chat: Chat, *, entities: dict[int, Any] | None =
         reply_count=getattr(getattr(raw, "replies", None), "replies", None),
         reactions=normalize_reactions(getattr(raw, "reactions", None)),
         poll=normalize_poll(getattr(raw, "media", None)),
+        outgoing=bool(raw.out) if hasattr(raw, "out") else None,
+        reply_markup=normalize_markup(getattr(raw, "reply_markup", None)),
     )
+    identity = (
+        f"document:{document.id}"
+        if isinstance(document, types.Document)
+        else (f"photo:{photo.id}" if isinstance(photo, types.Photo) else "")
+    )
+    message.revision = content_revision(message, identity)
+    return message

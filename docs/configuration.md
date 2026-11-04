@@ -41,6 +41,13 @@ The server reads its configuration on startup. Restart it after editing permissi
 port, or paths. A proxy's settings select the endpoint and token; they do not override
 the server's read policy or create per-client permissions.
 
+The unreleased outbound stage adds `allow_drafts`, `allow_send_messages`,
+`allow_send_files` and `allow_bot_callbacks` (all false), plus
+`allowed_write_chat_ids` and `allowed_upload_directories` (both empty). Upload directories
+also expand `~` and become absolute paths. A recipient needs both ordinary read access
+and an explicit write ID. These settings are configured locally and preserved by
+`configure`; see [outbound workflows](outbound.md) before enabling them.
+
 ## QR login
 
 Available in version 0.6 and later. Stop the session-owning server first:

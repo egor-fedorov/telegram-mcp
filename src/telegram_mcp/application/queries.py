@@ -122,6 +122,7 @@ class QueryService:
         sender_id: str | None = None,
         content_type: ContentType | None = None,
         has_link: bool | None = None,
+        direction: Literal["all", "incoming", "outgoing"] = "all",
         limit: int = 30,
         cursor: str | None = None,
         order: Literal["newest_first", "oldest_first"] = "newest_first",
@@ -130,7 +131,10 @@ class QueryService:
         check_limit(limit)
         if ordering not in ("page", "global") or order not in ("newest_first", "oldest_first"):
             raise ToolError("INVALID_ARGUMENT", "Use ordering page/global and a valid order.")
-        if not query.strip() and has_link is not True:
+        if direction not in ("all", "incoming", "outgoing"):
+            raise ToolError("INVALID_ARGUMENT", "Use direction all/incoming/outgoing.")
+        direction_only = direction != "all" and bool(chat_ids or folder_ids)
+        if not query.strip() and has_link is not True and not direction_only:
             raise ToolError(
                 "INVALID_ARGUMENT",
                 "Search requires a query or has_link=true; use get_history otherwise.",
@@ -139,7 +143,9 @@ class QueryService:
             query = ""
         read = SearchRead(
             query,
-            ReadFilters(date_from, date_to, content_type, order == "oldest_first", has_link),
+            ReadFilters(
+                date_from, date_to, content_type, order == "oldest_first", has_link, direction
+            ),
             sender_id,
             ordering,
         )

@@ -10,6 +10,7 @@ from telegram_mcp.adapters.telegram.discovery import DiscoveryGateway
 from telegram_mcp.adapters.telegram.forums import ForumGateway
 from telegram_mcp.adapters.telegram.incremental import IncrementalGateway
 from telegram_mcp.adapters.telegram.messages import MessageGateway
+from telegram_mcp.adapters.telegram.outbound import OutboundGateway
 from telegram_mcp.adapters.telegram.runtime import TelegramRuntime
 from telegram_mcp.application.attachment_ports import (
     AttachmentKind,
@@ -56,6 +57,7 @@ class TelegramBackend:
         self.forum_gateway = ForumGateway(self.runtime, self.chat_gateway)
         self.attachment_gateway = AttachmentGateway(self.runtime)
         self.incremental_gateway = IncrementalGateway(self.runtime, self.chat_gateway)
+        self.outbound = OutboundGateway(self.runtime, self.chat_gateway)
 
     async def checkpoint_binding(self) -> str:
         return await self.incremental_gateway.checkpoint_binding()
@@ -93,7 +95,7 @@ class TelegramBackend:
         await self.incremental_gateway.check_export_source(chat_id)
 
     async def status(self) -> dict[str, object]:
-        return await self.runtime.status()
+        return {**await self.runtime.status(), "cooldowns": self.runtime.cooldowns()}
 
     async def close(self) -> None:
         try:

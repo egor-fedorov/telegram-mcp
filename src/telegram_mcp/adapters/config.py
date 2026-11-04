@@ -13,6 +13,7 @@ from platformdirs import user_config_path, user_data_path
 from pydantic import Field, SecretStr, ValidationError, field_validator
 
 from telegram_mcp.domain.models import Model, ToolError
+from telegram_mcp.domain.outbound import WritePolicy
 from telegram_mcp.domain.periods import load_zone
 from telegram_mcp.domain.policy import SERVICE_NOTIFICATIONS_ID, ReadPolicy
 from telegram_mcp.domain.references import is_canonical_chat_id
@@ -30,6 +31,12 @@ class Settings(Model):
     allow_public_channel_reads: bool = False
     allow_public_channel_discovery: bool = False
     allow_attachment_downloads: bool = False
+    allow_drafts: bool = False
+    allow_send_messages: bool = False
+    allow_send_files: bool = False
+    allow_bot_callbacks: bool = False
+    allowed_write_chat_ids: list[str] = Field(default_factory=list)
+    allowed_upload_directories: list[Path] = Field(default_factory=list)
     archive_directory: Path | None = None
     mcp_schema_mode: Literal["compact", "full"] = "compact"
     timezone: str = "UTC"
@@ -54,7 +61,7 @@ class Settings(Model):
             raise ValueError("must be an IANA time zone name such as Europe/Moscow") from None
         return value
 
-    @field_validator("allowed_chat_ids")
+    @field_validator("allowed_chat_ids", "allowed_write_chat_ids")
     @classmethod
     def refuse_service_notifications(cls, value: list[str]) -> list[str]:
         if any(not is_canonical_chat_id(chat_id) for chat_id in value):
@@ -68,6 +75,15 @@ class Settings(Model):
                 "login codes and are never readable"
             )
         return value
+
+    def write_policy(self) -> WritePolicy:
+        return WritePolicy(
+            allow_drafts=self.allow_drafts,
+            allow_send_messages=self.allow_send_messages,
+            allow_send_files=self.allow_send_files,
+            allow_bot_callbacks=self.allow_bot_callbacks,
+            allowed_write_chat_ids=tuple(self.allowed_write_chat_ids),
+        )
 
     def credentials(self) -> tuple[int, str]:
         if self.api_id is None or self.api_hash is None:
@@ -162,6 +178,9 @@ def load_settings(path: Path | None = None) -> Settings:
             ) from None
     if not str(settings.session_path).endswith(".session"):
         settings.session_path = Path(str(settings.session_path) + ".session")
+    settings.allowed_upload_directories = [
+        path.expanduser().absolute() for path in settings.allowed_upload_directories
+    ]
     return settings
 
 

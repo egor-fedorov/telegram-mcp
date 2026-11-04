@@ -96,7 +96,9 @@ async def test_connect_and_status_probe_authorization_without_cached_helper(tmp_
         client.is_user_authorized.assert_not_called()
         options = constructor.call_args.kwargs
         assert options["raise_last_call_error"] is True
-        assert options["request_retries"] == options["connection_retries"] == 1
+        assert options["request_retries"] == 0
+        assert options["connection_retries"] == 1
+        assert options["auto_reconnect"] is False
         assert options["flood_sleep_threshold"] == 0
         client.side_effect = errors.SessionRevokedError(None)
         status = await runtime.status()

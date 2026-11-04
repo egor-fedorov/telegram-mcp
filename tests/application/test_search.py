@@ -1,6 +1,7 @@
 """Search planning, fair priming, access checks and recoverable global cursors."""
 
 from datetime import timedelta
+from typing import Any
 
 import pytest
 
@@ -9,6 +10,49 @@ from telegram_mcp.application.ports import GlobalBatch, GlobalOffset
 from telegram_mcp.bootstrap import build_service
 from telegram_mcp.domain.models import Folder, ToolError
 from tests.support.fakes import BASE, FakeBackend, FakeClock, msg
+
+
+@pytest.mark.parametrize("order", ["oldest_first", "newest_first"])
+@pytest.mark.parametrize("direction", ["incoming", "outgoing"])
+async def test_direction_only_search_pages_and_binds_cursor(order, direction):
+    backend = FakeBackend(
+        [msg("1", mid).model_copy(update={"outgoing": mid % 2 == 0}) for mid in range(1, 81)]
+    )
+    service = build_service(backend, Settings(allowed_chat_ids=["1"], rpc_pages_per_call=1))
+    args: dict[str, Any] = {
+        "query": "",
+        "chat_ids": ["1"],
+        "direction": direction,
+        "order": order,
+        "limit": 7,
+    }
+    page = await service.search_messages(**args)
+    assert page.next_cursor
+    changed = args.copy()
+    changed.update(direction="all", query="budget")
+    with pytest.raises(ToolError, match="CURSOR_MISMATCH"):
+        await service.search_messages(**changed, cursor=page.next_cursor)
+    changed.update(direction="incoming" if direction == "outgoing" else "outgoing", query="")
+    with pytest.raises(ToolError, match="CURSOR_MISMATCH"):
+        await service.search_messages(**changed, cursor=page.next_cursor)
+    seen = list(page.messages)
+    for _ in range(30):
+        if not page.next_cursor:
+            break
+        page = await service.search_messages(**args, cursor=page.next_cursor)
+        seen.extend(page.messages)
+    assert page.scope.complete and not page.next_cursor
+    expected = [mid for mid in range(1, 81) if (mid % 2 == 0) == (direction == "outgoing")]
+    assert [m.message_ref.message_id for m in seen] == (
+        expected if order == "oldest_first" else expected[::-1]
+    )
+
+
+@pytest.mark.parametrize("direction", ["incoming", "outgoing"])
+async def test_direction_only_search_requires_an_explicit_selector(direction):
+    service = build_service(FakeBackend([msg("1", 1)]), Settings(allow_all_chats=True))
+    with pytest.raises(ToolError, match="INVALID_ARGUMENT"):
+        await service.search_messages(query="", direction=direction)
 
 
 async def test_unrestricted_search_reads_one_global_page_for_300_sources() -> None:

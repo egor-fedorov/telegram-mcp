@@ -17,6 +17,16 @@ allow_public_channel_discovery = false
 # Independently allow one selected attachment up to 20 MiB from a permitted source.
 # Downloads expire after 15 minutes; message reads never download attachment bytes.
 allow_attachment_downloads = false
+# Optional outbound capabilities. The read grant AND explicit write ID are required.
+# No folder or public-channel exception expands write access. Restart after changes.
+allow_drafts = false
+allow_send_messages = false
+allow_send_files = false
+allow_bot_callbacks = false
+allowed_write_chat_ids = []
+# Only explicitly selected regular files below these directories may be registered.
+# Symlinks/junctions are rejected. Registered copies survive changes to the original.
+allowed_upload_directories = []
 # Optional permanent copies, only for explicit save=true calls. No automatic deletion.
 # Use a dedicated private directory; the server generates filenames inside it.
 # archive_directory = "/absolute/private/path/telegram-archive"

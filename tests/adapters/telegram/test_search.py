@@ -65,6 +65,22 @@ def last_request(client: AsyncMock) -> Any:
     return client.await_args.args[0]
 
 
+@pytest.mark.parametrize("oldest", [False, True])
+async def test_direction_only_search_uses_history_and_advances_past_filtered_rows(oldest):
+    backend, client = adapter(page([row(mid, out=mid % 2 == 0) for mid in range(1, 5)]))
+    request = SearchRead("", ReadFilters(direction="outgoing", oldest_first=oldest))
+    first = await backend.read(CHAT.id, request, limit=4)
+    assert isinstance(last_request(client), functions.messages.GetHistoryRequest)
+    assert [m.message_ref.message_id for m in first.messages] == ([2, 4] if oldest else [4, 2])
+    assert first.next_offset == (4 if oldest else 1) and not first.exhausted
+    client.return_value = (
+        page([row(5 if oldest else 0, out=False)], full=True) if oldest else page([], full=True)
+    )
+    second = await backend.read(CHAT.id, request, offset=first.next_offset, limit=4)
+    assert last_request(client).offset_id == (5 if oldest else 1)
+    assert second.exhausted and second.messages == []
+
+
 @pytest.mark.parametrize(
     "content,has_link,kind",
     [

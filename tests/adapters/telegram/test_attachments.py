@@ -77,6 +77,13 @@ def adapter(raw: Any = None) -> tuple[TelegramBackend, AsyncMock]:
     return backend, client
 
 
+async def test_authentication_notice_attachment_is_refused_before_download():
+    backend, client = adapter(message(message="Код для входа: 123456"))
+    with pytest.raises(ToolError, match="AUTH_NOTIFICATION_FILTERED"):
+        await backend.prepare_attachment(REF, "document")
+    client.download_media.assert_not_called()
+
+
 @pytest.mark.parametrize(
     "attributes",
     [
