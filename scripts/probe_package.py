@@ -21,6 +21,19 @@ from mcp.client.streamable_http import streamable_http_client
 import telegram_mcp
 from telegram_mcp.adapters.version import get_version
 
+OUTBOUND_TOOLS = {
+    "register_file",
+    "list_files",
+    "get_draft",
+    "list_drafts",
+    "create_draft",
+    "update_draft",
+    "send_message",
+    "send_file",
+    "get_send_status",
+    "invoke_button",
+}
+
 
 def probe_qr_login(executable: Path) -> None:
     from telegram_mcp.adapters.qr_code import show_qr
@@ -48,7 +61,12 @@ def probe_qr_login(executable: Path) -> None:
 
 
 async def probe_client(
-    client: Client, version: str, contract: dict[str, object], schema_mode: str
+    client: Client,
+    version: str,
+    contract: dict[str, object],
+    schema_mode: str,
+    *,
+    outbound: bool = False,
 ) -> None:
     assert client.server_info is not None
     assert client.server_info.version == version
@@ -66,21 +84,29 @@ async def probe_client(
                     assert definitions[name] == value
                 definitions[name] = value
         tools[tool.name] = entry
+    expected_tools, expected_definitions = contract["tools"], contract["definitions"]
+    assert isinstance(expected_tools, dict) and isinstance(expected_definitions, dict)
+    if not outbound:
+        expected_tools = {
+            name: entry for name, entry in expected_tools.items() if name not in OUTBOUND_TOOLS
+        }
     if schema_mode == "full":
-        assert {"definitions": definitions, "tools": tools} == contract
+        assert tools == expected_tools
+        if outbound:
+            assert definitions == expected_definitions
     else:
-        expected_tools, expected_definitions = contract["tools"], contract["definitions"]
-        assert isinstance(expected_tools, dict) and isinstance(expected_definitions, dict)
         assert tools == {name: {**entry, "output": {}} for name, entry in expected_tools.items()}
-        # Compact discovery retains input definitions; output-only definitions
-        # are intentionally absent. Full discovery above checks the complete fixture.
-        for name, value in definitions.items():
-            assert value == expected_definitions[name]
+    # Disabled tools and compact output schemas intentionally omit some definitions.
+    # The opted-in full-schema probe checks the complete fixture independently.
+    for name, value in definitions.items():
+        assert value == expected_definitions[name]
     response = await client.call_tool("get_status", {})
     assert not response.is_error
     status = response.structured_content
     assert status is not None
     assert status["authorized"] is False
+    assert status["mode"] == ("read_write" if outbound else "read_only")
+    assert status["allow_drafts"] is outbound
     assert status["error"]["code"] == "AUTH_REQUIRED"
     assert status["text_extraction_available"] is False
     assert status["text_extraction_formats"] == []
@@ -96,6 +122,8 @@ async def probe_stdio(
     schema_mode: str,
     command: str = "serve",
     package_arguments: list[str] | None = None,
+    *,
+    outbound: bool = False,
 ) -> None:
     parameters = StdioServerParameters(
         command=str(executable),
@@ -109,7 +137,7 @@ async def probe_stdio(
     )
     for mode in ("auto", "legacy"):
         async with Client(parameters, mode=mode, read_timeout_seconds=15) as client:
-            await probe_client(client, version, contract, schema_mode)
+            await probe_client(client, version, contract, schema_mode, outbound=outbound)
 
 
 async def probe_http(
@@ -224,6 +252,11 @@ def main() -> None:
         # A missing configuration exercises the compact default.
         asyncio.run(probe_stdio(executable, config, args.version, contract, schema_mode))
         probe_shared_server(executable, args.version, contract, schema_mode)
+    # Discover every optional tool from the installed wheel/sdist without credentials
+    # or dispatching an outbound action. Default transport probes remain read-only.
+    config = Path.cwd() / "outbound.toml"
+    config.write_text('mcp_schema_mode = "full"\nallow_drafts = true\n', encoding="utf-8")
+    asyncio.run(probe_stdio(executable, config, args.version, contract, "full", outbound=True))
     assert not list(Path.cwd().glob("*.session*"))
     print(
         f"Installed package {args.version}: Registry launch, metadata, CLI, STDIO, HTTP, "

@@ -107,7 +107,7 @@ def test_production_imports_follow_layers_without_cycles() -> None:
         if package:
             parts.pop()
         name = ".".join(parts)
-        modules[name] = imports(name, path.read_text(), package=package)
+        modules[name] = imports(name, path.read_text(encoding="utf-8"), package=package)
     violations = sorted(
         (source, target)
         for source, dependencies in modules.items()
