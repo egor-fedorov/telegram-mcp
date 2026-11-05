@@ -22,7 +22,13 @@ from tests.support.resources import assert_binary_read, assert_compact_download
 from tests.support.transport import running_resource_server
 
 
-def wheel_at(directory: Path, *, extra: str | None = None, version: str = "1.2.3") -> Path:
+def wheel_at(
+    directory: Path,
+    *,
+    extra: str | None = None,
+    version: str = "1.2.3",
+    build_info: bytes | None = None,
+) -> Path:
     wheel = directory / "telegram_context_mcp-1.2.3-py3-none-any.whl"
     with zipfile.ZipFile(wheel, "w") as archive:
         archive.writestr("telegram_mcp/__init__.py", "")
@@ -32,6 +38,8 @@ def wheel_at(directory: Path, *, extra: str | None = None, version: str = "1.2.3
         )
         if extra:
             archive.writestr(extra, "synthetic private data")
+        if build_info is not None:
+            archive.writestr("telegram_mcp/_build_info.json", build_info)
     return wheel
 
 
@@ -42,6 +50,8 @@ def wheel_at(directory: Path, *, extra: str | None = None, version: str = "1.2.3
         ".env",
         "mcp.token",
         "telegram_mcp/config.toml",
+        "telegram_mcp/config.json",
+        "telegram_mcp/adapters/_build_info.json",
         "telegram_mcp/../secret.py",
     ],
 )
@@ -53,6 +63,29 @@ def test_bundle_rejects_private_or_unexpected_wheel_files(tmp_path, extra):
 def test_bundle_rejects_mismatching_release_wheel(tmp_path):
     with pytest.raises(ValueError, match="metadata"):
         build_mcpb.validate_wheel(wheel_at(tmp_path, version="9.9.9"), "1.2.3")
+
+
+@pytest.mark.parametrize("commit", ["a" * 40, None])
+def test_bundle_accepts_embedded_build_identity(tmp_path, commit):
+    wheel = wheel_at(tmp_path, build_info=json.dumps({"build_commit": commit}).encode())
+    build_mcpb.validate_wheel(wheel, "1.2.3")
+
+
+@pytest.mark.parametrize(
+    "build_info",
+    [
+        b"not JSON",
+        b"[]",
+        b"{}",
+        b'{"build_commit":null,"token":"private"}',
+        b'{"build_commit":"invalid"}',
+        b'{"build_commit":true}',
+        b'{"build_commit":null}' + b" " * 1024,
+    ],
+)
+def test_bundle_rejects_invalid_build_identity(tmp_path, build_info):
+    with pytest.raises(ValueError, match="build identity"):
+        build_mcpb.validate_wheel(wheel_at(tmp_path, build_info=build_info), "1.2.3")
 
 
 def test_package_constraints_preserve_platform_markers_and_local_wheel():

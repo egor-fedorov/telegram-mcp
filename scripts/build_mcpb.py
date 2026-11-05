@@ -5,6 +5,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -42,6 +43,22 @@ def run_uv(arguments: list[str], directory: Path) -> str:
     )
 
 
+def validate_build_info(archive: zipfile.ZipFile, name: str) -> None:
+    if archive.getinfo(name).file_size > 1024:
+        raise ValueError("Wheel build identity exceeds the metadata size limit.")
+    try:
+        identity = json.loads(archive.read(name))
+    except ValueError as exc:
+        raise ValueError("Wheel build identity must be valid JSON.") from exc
+    if not isinstance(identity, dict) or set(identity) != {"build_commit"}:
+        raise ValueError("Wheel build identity must contain only build_commit.")
+    commit = identity["build_commit"]
+    if commit is not None and not (
+        isinstance(commit, str) and re.fullmatch(r"[0-9a-f]{40}", commit)
+    ):
+        raise ValueError("Wheel build identity must contain a commit SHA or null.")
+
+
 def validate_wheel(wheel: Path, version: str) -> None:
     expected = f"telegram_context_mcp-{version}-py3-none-any.whl"
     if wheel.name != expected:
@@ -49,6 +66,9 @@ def validate_wheel(wheel: Path, version: str) -> None:
     info = f"telegram_context_mcp-{version}.dist-info/"
     with zipfile.ZipFile(wheel) as archive:
         for name in archive.namelist():
+            if name == "telegram_mcp/_build_info.json":
+                validate_build_info(archive, name)
+                continue
             source = name.startswith("telegram_mcp/") and (
                 name.endswith(".py") or name.endswith("/py.typed")
             )

@@ -296,7 +296,7 @@ Offline coverage includes lost-response recovery, restart and permission revocat
 account/peer isolation, changed or unavailable messages, legacy migration, pagination and
 all three MCP transports in both protocol modes. Selected-recipient live validation and
 publication remain pending; no real messages were sent for these checks.
-Local `make check` passes Ruff, ty and 1992 tests with two platform-specific skips;
+Local `make check` passes Ruff, ty and 2003 tests with two platform-specific skips;
 the updated Agent Skill also passes its standalone validator.
 
 ### Outbound recipient and confirmation policies (unreleased)
