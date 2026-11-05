@@ -1,8 +1,8 @@
 # 0.7.0 validation record
 
-Status: 0.7.0 release candidate; the selected-source checks below passed after the follow-up fixes.
-Local release-version and distribution checks passed; remote publication remains pending. This record is not a
-publication announcement or a claim that every client supports confirmed writes.
+Release: 0.7.0. PyPI, GitHub Release and MCP Registry publication were verified on
+2026-11-05. The checks below establish the listed coverage; other clients' outbound
+confirmation UIs remain unverified.
 
 The release candidate changes metadata, installation pins and documentation only;
 runtime behavior and locked dependency versions match the live-validated code.
@@ -126,8 +126,22 @@ in both schema modes; every text character is preserved.
 | Default reading | 23 | 28,819 | 124,641 |
 | Outbound tools enabled | 33 | 35,314 | 142,087 |
 
-The GitHub release pipeline repeats autonomous checks and distribution/bundle probes
-on the tagged commit, including Windows/macOS and Python 3.12–3.15. Publication must
-be verified separately following [releasing](releasing.md). Other clients' outbound
+The GitHub release pipeline repeated autonomous checks and distribution/bundle probes
+on the tagged commit, including Windows/macOS and Python 3.12–3.15. Publication was
+verified separately following [releasing](releasing.md). Other clients' outbound
 confirmation UIs remain unverified; the earlier Windows Desktop read-only report does
 not imply write support.
+
+## Publication verification
+
+Annotated tag `v0.7.0` points to release commit
+`b78237698b85508d8f16340ef35e7ea9e0f9133e` from [PR #83](https://github.com/egor-fedorov/telegram-mcp/pull/83).
+The [release workflow](https://github.com/egor-fedorov/telegram-mcp/actions/runs/42012691679)
+passed the Linux/Python 3.12–3.15 and Windows/macOS 3.12/3.15 matrix, package/MCPB
+checks, PyPI publishing, GitHub Release creation and Registry publication.
+
+- [PyPI 0.7.0](https://pypi.org/project/telegram-context-mcp/0.7.0/) contains a non-yanked wheel and source distribution. Their SHA-256 values match the corresponding GitHub assets.
+- [GitHub Release v0.7.0](https://github.com/egor-fedorov/telegram-mcp/releases/tag/v0.7.0) contains exactly four assets: wheel (230,872 bytes), sdist (575,751 bytes), MCPB (378,813 bytes) and its checksum. Notes match the tagged changelog without manual wrapping inside paragraphs or list items.
+- MCPB SHA-256 is `7fa1bd8186f095896b6833d94532c197ad8cd20265830c765f140712dafa6953`. Its manifest version is 0.7.0, and the embedded wheel is byte-identical to the published wheel. Temporary verification downloads were removed.
+- The [Registry entry](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.egor-fedorov%2Ftelegram-mcp/versions/0.7.0) is active and matches the tagged manifest. `check_registry.py --tag v0.7.0 --check-pypi --require-published` passed.
+- A fresh, isolated PyPI invocation with `[extraction]` returned `telegram-mcp 0.7.0`. Updating the persistent shared-server installation remains a separate local upgrade step.
