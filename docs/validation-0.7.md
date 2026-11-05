@@ -148,7 +148,8 @@ checks, PyPI publishing, GitHub Release creation and Registry publication.
 
 ## Dependency follow-up identified after publication
 
-GitHub created four high-severity `pyasn1` alerts on 2026-11-05 after publication.
+GitHub created four high-severity `pyasn1` alerts during the 2026-11-05 release workflow;
+they were noticed on the post-publication documentation push.
 The 0.7.0 lockfile and MCPB pin 0.6.4. The advisories cover excessive decoder CPU use
 in [schemaless containers](https://github.com/advisories/GHSA-fm9c-5rcf-2q5p),
 [strings/ANY](https://github.com/advisories/GHSA-9m75-vc3g-4x39),
