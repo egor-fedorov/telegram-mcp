@@ -1,1 +1,1 @@
-"""Folder-aware, read-only Telegram context server."""
+"""Folder-aware Telegram context server with opt-in outbound workflows."""

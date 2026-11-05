@@ -895,7 +895,7 @@ payload. `list_folders` returns an object with a `folders` array.
   after its five-second delay. Downloads remain serialized; watch calls serialize
   only for the same name. Cancellation removes queued work without executing it.
 
-## Message buttons, direction and membership (unreleased)
+## Message buttons, direction and membership (0.7+)
 
 `Message.outgoing` comes from Telegram's outgoing flag; authorship is not a substitute.
 `search_messages` accepts `direction="all"` (default), `incoming` or `outgoing`; keep it

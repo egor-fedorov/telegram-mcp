@@ -1,7 +1,7 @@
-# Outbound workflows (unreleased 0.7)
+# Outbound workflows (0.7)
 
-The default server remains read-only. Use a source checkout for these unreleased tools;
-the published 0.6 package does not contain them. No OCR, joining channels, folder edits,
+The default server remains read-only. These tools require server and proxy version
+0.7.0 or later, explicit capability flags and permitted recipients. No OCR, joining channels, folder edits,
 bulk sends, scheduled sends or editing/deleting sent messages are included.
 
 ## Enable only the required capabilities

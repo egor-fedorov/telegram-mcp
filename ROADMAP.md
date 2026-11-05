@@ -27,7 +27,7 @@ need a concrete contract before implementation; no delivery dates are assigned.
 | M5 | Complete for 0.5 | Bounded multi-source history, archived watch batches and usable monitoring prompts |
 | R6 | Done | Feature-organized MCP and wire modules, bounded complexity, shared storage and faster tests |
 | M6 | Released in 0.6.0 | Optional PDF/DOCX text extraction with bounded continuation and source/page provenance |
-| M7 | Implemented; selected-source validation passed, release pending | Buttons/direction/membership, auth-notice omission and opt-in drafts, reusable files, confirmed sends and bot callbacks |
+| M7 | Complete for 0.7.0; publication pending | Buttons/direction/membership, auth-notice omission and opt-in drafts, reusable files, confirmed sends and bot callbacks |
 
 The [0.6.0 changelog](CHANGELOG.md#060---2026-10-29) and
 [validation record](docs/validation-0.6.md) describe the current release scope.
@@ -246,7 +246,7 @@ Dependabot groups pytest's supporting packages with development tools.
 Validation uses the current extraction and MCPB implementation, including transport,
 clean-install and portable-bundle checks.
 
-## M7: outbound workflows (unreleased 0.7)
+## M7: outbound workflows (0.7.0 release candidate)
 
 The agreed stage is implemented in one focused PR: button metadata and revisions,
 outgoing filters, channel membership, conservative authentication-notice omission,
@@ -273,7 +273,10 @@ additional selected-channel checks verified outgoing/incoming search and synthet
 authentication-notice omission in direct reads, checkpoint output and saved JSONL exports.
 The maintainer-selected private bot also passed button metadata, revision rejection,
 confirmed callback, stored-receipt and duplicate-key checks. Selected-source live
-validation is complete; release-version, distribution and publication checks remain.
+validation is complete. The 0.7.0 release candidate updates package/Registry versions,
+installation pins and release notes. Full local checks and isolated wheel/sdist installs,
+extraction probes, MCPB validation/rebuild and bundle smoke checks passed. Remote
+publication remains pending; the release workflow repeats checks on the tagged commit.
 
 ## Later decisions
 

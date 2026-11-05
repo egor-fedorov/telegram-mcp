@@ -247,7 +247,7 @@ Run `make check` and require GitHub CI before squash merge. Automated checks are
 Add cohesive use cases and adapters where needed; keep distinct pagination algorithms
 explicit rather than building a universal flag-driven query method.
 
-## Outbound extension (unreleased)
+## Outbound extension (0.7+)
 
 Outbound use cases retain the same dependency direction. `WritePolicy` is separate
 from read scope. `OutboundContext` checks capability, ordinary read access and explicit

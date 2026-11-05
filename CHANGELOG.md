@@ -6,6 +6,8 @@ A version entry describes its target artifact. Verify publication on [PyPI](http
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-05
+
 ### Reading
 
 - Preserve message button rows, text, types and URLs without exposing callback payloads. Message revisions include button changes and remain stable across text continuation and volatile counters. Add the raw Telegram outgoing flag, selected-source direction filters and channel membership metadata.
@@ -18,11 +20,17 @@ A version entry describes its target artifact. Verify publication on [PyPI](http
 - Persist account-bound idempotency keys and random IDs before sending. Repeated keys replay receipts, conflicting requests fail, uncertain sends retain their random ID, and uncertain callbacks never re-execute. Preserve deduplication records without FIFO eviction and refuse new operations at quota. Persist scoped Telegram cooldowns across restart.
 - Support legacy elicitation and modern MCP confirmation rounds through STDIO, authenticated HTTP and `connect`. Confirmation waits release tool capacity; permission, recipient, content and account checks run again before dispatch. Telegram mutations have no automatic RPC/reconnect replay; explicitly selected reads retain one bounded server-error retry.
 - Fix `get_send_status` returning an unexpected MCP error: return the send/callback receipt inside `result`, matching its advertised union output schema. Persisted operation records and direct send responses are unchanged.
-- Selected-channel live validation in Codex confirmed form acceptance/refusal, text drafts and conflicts, file integrity, and duplicate receipts across restart. See the [0.7 validation record](docs/validation-0.7.md) for remaining checks. No version tag or package release accompanies this change.
 
 ### Documentation
 
 - Document outbound permissions, operation recovery and client limitations; update the optional Agent Skill. Add compact Glama, mcprush and XERJ Corpus Hub directory badges.
+
+### Upgrade and validation
+
+- Upgrade the shared server and client proxies to 0.7.0, restart the server and refresh client tools. Existing read configurations remain read-only; no write capability or recipient is enabled by upgrading. Native Telegram sessions, checkpoints and watches remain supported.
+- Keep the `[extraction]` extra when updating a server that reads PDF/DOCX files. Outbound features require separate local capability flags and explicit write recipient IDs; sending and callbacks also require a client that supports human form confirmation. See the [outbound guide](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/outbound.md).
+- Preserve the session-adjacent outbound database and reusable-file storage across upgrades; deleting operation records loses durable duplicate-send protection. No outbound state downgrade is supported.
+- Selected-source live validation in Codex confirmed form acceptance/refusal, text drafts and conflicts, file integrity, duplicate receipts across restart, direction filters, synthetic authentication-notice omission before archive, and one explicitly selected bot callback with revision rejection and receipt replay. See the [0.7 validation record](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/validation-0.7.md) for evidence and client coverage limits.
 
 ## [0.6.0] - 2026-10-29
 

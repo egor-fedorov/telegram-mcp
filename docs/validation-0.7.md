@@ -1,8 +1,11 @@
-# 0.7 validation record
+# 0.7.0 validation record
 
-Status: unreleased; the selected-source checks below passed after the follow-up fixes.
-Release-version and distribution checks remain pending. This record is not a
+Status: 0.7.0 release candidate; the selected-source checks below passed after the follow-up fixes.
+Local release-version and distribution checks passed; remote publication remains pending. This record is not a
 publication announcement or a claim that every client supports confirmed writes.
+
+The release candidate changes metadata, installation pins and documentation only;
+runtime behavior and locked dependency versions match the live-validated code.
 
 ## Scope and environment
 
@@ -99,7 +102,32 @@ Final status was authorized and connected with no active cooldown. The maintaine
 manually edited native draft retained its exact text and revision. Full `make check`
 passed again: Ruff format/lint, ty, 1846 tests and two platform-specific skips.
 
-## Remaining before publication
+## Release candidate checks
 
-- Finish release-version, distribution, MCPB and GitHub CI checks following
-  [releasing](releasing.md). Other clients' confirmation UIs remain unverified.
+On Linux/Python 3.12.15, `make check` passed with version 0.7.0: Ruff format/lint, ty,
+1846 tests and two platform-specific skips. All 52 dependency records in `uv.lock`
+match the previous revision; only the project version changed. Registry identity,
+launch metadata and version synchronization passed. Release notes were extracted
+from the dated changelog and checked for unwrapped paragraphs/list items.
+
+Wheel and source-distribution installations outside the checkout passed CLI, Registry
+launch, STDIO, HTTP and bridge checks in compact/full schema modes. Both installations
+also passed the extraction-extra document and worker probes. The MCPB passed the pinned
+official manifest validator, a byte-identical rebuild and an isolated uv install/proxy
+check with external-profile preservation. Temporary package and bundle environments
+were removed; generated candidates remain in ignored `dist/release-0.7.0/`.
+
+Synthetic wire measurements use 30 messages containing 10,260 text characters. The
+complete MCP response, including text fallback and structured content, is 32,327 bytes
+in both schema modes; every text character is preserved.
+
+| Tool surface | Tools | Compact `tools/list` bytes | Full `tools/list` bytes |
+| --- | ---: | ---: | ---: |
+| Default reading | 23 | 28,819 | 124,641 |
+| Outbound tools enabled | 33 | 35,314 | 142,087 |
+
+The GitHub release pipeline repeats autonomous checks and distribution/bundle probes
+on the tagged commit, including Windows/macOS and Python 3.12–3.15. Publication must
+be verified separately following [releasing](releasing.md). Other clients' outbound
+confirmation UIs remain unverified; the earlier Windows Desktop read-only report does
+not imply write support.

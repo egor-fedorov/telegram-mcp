@@ -7,9 +7,9 @@ on the same computer. It runs `telegram-mcp connect` and shares that server's ac
 permissions, tools, resources and prompts. Closing or removing the extension leaves
 the HTTP server running. The extension does not start a daemon or perform Telegram login.
 
-The first published bundle is available in the
-[0.6.0 GitHub Release](https://github.com/egor-fedorov/telegram-mcp/releases/tag/v0.6.0),
-with a SHA-256 checksum. The initial Windows Desktop check used the earlier candidate
+The release bundle and SHA-256 checksum are attached to its
+[GitHub Release](https://github.com/egor-fedorov/telegram-mcp/releases).
+The first bundled release was 0.6.0. The initial Windows Desktop check used the earlier candidate
 identified in the [validation report](#windows-report-2026-10-29); it is separate
 from automated verification of the published artifact.
 
@@ -20,6 +20,10 @@ first use; this needs network access and may take longer than subsequent starts.
 The manual acceptance check is on Windows. macOS Desktop validation remains
 unverified and does not block the first bundle; automated macOS checks cover the
 extracted program, not the Desktop UI.
+
+Optional outbound actions in 0.7 require server-side grants and client form confirmation.
+The Windows Desktop read-only check below does not verify that UI; outbound live
+validation used Codex. See [client confirmation coverage](clients.md#optional-outbound-confirmation-07).
 
 ## Prepare the shared server
 
@@ -33,7 +37,7 @@ and run these commands in **PowerShell**, using the version of the selected bund
 (0.6.0 is the first bundled release):
 
 ```powershell
-$version = "0.6.0"
+$version = "0.7.0"
 $config = Join-Path $env:USERPROFILE ".config\telegram-mcp\config.toml"
 uv tool install --python 3.12 "telegram-context-mcp==$version"
 telegram-mcp --config "$config" login
@@ -60,8 +64,8 @@ does not serve this loopback-only Windows extension.
    with the first field in the checksum file:
 
    ```powershell
-   Get-FileHash .\telegram-mcp-0.6.0.mcpb -Algorithm SHA256
-   Get-Content .\telegram-mcp-0.6.0.mcpb.sha256
+   Get-FileHash .\telegram-mcp-0.7.0.mcpb -Algorithm SHA256
+   Get-Content .\telegram-mcp-0.7.0.mcpb.sha256
    ```
 
 2. In Claude Desktop, open **Settings → Desktop app → Manage** beside Extensions
@@ -109,7 +113,7 @@ From a checkout, with uv and Node.js/npx installed:
 uv build --no-sources
 uv run --locked python scripts/build_mcpb.py --validate
 uv run --locked python scripts/build_mcpb.py --check
-uv run --locked python scripts/smoke_mcpb.py dist/mcpb/telegram-mcp-0.6.0.mcpb
+uv run --locked python scripts/smoke_mcpb.py dist/mcpb/telegram-mcp-0.7.0.mcpb
 ```
 
 The builder derives versions from `pyproject.toml`, accepts only the matching pure

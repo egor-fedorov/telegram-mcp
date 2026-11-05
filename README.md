@@ -33,15 +33,15 @@ even with all-chat or folder access. Upgrade every installation.
 
 Version 0.6 adds optional PDF/DOCX text extraction with bounded continuation and source
 references, terminal QR login, a Claude Desktop MCPB bundle, and an optional Agent Skill.
-For document extraction, install `'telegram-context-mcp[extraction]==0.6.0'` in the
+For document extraction, install `'telegram-context-mcp[extraction]==0.7.0'` in the
 session-owning server and enable attachment downloads. See the
 [usage guide](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/usage.md#extract-pdf-or-docx-text)
 for limits and platform coverage.
 
-The unreleased 0.7 work adds message buttons, outgoing search, channel membership,
+Version 0.7 adds message buttons, outgoing search, channel membership,
 authentication-notice omission, and opt-in native drafts, reusable files, confirmed
-sends and private-bot callbacks. These features require a source checkout until a
-release is published. See [outbound workflows](docs/outbound.md) for permissions,
+sends and private-bot callbacks. Write capabilities default off; native drafts support
+plain text only. See [outbound workflows](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/outbound.md) for permissions,
 client confirmation requirements, recovery and validation limits.
 
 ## Install and log in
@@ -49,14 +49,14 @@ client confirmation requirements, recovery and validation limits.
 Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then run:
 
 ```sh
-uv tool install --python 3.12 telegram-context-mcp==0.6.0
+uv tool install --python 3.12 telegram-context-mcp==0.7.0
 telegram-mcp --version
 telegram-mcp login
 telegram-mcp configure
 telegram-mcp status
 ```
 
-These examples target release 0.6.0; check [PyPI](https://pypi.org/project/telegram-context-mcp/)
+These examples target release 0.7.0; check [PyPI](https://pypi.org/project/telegram-context-mcp/)
 for published versions. Use the [source setup](#run-from-source) for unreleased revisions.
 Upgrading from 0.3? Read the [migration guide](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/migration-0.4.md),
 then restart the server and refresh your client's tool schemas.
@@ -78,7 +78,7 @@ The package name is **`telegram-context-mcp`**; the executable is **`telegram-mc
 You can also run a pinned version without installing a persistent command:
 
 ```sh
-uvx --python 3.12 --from telegram-context-mcp==0.6.0 telegram-mcp --version
+uvx --python 3.12 --from telegram-context-mcp==0.7.0 telegram-mcp --version
 ```
 
 The server is listed in the official MCP Registry as
@@ -112,7 +112,7 @@ cover Codex, Claude Desktop, Claude Code, Cursor, and VS Code, including a pinne
 command and executable paths for Windows.
 
 A [Claude Desktop MCPB bundle](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/mcpb.md)
-is available in the [0.6.0 release](https://github.com/egor-fedorov/telegram-mcp/releases/tag/v0.6.0).
+is attached to each matching [GitHub Release](https://github.com/egor-fedorov/telegram-mcp/releases).
 It uses the same shared server and separate local login; see the guide for installation
 and current validation coverage.
 
@@ -150,6 +150,18 @@ do not paste it into client configuration. This is a local, single-user integrat
 | `get_watch_changes` / `ack_watch_changes` | Poll and acknowledge a durable batch without per-chat tokens; optionally save it first |
 | `delete_watch` | Explicitly discard a subscription and its pending batch |
 | `export_history` | Source-linked JSONL or Markdown history in bounded, restartable parts |
+
+When a write capability is enabled, these additional tools appear. Each still checks
+its own capability flag and explicit recipient permission:
+
+| Tool | Purpose |
+| --- | --- |
+| `get_draft` / `list_drafts` | Read native drafts and revisions for permitted recipients |
+| `create_draft` / `update_draft` | Prepare plain-text drafts with conflict checks; replacing a user draft requires confirmation |
+| `register_file` / `list_files` | Register and discover immutable files for reuse in sends |
+| `send_message` / `send_file` | Confirm one text or file send with a durable idempotency key |
+| `get_send_status` | Read a stored send or callback receipt without dispatching |
+| `invoke_button` | Confirm one ordinary callback in a selected private bot dialog |
 
 Two prompts package these tools for monitoring: `watch_digest` turns
 a named watch into a source-linked digest, saving each batch before acknowledging it;
@@ -232,11 +244,13 @@ the [0.5.1 record](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/v
 covers the security patch.
 The [0.6 validation record](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/validation-0.6.md)
 tracks document extraction, packaging and publication.
+The [0.7 validation record](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/validation-0.7.md)
+tracks outbound workflows, authentication-notice omission and release checks.
 
 The code is [MIT licensed](https://github.com/egor-fedorov/telegram-mcp/blob/main/LICENSE).
 This does not grant rights to Telegram content. Secret chats are unsupported; attachment
 downloads require a separate opt-in. Permanent copies require an archive directory
 and `save=true`; administration and continuous archiving remain future work. Outbound
-actions are an unreleased, separately permitted feature described in the guide above.
+actions require separate permissions and the confirmation rules in the guide above.
 Use source material you are entitled to share with your chosen model and follow
 [Telegram's content terms](https://telegram.org/tos/content-licensing).

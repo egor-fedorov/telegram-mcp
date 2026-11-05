@@ -2,20 +2,20 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.egor-fedorov/telegram-mcp",
   "title": "Telegram Context MCP",
-  "description": "Read permitted Telegram chats, retrieve original posts and files, and track changes locally.",
+  "description": "Read permitted Telegram chats, track changes and optionally confirm outbound actions locally.",
   "repository": {
     "url": "https://github.com/egor-fedorov/telegram-mcp",
     "source": "github",
     "id": "1410391452"
   },
   "websiteUrl": "https://github.com/egor-fedorov/telegram-mcp#install-and-log-in",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "packages": [
     {
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "telegram-context-mcp",
-      "version": "0.6.0",
+      "version": "0.7.0",
       "runtimeHint": "uvx",
       "runtimeArguments": [
         {
