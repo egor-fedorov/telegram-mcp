@@ -20,7 +20,7 @@ Stop any manually started server and standalone STDIO clients using this session
 1. Install a persistent, pinned executable:
 
    ```sh
-   uv tool install --python 3.12 telegram-context-mcp==0.7.0
+   uv tool install --python 3.12 telegram-context-mcp==0.8.0
    uv tool dir --bin
    "$HOME/.local/bin/telegram-mcp" --version
    systemctl --user is-system-running
@@ -52,12 +52,12 @@ Stop any manually started server and standalone STDIO clients using this session
    telegram_mcp_unit_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
    install -d -m 700 "$telegram_mcp_unit_dir"
    curl --fail --location \
-     https://raw.githubusercontent.com/egor-fedorov/telegram-mcp/v0.7.0/contrib/systemd/telegram-mcp.service \
+     https://raw.githubusercontent.com/egor-fedorov/telegram-mcp/v0.8.0/contrib/systemd/telegram-mcp.service \
      --output "$telegram_mcp_unit_dir/telegram-mcp.service"
    ```
 
    From a checkout, copying `contrib/systemd/telegram-mcp.service` to that directory is
-   equivalent. The download URL pins the unit to the reviewed `v0.7.0` release;
+   equivalent. The download URL pins the unit to the reviewed `v0.8.0` release;
    review future unit changes before replacing an existing installation.
 
    Review the file before enabling it. For a custom configuration location, including

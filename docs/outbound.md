@@ -4,9 +4,9 @@ The default server remains read-only. These tools require server and proxy versi
 0.7.0 or later, explicit capability flags and permitted recipients. No OCR, joining channels, folder edits,
 bulk sends, scheduled sends or editing/deleting sent messages are included.
 
-The additional recipient modes, inspection tools and per-action confirmation settings below are
-**unreleased**. They require a server built from this checkout; the published 0.7.0
-package supports only the original read+write allowlist with required forms.
+The additional recipient modes, inspection tools and per-action confirmation settings below
+require server and proxy version **0.8.0**. Version 0.7.0 supports only the original
+read+write allowlist with required forms.
 
 ## Enable only the required capabilities
 
@@ -281,10 +281,11 @@ one confirmed text send, one file+caption, duplicate-key recovery, and one callb
 Check acceptance and refusal in the intended real MCP client's UI. Never use login
 notifications or real job applications as test data. The [0.7 validation record](validation-0.7.md)
 records selected-channel checks in Codex, discovered failures and remaining coverage.
-The new recipient/form policies have offline regression coverage, but live validation is
-still pending. Before release, use explicitly selected test recipients to validate a one-off
-send, a test-channel send with all-chat access, acceptance/refusal, a locally disabled form
-and replay after restart. Use synthetic file contents, not real applications or CVs.
+The [0.8 validation record](validation-0.8.md) covers selected-recipient all-chat and one-off
+sends, explicit human form refusal/acceptance, locally disabled message/file forms, exact
+message verification and receipt recovery after restart and grant revocation. These checks
+used synthetic content and a dedicated MCP client; they do not establish new native-client
+confirmation UI coverage.
 
 The earlier [PR #32](https://github.com/egor-fedorov/telegram-mcp/pull/32) supplied a
 useful write-permission/confirmation proposal. Its documentation-only design was

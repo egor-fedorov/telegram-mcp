@@ -29,6 +29,10 @@ need a concrete contract before implementation; no delivery dates are assigned.
 | M6 | Released in 0.6.0 | Optional PDF/DOCX text extraction with bounded continuation and source/page provenance |
 | M7 | Released in 0.7.0 | Buttons/direction/membership, auth-notice omission and opt-in drafts, reusable files, confirmed sends and bot callbacks |
 
+Release 0.8.0 is prepared: recipient policies, send inspection, build diagnostics and
+Windows storage repair are complete. Selected-source checks passed; publication is pending.
+See the [0.8 validation record](docs/validation-0.8.md).
+
 The [0.7.0 changelog](CHANGELOG.md#070---2026-11-05) and
 [validation record](docs/validation-0.7.md) describe the current release scope.
 Publication of 0.7.0 was verified on
@@ -281,9 +285,9 @@ PyPI/GitHub artifact hashes, the MCPB's embedded wheel and checksum, exact relea
 the active Registry entry and a fresh PyPI invocation were verified. File drafts and
 OCR remain deferred; other clients' outbound confirmation UIs remain unverified.
 
-## Later decisions
+## 0.8.0: outbound policies and inspection
 
-### Outbound inspection and build diagnostics (unreleased)
+### Outbound inspection and build diagnostics (complete for 0.8.0)
 
 Implemented recipient metadata previews without history, exact sent-message verification,
 receipt lookup by idempotency key and bounded account-bound journal pages. Verification
@@ -294,8 +298,9 @@ are reported separately with a frozen source-build commit when available.
 
 Offline coverage includes lost-response recovery, restart and permission revocation,
 account/peer isolation, changed or unavailable messages, legacy migration, pagination and
-all three MCP transports in both protocol modes. Selected-recipient live validation and
-publication remain pending; no real messages were sent for these checks.
+all three MCP transports in both protocol modes. Selected-recipient live validation passed
+for metadata previews, exact sent-message verification, journal filters and receipt recovery
+after restart and grant revocation; publication is pending.
 Local `make check` passes Ruff, ty and 2003 tests with two platform-specific skips;
 the updated Agent Skill also passes its standalone validator.
 
@@ -307,7 +312,7 @@ a write, and recovery of a deterministically truncated journal index. Production
 redaction and journal timestamp formats remain unchanged.
 Local `make check` passes Ruff, ty and 2006 tests with three platform-specific skips.
 
-### Outbound recipient and confirmation policies (unreleased)
+### Outbound recipient and confirmation policies (complete for 0.8.0)
 
 Implemented local-only all-chat writes, one-off confirmed sends to people/private bots,
 and independent confirmation settings for text, files, callbacks and user-draft overwrites.
@@ -321,20 +326,23 @@ before another dispatch; uncertain callbacks never re-execute. See the
 Offline checks cover permission modes, per-action forms, alias reassignment, revocation,
 restart recovery and MCP transports. Local `make check` passes Ruff, ty and 1945 tests
 with two platform-specific skips; skill metadata/API checks and its standalone validator
-also pass. Live validation of these new policies and publication
-remain separate steps; no test-recipient or production configuration is changed by this PR.
+also pass. Selected-source live validation passed for all-chat text/file sends without forms
+and one-off human refusal/acceptance through a dedicated MCP client. The production
+configuration remained unchanged; publication is pending.
 The Windows CI follow-up makes the existing archive responsiveness test wait for an
 explicit worker signal with a filesystem-setup budget, retaining the short event-loop
 responsiveness assertion and cancellation cleanup checks.
 
 [Dependabot PR #84](https://github.com/egor-fedorov/telegram-mcp/pull/84) updates the
 reviewed `pyasn1` lock entry to 0.6.5 for four decoder CPU-exhaustion advisories.
-Source installs and future MCPB builds use the patched lock. Shipping it to bundle
-users requires a new release; the published 0.7.0 artifact remains immutable. The
+Source installs and the 0.8.0 MCPB use the patched lock. The published 0.7.0 artifact
+remains immutable; replace it with the new bundle after publication. The
 [0.7.0 validation record](docs/validation-0.7.md#dependency-follow-up-identified-after-publication)
 retains the release-time dependency and bounded reachability review.
 Validation passed: `make check` (1846 tests, two skips), PyPI artifact-hash comparison,
 and a disposable MCPB's manifest/rebuild/proxy checks with 0.6.5 in its embedded lock.
+
+## Later decisions
 
 File drafts, OCR and voice transcription, editing/deleting sent messages and
 administration remain separate decisions with explicit permission contracts.

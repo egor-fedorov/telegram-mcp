@@ -6,6 +6,8 @@ A version entry describes its target artifact. Verify publication on [PyPI](http
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-05
+
 ### Outbound policies
 
 - Add local-only all-chat write access and one-off confirmed sends to new people or private bots. Keep action flags separate and leave recipient lists unchanged; retrieval permissions, service-notification exclusions and unsupported-action checks remain enforced.
@@ -20,7 +22,13 @@ A version entry describes its target artifact. Verify publication on [PyPI](http
 
 ### Security
 
-- Update locked `pyasn1` from 0.6.4 to 0.6.5 for four ASN.1 decoder CPU-exhaustion advisories (GHSA-fm9c-5rcf-2q5p, GHSA-9m75-vc3g-4x39, GHSA-2qm8-x737-gmw5 and GHSA-mm57-4v3p-rchx). Source installs using the updated lock and future MCPB builds use the patched dependency. The published 0.7.0 bundle remains unchanged; distributing the corrected bundle requires a new release.
+- Update locked `pyasn1` from 0.6.4 to 0.6.5 for four ASN.1 decoder CPU-exhaustion advisories (GHSA-fm9c-5rcf-2q5p, GHSA-9m75-vc3g-4x39, GHSA-2qm8-x737-gmw5 and GHSA-mm57-4v3p-rchx). The 0.8.0 MCPB includes the patched dependency; replace older bundles to receive it.
+
+### Upgrade and validation
+
+- Upgrade the shared server and client proxies to 0.8.0, restart both, and refresh client tools. Keep the `[extraction]` extra when upgrading a server that reads PDF/DOCX files. Existing write flags, recipient allowlists and required forms retain their defaults; upgrading does not enable broader access or disable confirmation.
+- Preserve the session-adjacent outbound database and reusable files. Journal migration is automatic and retains receipts and idempotency keys; the Windows repair rebuilds only the affected derived date index. No outbound state downgrade is supported.
+- See the [0.8.0 validation record](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/validation-0.8.md) for release checks and live coverage limits.
 
 ## [0.7.0] - 2026-11-05
 

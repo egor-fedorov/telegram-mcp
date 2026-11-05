@@ -45,7 +45,7 @@ The outbound stage adds `allow_drafts`, `allow_send_messages`,
 `allow_send_files` and `allow_bot_callbacks` (all false), plus
 `allowed_write_chat_ids` and `allowed_upload_directories` (both empty). Upload directories
 also expand `~` and become absolute paths. A recipient needs both ordinary read access
-and an explicit write ID by default. The unreleased `allow_all_write_chats` and
+and an explicit write ID by default. The 0.8.0 `allow_all_write_chats` and
 `allow_one_off_sends` add broader recipient modes. Independent forms use
 `require_send_message_confirmation`, `require_send_file_confirmation`,
 `require_bot_callback_confirmation` and `require_draft_overwrite_confirmation`.

@@ -37,7 +37,7 @@ and run these commands in **PowerShell**, using the version of the selected bund
 (0.6.0 is the first bundled release):
 
 ```powershell
-$version = "0.7.0"
+$version = "0.8.0"
 $config = Join-Path $env:USERPROFILE ".config\telegram-mcp\config.toml"
 uv tool install --python 3.12 "telegram-context-mcp==$version"
 telegram-mcp --config "$config" login
@@ -64,8 +64,8 @@ does not serve this loopback-only Windows extension.
    with the first field in the checksum file:
 
    ```powershell
-   Get-FileHash .\telegram-mcp-0.7.0.mcpb -Algorithm SHA256
-   Get-Content .\telegram-mcp-0.7.0.mcpb.sha256
+   Get-FileHash .\telegram-mcp-0.8.0.mcpb -Algorithm SHA256
+   Get-Content .\telegram-mcp-0.8.0.mcpb.sha256
    ```
 
 2. In Claude Desktop, open **Settings → Desktop app → Manage** beside Extensions
@@ -113,7 +113,7 @@ From a checkout, with uv and Node.js/npx installed:
 uv build --no-sources
 uv run --locked python scripts/build_mcpb.py --validate
 uv run --locked python scripts/build_mcpb.py --check
-uv run --locked python scripts/smoke_mcpb.py dist/mcpb/telegram-mcp-0.7.0.mcpb
+uv run --locked python scripts/smoke_mcpb.py dist/mcpb/telegram-mcp-0.8.0.mcpb
 ```
 
 The builder derives versions from `pyproject.toml`, accepts only the matching pure

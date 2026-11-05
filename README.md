@@ -33,7 +33,7 @@ even with all-chat or folder access. Upgrade every installation.
 
 Version 0.6 adds optional PDF/DOCX text extraction with bounded continuation and source
 references, terminal QR login, a Claude Desktop MCPB bundle, and an optional Agent Skill.
-For document extraction, install `'telegram-context-mcp[extraction]==0.7.0'` in the
+For document extraction, install `'telegram-context-mcp[extraction]==0.8.0'` in the
 session-owning server and enable attachment downloads. See the
 [usage guide](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/usage.md#extract-pdf-or-docx-text)
 for limits and platform coverage.
@@ -49,14 +49,14 @@ client confirmation requirements, recovery and validation limits.
 Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then run:
 
 ```sh
-uv tool install --python 3.12 telegram-context-mcp==0.7.0
+uv tool install --python 3.12 telegram-context-mcp==0.8.0
 telegram-mcp --version
 telegram-mcp login
 telegram-mcp configure
 telegram-mcp status
 ```
 
-These examples target release 0.7.0; check [PyPI](https://pypi.org/project/telegram-context-mcp/)
+These examples target release 0.8.0; check [PyPI](https://pypi.org/project/telegram-context-mcp/)
 for published versions. Use the [source setup](#run-from-source) for unreleased revisions.
 Upgrading from 0.3? Read the [migration guide](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/migration-0.4.md),
 then restart the server and refresh your client's tool schemas.
@@ -78,11 +78,11 @@ The package name is **`telegram-context-mcp`**; the executable is **`telegram-mc
 You can also run a pinned version without installing a persistent command:
 
 ```sh
-uvx --python 3.12 --from telegram-context-mcp==0.7.0 telegram-mcp --version
+uvx --python 3.12 --from telegram-context-mcp==0.8.0 telegram-mcp --version
 ```
 
 The server is listed in the official MCP Registry as
-[`io.github.egor-fedorov/telegram-mcp`](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.egor-fedorov%2Ftelegram-mcp/versions/0.7.0).
+[`io.github.egor-fedorov/telegram-mcp`](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.egor-fedorov%2Ftelegram-mcp/versions/0.8.0).
 The entry launches a local STDIO server through
 `uvx`; it does not supply a hosted Telegram service. Complete `login` and `configure`
 locally before connecting a client. Registry publication starts with version 0.5.0. See the
@@ -129,7 +129,7 @@ do not paste it into client configuration. This is a local, single-user integrat
 
 | Tool | Purpose |
 | --- | --- |
-| `get_status` | Authorization, connection, permitted sources; running server/proxy build identity (unreleased) |
+| `get_status` | Authorization, connection, permitted sources; running server/proxy build identity |
 | `list_folders` | Folders, IDs, order, inclusion/exclusion rules |
 | `list_chats` | Chats filtered by name, type, or folders |
 | `get_chat` | Description and linked discussion group |
@@ -160,14 +160,14 @@ its own capability flag and explicit recipient permission:
 | `create_draft` / `update_draft` | Prepare plain-text drafts with conflict checks and local confirmation policy |
 | `register_file` / `list_files` | Register and discover immutable files for reuse in sends |
 | `send_message` / `send_file` | Send one text or file under local permission/form policy with a durable idempotency key |
-| `get_send_status` | Read a stored send/callback receipt by operation ID or idempotency key (key lookup unreleased) |
-| `resolve_recipient` (unreleased) | Exact recipient metadata and local send/form policy without history |
-| `verify_sent_message` (unreleased) | Reread only this MCP's sent message and compare text/attachment metadata |
-| `list_operations` (unreleased) | Filter and page through this account's MCP journal; excludes manual sends |
+| `get_send_status` | Read a stored send/callback receipt by operation ID or idempotency key |
+| `resolve_recipient` | Exact recipient metadata and local send/form policy without history |
+| `verify_sent_message` | Reread only this MCP's sent message and compare text/attachment metadata |
+| `list_operations` | Filter and page through this account's MCP journal; excludes manual sends |
 | `invoke_button` | Invoke one ordinary callback in a selected private bot dialog under local form policy |
 
-The checkout adds unreleased all-chat/one-off recipient modes, independent form settings
-and outbound inspection/recovery. Published 0.7.0 keeps the original tools, allowlist and confirmations;
+Version 0.8.0 adds all-chat/one-off recipient modes, independent form settings
+and outbound inspection/recovery;
 see [outbound policies](docs/outbound.md#recipient-modes-and-independent-forms).
 
 Two prompts package these tools for monitoring: `watch_digest` turns
@@ -253,6 +253,8 @@ The [0.6 validation record](https://github.com/egor-fedorov/telegram-mcp/blob/ma
 tracks document extraction, packaging and publication.
 The [0.7 validation record](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/validation-0.7.md)
 tracks outbound workflows, authentication-notice omission and release checks.
+The [0.8 validation record](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/validation-0.8.md)
+covers recipient policies, send inspection, Windows storage repair and publication.
 
 The code is [MIT licensed](https://github.com/egor-fedorov/telegram-mcp/blob/main/LICENSE).
 This does not grant rights to Telegram content. Secret chats are unsupported; attachment

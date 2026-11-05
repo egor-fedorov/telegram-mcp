@@ -25,8 +25,8 @@ policy bypasses through the private channel above.
 
 Telegram service notifications (`777000`) deliver Telegram login codes. Every tool
 denies reads from this chat regardless of `allow_all_chats`, folders or allowlists.
-The unreleased outbound stage additionally recognizes common English/Russian auth
-notices in ordinary chats and omits their content and attachments before delivery,
+Version 0.7.0 and later additionally recognize common English/Russian auth
+notices in ordinary chats and omit their content and attachments before delivery,
 new exports and replay of stored batches. It requires authentication context and a
 credential-shaped value. This is a heuristic, not a guarantee against every code,
 language, obfuscation or image. Existing permanent archives are not rewritten.
@@ -37,10 +37,10 @@ selected folder or `allow_all_chats` can permit it. Granting that access can exp
 unrecognized codes to the connected agent. It is not covered by a blanket chat ban.
 
 Outbound capabilities are off by default. The default recipient policy requires write
-IDs and ordinary read access. Unreleased local-only settings also permit one-off confirmed
+IDs and ordinary read access. Local-only settings in 0.8.0 also permit one-off confirmed
 sends to people/private bots or writes to all supported chats. They never grant retrieval
 access; drafts, callbacks and replies retain their existing-content read checks.
-The unreleased `verify_sent_message` grants only an exact outgoing-message reread from
+In 0.8.0, `verify_sent_message` grants only an exact outgoing-message reread from
 the current account's stored successful send receipt. It does not permit arbitrary
 references, surrounding messages, replies or attachment downloads. Authentication-notice
 filtering remains enforced. Local journal queries are account-bound and remain available

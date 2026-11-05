@@ -13,7 +13,7 @@ to start the shared server at login. Each client below launches a STDIO `connect
 profile; no Telegram credentials or HTTP token belong in these client configurations.
 It never starts the HTTP server automatically.
 
-The examples target package version 0.7.0 and Python 3.12 through `uvx`. Check
+The examples target package version 0.8.0 and Python 3.12 through `uvx`. Check
 [PyPI](https://pypi.org/project/telegram-context-mcp/) for published versions. For an
 unreleased revision, use an absolute executable path from a [source checkout](../README.md#run-from-source),
 with `args = ["connect"]` or its JSON equivalent. A persistent `uv tool install`
@@ -39,7 +39,7 @@ Merge this table into your existing `~/.codex/config.toml`, preserving other set
 ```toml
 [mcp_servers.telegram]
 command = "uvx"
-args = ["--python", "3.12", "--from", "telegram-context-mcp==0.7.0", "telegram-mcp", "connect"]
+args = ["--python", "3.12", "--from", "telegram-context-mcp==0.8.0", "telegram-mcp", "connect"]
 startup_timeout_sec = 20
 tool_timeout_sec = 120
 enabled_tools = [
@@ -61,7 +61,7 @@ server in Codex's MCP settings and call `get_status`. See the
 The optional [MCPB extension](mcpb.md) packages this same `connect` proxy and provides
 a configuration-file picker. Initial Windows connection and catalog checks passed;
 see the [Desktop validation record](mcpb.md#windows-report-2026-10-29) for versions and coverage.
-The [0.7.0 release](https://github.com/egor-fedorov/telegram-mcp/releases/tag/v0.7.0) includes the bundle and checksum.
+The [0.8.0 release](https://github.com/egor-fedorov/telegram-mcp/releases/tag/v0.8.0) includes the bundle and checksum.
 The manual setup below remains available.
 
 Open Settings → Developer → Edit Config and merge this `mcpServers` entry into
@@ -72,7 +72,7 @@ Open Settings → Developer → Edit Config and merge this `mcpServers` entry in
   "mcpServers": {
     "telegram": {
       "command": "uvx",
-      "args": ["--python", "3.12", "--from", "telegram-context-mcp==0.7.0", "telegram-mcp", "connect"]
+      "args": ["--python", "3.12", "--from", "telegram-context-mcp==0.8.0", "telegram-mcp", "connect"]
     }
   }
 }
@@ -88,7 +88,7 @@ Use the file opened by the app; the standard locations include
 Add the proxy in user scope so it is available across your projects:
 
 ```sh
-claude mcp add --transport stdio --scope user telegram -- uvx --python 3.12 --from telegram-context-mcp==0.7.0 telegram-mcp connect
+claude mcp add --transport stdio --scope user telegram -- uvx --python 3.12 --from telegram-context-mcp==0.8.0 telegram-mcp connect
 claude mcp get telegram
 ```
 
@@ -102,7 +102,7 @@ the configuration is:
     "telegram": {
       "type": "stdio",
       "command": "uvx",
-      "args": ["--python", "3.12", "--from", "telegram-context-mcp==0.7.0", "telegram-mcp", "connect"]
+      "args": ["--python", "3.12", "--from", "telegram-context-mcp==0.8.0", "telegram-mcp", "connect"]
     }
   }
 }
@@ -122,7 +122,7 @@ Cursor also supports project-local `.cursor/mcp.json`.
   "mcpServers": {
     "telegram": {
       "command": "uvx",
-      "args": ["--python", "3.12", "--from", "telegram-context-mcp==0.7.0", "telegram-mcp", "connect"]
+      "args": ["--python", "3.12", "--from", "telegram-context-mcp==0.8.0", "telegram-mcp", "connect"]
     }
   }
 }
@@ -139,7 +139,7 @@ Use the current guided setup for the selected agent harness:
 2. Choose **Command (stdio)** and enter:
 
    ```sh
-   uvx --python 3.12 --from telegram-context-mcp==0.7.0 telegram-mcp connect
+   uvx --python 3.12 --from telegram-context-mcp==0.8.0 telegram-mcp connect
    ```
 
 3. Name the server `telegram`. For a personal Copilot setup, choose **Global**, then
@@ -162,7 +162,7 @@ use its `servers` format instead. It is distinct from the portable Copilot forma
     "telegram": {
       "type": "stdio",
       "command": "uvx",
-      "args": ["--python", "3.12", "--from", "telegram-context-mcp==0.7.0", "telegram-mcp", "connect"]
+      "args": ["--python", "3.12", "--from", "telegram-context-mcp==0.8.0", "telegram-mcp", "connect"]
     }
   }
 }
@@ -178,7 +178,7 @@ For one client, stop the shared HTTP server and change the final `connect` argum
 to `serve` in that client's configuration. The complete command becomes:
 
 ```sh
-uvx --python 3.12 --from telegram-context-mcp==0.7.0 telegram-mcp serve
+uvx --python 3.12 --from telegram-context-mcp==0.8.0 telegram-mcp serve
 ```
 
 The client now starts and owns a standalone STDIO server. Do not start another
@@ -311,7 +311,7 @@ For a custom configuration, insert `--config` and its absolute path after
 `telegram-mcp` and before `connect` or `serve`:
 
 ```json
-["--python", "3.12", "--from", "telegram-context-mcp==0.7.0", "telegram-mcp", "--config", "/absolute/private/config.toml", "connect"]
+["--python", "3.12", "--from", "telegram-context-mcp==0.8.0", "telegram-mcp", "--config", "/absolute/private/config.toml", "connect"]
 ```
 
 Run the HTTP server with that same configuration. All clients share its account,
@@ -320,9 +320,9 @@ The first `uvx` launch may need to download Python or dependencies. Run the pinn
 `--version` command in a terminal first if the client startup timeout is too short.
 For connection and authorization errors, see [troubleshooting](troubleshooting.md).
 
-### Running build diagnostics (unreleased)
+### Running build diagnostics (0.8+)
 
-The checkout's `get_status` includes `server.version`, `server.build_commit` and
+Starting with 0.8.0, `get_status` includes `server.version`, `server.build_commit` and
 `server.started_at`, plus a separate `connect.version`/`connect.build_commit` when using
 an updated proxy. A direct STDIO/HTTP connection reports `connect=null`. These identify
 the loaded processes, not a newer checkout or package installed after they started.
@@ -341,7 +341,7 @@ server, proxies and client discovery after changing configuration. STDIO, HTTP a
 `get_status.confirmation_supported` reports the current client's advertised form
 capability. Actual UI behavior still requires checking in that client: some clients
 may decline, lack a form UI, or automatically answer. Use explicit human approval when
-a form is required. Published 0.7.0 requires forms for sends and callbacks. The unreleased
+a form is required. Version 0.7.0 requires forms for sends and callbacks. The 0.8.0
 per-action settings permit actions without elicitation only when the server's local
 configuration disables that action's form; one-off grants always require one.
 Inspect the individual settings in `get_status`, not just its aggregate

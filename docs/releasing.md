@@ -5,7 +5,8 @@ The distribution is `telegram-context-mcp`; its executable is `telegram-mcp`, wi
 The commands below use **0.6.1 as an example**, not a published or scheduled release;
 substitute the version being prepared. Published 0.4.0 predates Registry metadata.
 Publishing requires selected-source validation, including any changed download,
-monitoring and retrieval paths. The [0.7.0 validation record](validation-0.7.md) covers
+monitoring and retrieval paths. The [0.8.0 validation record](validation-0.8.md) covers
+recipient policies and outbound inspection; [0.7.0](validation-0.7.md) covers the initial
 outbound workflows and publication; the [0.4 migration guide](migration-0.4.md) applies to upgrades
 from 0.3. Source changes, a release
 tag, a GitHub Release, a published PyPI distribution, and an MCP Registry entry are
