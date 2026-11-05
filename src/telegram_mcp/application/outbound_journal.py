@@ -9,10 +9,11 @@ from typing import Literal
 
 from telegram_mcp.application.outbound_access import OutboundContext, require_confirmation
 from telegram_mcp.application.outbound_ports import Confirm, ConfirmationPending
-from telegram_mcp.domain.models import ToolError
+from telegram_mcp.domain.models import MessageRef, ToolError
 from telegram_mcp.domain.outbound import (
     CallbackReceipt,
     OutboundOperation,
+    RecipientBinding,
     SendReceipt,
     check_key,
     request_digest,
@@ -30,9 +31,12 @@ class OperationJournal:
     async def status(self, operation_id: str) -> Receipt:
         account = await self.context.backend.account_id()
         operation = await self.context.store.lookup_operation(account, operation_id)
-        await self.context.recipient(
-            operation.chat_id, self.capability(operation.kind), bot=operation.kind == "callback"
-        )
+        if not (
+            operation.kind in ("message", "file")
+            and operation.recipient is not None
+            and operation.recipient.grant in ("one_off", "all_chats")
+        ):
+            await self.authorize(operation)
         if (
             operation.receipt.status == "pending"
             and operation.dispatched
@@ -40,6 +44,17 @@ class OperationJournal:
         ):
             return operation.receipt.model_copy(update={"status": "unknown"})
         return operation.receipt
+
+    async def authorize(self, operation: OutboundOperation) -> None:
+        capability = self.capability(operation.kind)
+        if operation.recipient is not None:
+            if operation.recipient.chat_id != operation.chat_id:
+                raise ToolError("WRITE_ACCESS_DENIED", "Stored recipient identity is inconsistent.")
+            await self.context.revalidate(operation.recipient, capability)
+        else:
+            await self.context.recipient(
+                operation.chat_id, capability, bot=operation.kind == "callback", grant="allowlist"
+            )
 
     async def cooldowns(self) -> list[dict[str, object]]:
         account = await self.context.backend.account_id()
@@ -96,10 +111,13 @@ class OperationJournal:
         key: str,
         payload: dict,
         identity: dict,
-        description: str,
+        description: str | Callable[[OutboundOperation], str],
         confirm: Confirm | None,
-        validate: Callable[[], Awaitable[None]],
+        validate: Callable[[OutboundOperation], Awaitable[None]],
         dispatch: Callable[[OutboundOperation], Awaitable[Receipt]],
+        recipient: RecipientBinding | None = None,
+        reply_selector: str | None = None,
+        reply_ref: MessageRef | None = None,
     ) -> Receipt:
         check_key(key)
         digest = self.digest(kind, chat, identity)
@@ -126,6 +144,9 @@ class OperationJournal:
                     chat_id=chat,
                     random_id=secrets.randbits(63) or 1,
                     receipt=receipt,
+                    recipient=recipient,
+                    reply_selector=reply_selector,
+                    reply_ref=reply_ref,
                 )
             )
             replay = self._replay(operation, digest)
@@ -133,7 +154,8 @@ class OperationJournal:
                 return replay
             self._active.add(operation.operation_id)
         try:
-            return await self._execute(operation, description, confirm, validate, dispatch)
+            text = description if isinstance(description, str) else description(operation)
+            return await self._execute(operation, text, confirm, validate, dispatch)
         finally:
             self._active.discard(operation.operation_id)
 
@@ -142,19 +164,27 @@ class OperationJournal:
         operation: OutboundOperation,
         description: str,
         confirm: Confirm | None,
-        validate: Callable[[], Awaitable[None]],
+        validate: Callable[[OutboundOperation], Awaitable[None]],
         dispatch: Callable[[OutboundOperation], Awaitable[Receipt]],
     ) -> Receipt:
         was_dispatched = operation.dispatched
         try:
             scope = "callback" if operation.kind == "callback" else "send"
             await self.context.check_cooldown(operation.account_id, f"{scope}:{operation.chat_id}")
-            if not operation.confirmed:
+            await self.authorize(operation)
+            await validate(operation)
+            if not operation.confirmed and self._requires_confirmation(operation):
                 await require_confirmation(
                     confirm, f"{description}\nOperation: {operation.operation_id}"
                 )
                 operation.confirmed = True
-            await validate()
+            operation.confirmation_source = "form" if operation.confirmed else "config"
+            await self.authorize(operation)
+            await validate(operation)
+            if not operation.confirmed and self._requires_confirmation(operation):
+                raise ToolError(
+                    "CONFIRMATION_REQUIRED", "Confirmation policy changed before dispatch."
+                )
             if await self.context.backend.account_id() != operation.account_id:
                 raise ToolError("ACCOUNT_CHANGED", "Account changed while confirming this action.")
             operation.dispatched = True
@@ -185,6 +215,10 @@ class OperationJournal:
             operation.payload = {}
         await self.context.store.save_operation(operation)
         return operation.receipt
+
+    def _requires_confirmation(self, operation: OutboundOperation) -> bool:
+        grant = operation.recipient.grant if operation.recipient else "allowlist"
+        return self.context.policies().requires_confirmation(operation.kind, grant)
 
     def _failure(
         self, operation: OutboundOperation, error: ToolError, was_dispatched: bool

@@ -283,6 +283,23 @@ OCR remain deferred; other clients' outbound confirmation UIs remain unverified.
 
 ## Later decisions
 
+### Outbound recipient and confirmation policies (unreleased)
+
+Implemented local-only all-chat writes, one-off confirmed sends to people/private bots,
+and independent confirmation settings for text, files, callbacks and user-draft overwrites.
+The original defaults and action flags remain. Read access stays separate; draft listing
+with all-chat writes is bounded to readable sources. New journal entries pin recipient
+identity and permission basis across retries, retain old-record compatibility and distinguish
+form approval from configuration authorization. A stricter confirmation policy applies
+before another dispatch; uncertain callbacks never re-execute. See the
+[outbound guide](docs/outbound.md#recipient-modes-and-independent-forms).
+
+Offline checks cover permission modes, per-action forms, alias reassignment, revocation,
+restart recovery and MCP transports. Local `make check` passes Ruff, ty and 1945 tests
+with two platform-specific skips; skill metadata/API checks and its standalone validator
+also pass. Live validation of these new policies and publication
+remain separate steps; no test-recipient or production configuration is changed by this PR.
+
 [Dependabot PR #84](https://github.com/egor-fedorov/telegram-mcp/pull/84) updates the
 reviewed `pyasn1` lock entry to 0.6.5 for four decoder CPU-exhaustion advisories.
 Source installs and future MCPB builds use the patched lock. Shipping it to bundle

@@ -128,7 +128,10 @@ requested `send_file`; do not turn a draft request into a send. Drafts change Te
 state but do not send.
 
 For `send_message` / `send_file`, keep a stable `idempotency_key` for this exact action.
-Let the MCP client show the confirmation; never answer it for the user. After failure
+Inspect the per-action confirmation flags in `get_status`: a locally disabled form
+does not replace the user's request to act. One-off sends outside the write IDs always
+require a form; all-chat writes do not grant retrieval access. Let the MCP client show
+any required confirmation; never answer it for the user. After failure
 or interruption inspect the `result` receipt from `get_send_status`. Retry an uncertain
 send only with the same key and arguments; do not make up a new key to escape uncertainty
 or a cooldown.

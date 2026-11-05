@@ -41,12 +41,18 @@ The server reads its configuration on startup. Restart it after editing permissi
 port, or paths. A proxy's settings select the endpoint and token; they do not override
 the server's read policy or create per-client permissions.
 
-The unreleased outbound stage adds `allow_drafts`, `allow_send_messages`,
+The outbound stage adds `allow_drafts`, `allow_send_messages`,
 `allow_send_files` and `allow_bot_callbacks` (all false), plus
 `allowed_write_chat_ids` and `allowed_upload_directories` (both empty). Upload directories
 also expand `~` and become absolute paths. A recipient needs both ordinary read access
-and an explicit write ID. These settings are configured locally and preserved by
-`configure`; see [outbound workflows](outbound.md) before enabling them.
+and an explicit write ID by default. The unreleased `allow_all_write_chats` and
+`allow_one_off_sends` add broader recipient modes. Independent forms use
+`require_send_message_confirmation`, `require_send_file_confirmation`,
+`require_bot_callback_confirmation` and `require_draft_overwrite_confirmation`.
+These six policies accept strict TOML booleans, have no environment/CLI/MCP overrides,
+and require a server restart. `configure` preserves them. See
+[outbound workflows](outbound.md#recipient-modes-and-independent-forms) for precedence,
+defaults and the read checks retained by drafts, callbacks and replies.
 
 ## QR login
 

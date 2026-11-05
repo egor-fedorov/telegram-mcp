@@ -25,6 +25,12 @@ class Status(TypedDict):
     allow_send_files: bool
     allow_bot_callbacks: bool
     allowed_write_chat_ids: list[ChatID]
+    allow_all_write_chats: bool
+    allow_one_off_sends: bool
+    require_send_message_confirmation: bool
+    require_send_file_confirmation: bool
+    require_bot_callback_confirmation: bool
+    require_draft_overwrite_confirmation: bool
     confirmation_required: bool
     confirmation_supported: bool | None
     cooldowns: list[Cooldown]

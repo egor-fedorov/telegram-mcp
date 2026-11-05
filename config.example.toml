@@ -17,13 +17,24 @@ allow_public_channel_discovery = false
 # Independently allow one selected attachment up to 20 MiB from a permitted source.
 # Downloads expire after 15 minutes; message reads never download attachment bytes.
 allow_attachment_downloads = false
-# Optional outbound capabilities. The read grant AND explicit write ID are required.
-# No folder or public-channel exception expands write access. Restart after changes.
+# Optional outbound capabilities. All are off by default. Restart after changes.
 allow_drafts = false
 allow_send_messages = false
 allow_send_files = false
 allow_bot_callbacks = false
 allowed_write_chat_ids = []
+# Recipient grants: default is ordinary read access AND an explicit write ID.
+# All-chat writes permit sends without a read grant; drafts/callbacks still need reads.
+allow_all_write_chats = false
+# Outside the write IDs: people/bots only, sends only, always with a confirmation form.
+allow_one_off_sends = false
+# Independent MCP forms. False permits this action without a form; it does not enable it.
+# These policies are local TOML only; there are no MCP, CLI or environment overrides.
+require_send_message_confirmation = true
+require_send_file_confirmation = true
+require_bot_callback_confirmation = true
+# Applies to replacing a user-owned/modified draft; revision checks always remain.
+require_draft_overwrite_confirmation = true
 # Only explicitly selected regular files below these directories may be registered.
 # Symlinks/junctions are rejected. Registered copies survive changes to the original.
 allowed_upload_directories = []

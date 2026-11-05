@@ -8,6 +8,35 @@ from pydantic import SecretStr, ValidationError
 from telegram_mcp.adapters.config import Settings, load_settings, save_settings
 from telegram_mcp.domain.models import ToolError
 
+OUTBOUND_POLICY_DEFAULTS = {
+    "allow_all_write_chats": False,
+    "allow_one_off_sends": False,
+    "require_send_message_confirmation": True,
+    "require_send_file_confirmation": True,
+    "require_bot_callback_confirmation": True,
+    "require_draft_overwrite_confirmation": True,
+}
+
+
+@pytest.mark.parametrize("name,default", OUTBOUND_POLICY_DEFAULTS.items())
+def test_outbound_policy_defaults_and_local_only_roundtrip(tmp_path, monkeypatch, name, default):
+    path = tmp_path / "config.toml"
+    monkeypatch.setenv("TELEGRAM_" + name.upper(), str(not default).lower())
+    assert getattr(load_settings(path), name) is default
+    settings = Settings.model_validate({name: not default})
+    save_settings(settings, path)
+    assert getattr(load_settings(path), name) is not default
+    assert getattr(load_settings(path).write_policy(), name) is not default
+
+
+@pytest.mark.parametrize("name", OUTBOUND_POLICY_DEFAULTS)
+@pytest.mark.parametrize("value", ['"false"', '"true"', "0", "1"])
+def test_outbound_policy_requires_toml_booleans(tmp_path, name, value):
+    path = tmp_path / "config.toml"
+    path.write_text(f"{name} = {value}\n", encoding="utf-8")
+    with pytest.raises(ToolError, match=name):
+        load_settings(path)
+
 
 def test_configuration_roundtrip_and_file_permissions(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

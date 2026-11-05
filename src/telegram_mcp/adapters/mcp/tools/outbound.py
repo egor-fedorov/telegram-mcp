@@ -1,4 +1,4 @@
-"""Explicitly enabled drafts, immutable files, confirmed sends and bot callbacks."""
+"""Locally permitted drafts, immutable files, sends and bot callbacks."""
 
 from typing import Annotated, Any
 
@@ -30,7 +30,7 @@ def register(server: MCPServer[None], service: Service, expose: Expose, gate: To
     async def register_file(
         attachment_id: str | None = None, path: str | None = None
     ) -> Annotated[CallToolResult, dto.RegisteredFile]:
-        """Register immutable file bytes for confirmed sends. Supply attachment_id XOR path.
+        """Register immutable file bytes for permitted sends. Supply attachment_id XOR path.
 
         Local paths must be inside allowed_upload_directories. Telegram sources require
         download permission and are rechecked on reuse. Limits: 20 MiB/file, 100 MiB/32 files.
@@ -55,7 +55,7 @@ def register(server: MCPServer[None], service: Service, expose: Expose, gate: To
     async def list_drafts(
         limit: int = 30, cursor: str | None = None
     ) -> Annotated[CallToolResult, dto.DraftList]:
-        """List drafts across the explicit write allowlist, rechecking ordinary read access."""
+        """List permitted drafts with read checks; all-chat writes scan only readable sources."""
         return wire.encode(await service.list_drafts(limit, cursor))
 
     @server.tool(annotations=WRITE)
@@ -81,7 +81,7 @@ def register(server: MCPServer[None], service: Service, expose: Expose, gate: To
         ctx: Context[None, Any],
         file_id: str | None = None,
     ) -> Annotated[CallToolResult, dto.Draft]:
-        """Replace a draft at its expected revision. Replacing a user draft requires elicitation.
+        """Replace a draft at its expected revision; user overwrites follow local form policy.
 
         Server-owned unchanged drafts need no prompt. Telegram has no atomic compare-and-swap;
         a user edit during the save can still race. Only plain text is supported.
@@ -103,9 +103,10 @@ def register(server: MCPServer[None], service: Service, expose: Expose, gate: To
         ctx: Context[None, Any],
         reply_to: str | None = None,
     ) -> Annotated[CallToolResult, dto.SendReceipt]:
-        """Send one plain-text message after client form confirmation. No automatic previews.
+        """Send one plain-text message under local permission/form policies. No automatic previews.
 
-        Requires send permission and read+write grants. Keep the same idempotency_key and exact
+        Use an ID, username or t.me chat link. One-off grants always require a client form.
+        Other grants use require_send_message_confirmation. Keep the idempotency_key and exact
         arguments after a failure/unknown outcome; a new key may send twice. Maximum 4096 UTF-16
         units. No splitting, paid sends, scheduling or automatic draft clearing.
         """
@@ -126,9 +127,10 @@ def register(server: MCPServer[None], service: Service, expose: Expose, gate: To
         ctx: Context[None, Any],
         reply_to: str | None = None,
     ) -> Annotated[CallToolResult, dto.SendReceipt]:
-        """Send one registered file plus plain caption after client form confirmation.
+        """Send one registered file plus plain caption under local permission/form policies.
 
-        Requires allow_send_files and read+write grants. Caption maximum 1024 UTF-16 units.
+        Requires allow_send_files and a recipient grant. Caption maximum 1024 UTF-16 units.
+        Uses require_send_file_confirmation; one-off grants always require a client form.
         Reuse the same key and arguments to recover an uncertain send. No bulk sending.
         """
         return wire.encode(
@@ -161,9 +163,10 @@ def register(server: MCPServer[None], service: Service, expose: Expose, gate: To
         idempotency_key: str,
         ctx: Context[None, Any],
     ) -> Annotated[CallToolResult, dto.CallbackReceipt]:
-        """Invoke one ordinary callback in an allowed private bot dialog after form confirmation.
+        """Invoke one ordinary callback in a permitted private bot dialog under local form policy.
 
         Requires allow_bot_callbacks, read+write grants and the exact current message revision.
+        Forms follow require_bot_callback_confirmation in the server's local configuration.
         No URL/auth/payment/WebApp/2FA/contact/location actions. Duplicate keys replay receipts;
         unknown callbacks are never retried. Observed same-peer message refs are bounded to
         five seconds/20 items, incomplete, and are not proof the callback caused them.

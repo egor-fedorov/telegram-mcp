@@ -157,11 +157,15 @@ its own capability flag and explicit recipient permission:
 | Tool | Purpose |
 | --- | --- |
 | `get_draft` / `list_drafts` | Read native drafts and revisions for permitted recipients |
-| `create_draft` / `update_draft` | Prepare plain-text drafts with conflict checks; replacing a user draft requires confirmation |
+| `create_draft` / `update_draft` | Prepare plain-text drafts with conflict checks and local confirmation policy |
 | `register_file` / `list_files` | Register and discover immutable files for reuse in sends |
-| `send_message` / `send_file` | Confirm one text or file send with a durable idempotency key |
+| `send_message` / `send_file` | Send one text or file under local permission/form policy with a durable idempotency key |
 | `get_send_status` | Read a stored send or callback receipt without dispatching |
-| `invoke_button` | Confirm one ordinary callback in a selected private bot dialog |
+| `invoke_button` | Invoke one ordinary callback in a selected private bot dialog under local form policy |
+
+The checkout adds unreleased all-chat/one-off recipient modes and independent form
+settings. Published 0.7.0 keeps the original allowlist and required confirmations;
+see [outbound policies](docs/outbound.md#recipient-modes-and-independent-forms).
 
 Two prompts package these tools for monitoring: `watch_digest` turns
 a named watch into a source-linked digest, saving each batch before acknowledging it;

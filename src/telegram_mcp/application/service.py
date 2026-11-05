@@ -346,6 +346,7 @@ class Service:
     async def get_status(self) -> dict[str, object]:
         status = await self._runtime.status()
         policy = self._policies.current()
+        writes = self._write_policy()
         extraction_available = self._extractions.parser.available
         cooldowns = status.get("cooldowns", [])
         if self._outbound is not None and self.writes_enabled and status.get("authorized") is True:
@@ -362,7 +363,13 @@ class Service:
             "allow_send_files": self._write_policy().allow_send_files,
             "allow_bot_callbacks": self._write_policy().allow_bot_callbacks,
             "allowed_write_chat_ids": list(self._write_policy().allowed_write_chat_ids),
-            "confirmation_required": True,
+            "allow_all_write_chats": self._write_policy().allow_all_write_chats,
+            "allow_one_off_sends": self._write_policy().allow_one_off_sends,
+            "require_send_message_confirmation": writes.require_send_message_confirmation,
+            "require_send_file_confirmation": writes.require_send_file_confirmation,
+            "require_bot_callback_confirmation": writes.require_bot_callback_confirmation,
+            "require_draft_overwrite_confirmation": writes.require_draft_overwrite_confirmation,
+            "confirmation_required": self._write_policy().confirmation_required,
             "confirmation_supported": None,
             "cooldowns": cooldowns,
             "allow_all_chats": policy.allow_all_chats,

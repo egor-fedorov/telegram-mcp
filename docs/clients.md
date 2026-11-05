@@ -327,9 +327,13 @@ server, proxies and client discovery after changing configuration. STDIO, HTTP a
 `connect` support legacy form elicitation and modern MCP multi-round confirmation.
 `get_status.confirmation_supported` reports the current client's advertised form
 capability. Actual UI behavior still requires checking in that client: some clients
-may decline, lack a form UI, or automatically answer. Use explicit human approval.
-A client without form support cannot send or invoke callbacks. Ordinary read tools
-remain usable. See [outbound workflows](outbound.md) for permissions and recovery.
+may decline, lack a form UI, or automatically answer. Use explicit human approval when
+a form is required. Published 0.7.0 requires forms for sends and callbacks. The unreleased
+per-action settings permit actions without elicitation only when the server's local
+configuration disables that action's form; one-off grants always require one.
+Inspect the individual settings in `get_status`, not just its aggregate
+`confirmation_required`. Ordinary read tools remain usable. See
+[outbound workflows](outbound.md) for permissions and recovery.
 
 Selected-source checks in Codex confirmed accepted/refused forms and one selected bot
 callback. Other clients' outbound confirmation UIs remain unverified; successful read

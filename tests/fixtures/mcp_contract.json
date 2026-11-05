@@ -3236,6 +3236,9 @@
           "allow_all_chats": {
             "type": "boolean"
           },
+          "allow_all_write_chats": {
+            "type": "boolean"
+          },
           "allow_attachment_downloads": {
             "type": "boolean"
           },
@@ -3243,6 +3246,9 @@
             "type": "boolean"
           },
           "allow_drafts": {
+            "type": "boolean"
+          },
+          "allow_one_off_sends": {
             "type": "boolean"
           },
           "allow_public_channel_discovery": {
@@ -3342,6 +3348,18 @@
             ],
             "type": "string"
           },
+          "require_bot_callback_confirmation": {
+            "type": "boolean"
+          },
+          "require_draft_overwrite_confirmation": {
+            "type": "boolean"
+          },
+          "require_send_file_confirmation": {
+            "type": "boolean"
+          },
+          "require_send_message_confirmation": {
+            "type": "boolean"
+          },
           "text_extraction_available": {
             "type": "boolean"
           },
@@ -3365,6 +3383,12 @@
           "allow_send_files",
           "allow_bot_callbacks",
           "allowed_write_chat_ids",
+          "allow_all_write_chats",
+          "allow_one_off_sends",
+          "require_send_message_confirmation",
+          "require_send_file_confirmation",
+          "require_bot_callback_confirmation",
+          "require_draft_overwrite_confirmation",
           "confirmation_required",
           "confirmation_supported",
           "cooldowns",

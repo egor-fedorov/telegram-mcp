@@ -40,17 +40,16 @@ class CallbackService:
     ) -> CallbackReceipt:
         self.context.enabled("allow_bot_callbacks")
         ref = await self.messages.resolve_message(message_ref)
-        chat = await self.context.recipient(ref.chat_id, "allow_bot_callbacks", bot=True)
+        binding = await self.context.bind(ref.chat_id, "allow_bot_callbacks", bot=True)
         account = await self.context.backend.account_id()
         identity = {"ref": ref.key, "button_id": button_id, "revision": revision}
-        replay = await self.journal.replay(account, chat.id, "callback", key, identity)
+        replay = await self.journal.replay(account, binding.chat_id, "callback", key, identity)
         if replay is not None:
             assert isinstance(replay, CallbackReceipt)
             return replay
         button = await self._button(ref, button_id, revision)
 
-        async def validate() -> None:
-            await self.context.recipient(ref.chat_id, "allow_bot_callbacks", bot=True)
+        async def validate(operation: OutboundOperation) -> None:
             await self._button(ref, button_id, revision)
 
         async def dispatch(operation: OutboundOperation) -> CallbackReceipt:
@@ -58,16 +57,18 @@ class CallbackService:
 
         result = await self.journal.run(
             account=account,
-            chat=chat.id,
+            chat=binding.chat_id,
             kind="callback",
             key=key,
             payload=identity,
             identity=identity,
-            description=f"Invoke bot button {button.text!r} in {chat.title} ({chat.id}), "
+            description=f"Invoke bot button {button.text!r} in {binding.title!r} "
+            f"({binding.chat_id}), "
             f"message {ref.key}? The bot may change remote state.",
             confirm=confirm,
             validate=validate,
             dispatch=dispatch,
+            recipient=binding,
         )
         assert isinstance(result, CallbackReceipt)
         return result

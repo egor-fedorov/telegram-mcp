@@ -153,6 +153,22 @@ async def test_interrupted_configure_does_not_save_or_mutate_settings(
     assert path.read_bytes() == original and backend.closed
 
 
+async def test_configure_preserves_local_outbound_policy(tmp_path, monkeypatch):
+    settings = Settings(
+        allow_all_write_chats=True,
+        allow_one_off_sends=True,
+        require_send_message_confirmation=False,
+        require_send_file_confirmation=False,
+        require_bot_callback_confirmation=False,
+        require_draft_overwrite_confirmation=False,
+    )
+    monkeypatch.setattr("telegram_mcp.adapters.cli.sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    path = tmp_path / "config.toml"
+    await configure(settings, path, lambda _: FakeBackend())
+    assert load_settings(path).write_policy() == settings.write_policy()
+
+
 @pytest.mark.parametrize(
     ("replies", "field"),
     [(["invalid"], "allowed_folder_ids"), (["", "invalid"], "allowed_chat_ids")],

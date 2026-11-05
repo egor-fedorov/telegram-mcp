@@ -32,6 +32,9 @@ class DraftService:
         if not 1 <= limit <= 100:
             raise ToolError("INVALID_ARGUMENT", "limit must be between 1 and 100.")
         ids = sorted(set(self.context.policies().allowed_write_chat_ids))
+        if self.context.policies().allow_all_write_chats:
+            context = await self.context.access.load()
+            ids = sorted(context.allowed)
         if cursor is not None:
             if cursor not in ids:
                 raise ToolError(
@@ -68,13 +71,16 @@ class DraftService:
         current = await self._get(account, chat.id)
         await self.context.check_cooldown(account, f"draft:{chat.id}")
         self._check(current, revision)
-        if revision is not None and current.exists and not current.owned:
+        overwrite = revision is not None and current.exists and not current.owned
+        approved = False
+        if overwrite and self.context.policies().require_draft_overwrite_confirmation:
             await require_confirmation(
                 confirm,
                 f"Replace your Telegram draft in {chat.title} ({chat.id})?\n"
                 f"Account: {account}; current revision: {current.revision}\n"
                 f"New text:\n{text}",
             )
+            approved = True
         async with self._locks.setdefault(chat.id, asyncio.Lock()):
             await self.context.recipient(chat.id, "allow_drafts")
             if await self.context.backend.account_id() != account:
@@ -83,6 +89,14 @@ class DraftService:
             if latest.revision != current.revision:
                 raise ToolError(
                     "DRAFT_CONFLICT", "The draft changed; read it again before replacing it."
+                )
+            if (
+                overwrite
+                and not approved
+                and self.context.policies().require_draft_overwrite_confirmation
+            ):
+                raise ToolError(
+                    "CONFIRMATION_REQUIRED", "Confirmation policy changed before saving."
                 )
             # Retain the previous snapshot before dispatch, but do not claim ownership yet.
             await self.context.store.save_draft(account, latest, latest)

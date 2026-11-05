@@ -6,6 +6,12 @@ A version entry describes its target artifact. Verify publication on [PyPI](http
 
 ## [Unreleased]
 
+### Outbound policies
+
+- Add local-only all-chat write access and one-off confirmed sends to new people or private bots. Keep action flags separate and leave recipient lists unchanged; retrieval permissions, service-notification exclusions and unsupported-action checks remain enforced.
+- Add independent strict TOML switches for message, file, callback and user-draft overwrite forms. Defaults preserve required confirmations; one-off grants always require a form. Report exact policies and aggregate confirmation requirements in `get_status`.
+- Bind new send operations to their original numeric recipient across username reassignment, restarts and payload cleanup. Persist the permission basis and distinguish configuration authorization from form approval; stricter confirmation settings require approval before an unapproved retry. One-off/all-chat send receipts remain readable after permission revocation without permitting another send.
+
 ### Security
 
 - Update locked `pyasn1` from 0.6.4 to 0.6.5 for four ASN.1 decoder CPU-exhaustion advisories (GHSA-fm9c-5rcf-2q5p, GHSA-9m75-vc3g-4x39, GHSA-2qm8-x737-gmw5 and GHSA-mm57-4v3p-rchx). Source installs using the updated lock and future MCPB builds use the patched dependency. The published 0.7.0 bundle remains unchanged; distributing the corrected bundle requires a new release.

@@ -20,6 +20,44 @@ from tests.support.outbound import outbound_fixture
 
 @pytest.mark.parametrize("mode", ["auto", "legacy"])
 @pytest.mark.parametrize("schema_mode", ["compact", "full"])
+async def test_one_off_form_remains_bound_when_username_and_title_change(
+    tmp_path, mode, schema_mode
+):
+    async with outbound_fixture(tmp_path) as env:
+        env.settings.allowed_chat_ids = env.settings.allowed_write_chat_ids = []
+        env.settings.allow_one_off_sends = True
+        env.settings.require_send_message_confirmation = False
+        env.backend.chats[0].username = "recruiter"
+        forms = []
+
+        async def confirm(context, params):
+            forms.append(params.message)
+            env.backend.chats[0].username = "renamed"
+            env.backend.chats[0].title = "Renamed person"
+            return ElicitResult(action="accept", content={"approve": True})
+
+        server = create_server(env.service, owns_service=False, schema_mode=schema_mode)
+        async with Client(server, mode=mode, elicitation_callback=confirm) as client:
+            status = (await client.call_tool("get_status", {})).structured_content
+            assert status["allow_one_off_sends"] is True
+            assert status["require_send_message_confirmation"] is False
+            assert status["confirmation_required"] is True
+            result = await client.call_tool(
+                "send_message",
+                {
+                    "chat_ref": "@recruiter",
+                    "text": "Exact text",
+                    "idempotency_key": "one-off",
+                },
+            )
+        assert not result.is_error and result.structured_content["status"] == "sent"
+        assert len(forms) == 1 and "One-time permission" in forms[0]
+        assert "'Recipient' (1)" in forms[0] and "Username: 'recruiter'" in forms[0]
+        assert len(env.telegram.send_calls) == 1
+
+
+@pytest.mark.parametrize("mode", ["auto", "legacy"])
+@pytest.mark.parametrize("schema_mode", ["compact", "full"])
 @pytest.mark.parametrize("kind", ["message", "file", "callback"])
 @pytest.mark.parametrize("state", ["pending", "success", "failed", "unknown"])
 async def test_get_send_status_returns_persisted_receipt_without_dispatch(

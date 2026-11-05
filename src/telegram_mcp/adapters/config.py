@@ -36,6 +36,12 @@ class Settings(Model):
     allow_send_files: bool = False
     allow_bot_callbacks: bool = False
     allowed_write_chat_ids: list[str] = Field(default_factory=list)
+    allow_all_write_chats: bool = Field(default=False, strict=True)
+    allow_one_off_sends: bool = Field(default=False, strict=True)
+    require_send_message_confirmation: bool = Field(default=True, strict=True)
+    require_send_file_confirmation: bool = Field(default=True, strict=True)
+    require_bot_callback_confirmation: bool = Field(default=True, strict=True)
+    require_draft_overwrite_confirmation: bool = Field(default=True, strict=True)
     allowed_upload_directories: list[Path] = Field(default_factory=list)
     archive_directory: Path | None = None
     mcp_schema_mode: Literal["compact", "full"] = "compact"
@@ -83,6 +89,12 @@ class Settings(Model):
             allow_send_files=self.allow_send_files,
             allow_bot_callbacks=self.allow_bot_callbacks,
             allowed_write_chat_ids=tuple(self.allowed_write_chat_ids),
+            allow_all_write_chats=self.allow_all_write_chats,
+            allow_one_off_sends=self.allow_one_off_sends,
+            require_send_message_confirmation=self.require_send_message_confirmation,
+            require_send_file_confirmation=self.require_send_file_confirmation,
+            require_bot_callback_confirmation=self.require_bot_callback_confirmation,
+            require_draft_overwrite_confirmation=self.require_draft_overwrite_confirmation,
         )
 
     def credentials(self) -> tuple[int, str]:

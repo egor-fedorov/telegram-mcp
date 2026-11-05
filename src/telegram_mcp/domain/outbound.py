@@ -7,9 +7,10 @@ from typing import Literal
 
 from pydantic import AwareDatetime, Field
 
-from telegram_mcp.domain.models import Issue, MessageRef, Model, ToolError
+from telegram_mcp.domain.models import ChatType, Issue, MessageRef, Model, ToolError
 
 OperationState = Literal["pending", "sent", "failed", "unknown"]
+WriteGrant = Literal["allowlist", "one_off", "all_chats"]
 
 
 @dataclass(frozen=True)
@@ -19,6 +20,33 @@ class WritePolicy:
     allow_send_files: bool = False
     allow_bot_callbacks: bool = False
     allowed_write_chat_ids: tuple[str, ...] = ()
+    allow_all_write_chats: bool = False
+    allow_one_off_sends: bool = False
+    require_send_message_confirmation: bool = True
+    require_send_file_confirmation: bool = True
+    require_bot_callback_confirmation: bool = True
+    require_draft_overwrite_confirmation: bool = True
+
+    def requires_confirmation(self, kind: str, grant: WriteGrant = "allowlist") -> bool:
+        if grant == "one_off":
+            return True
+        return {
+            "message": self.require_send_message_confirmation,
+            "file": self.require_send_file_confirmation,
+            "callback": self.require_bot_callback_confirmation,
+        }[kind]
+
+    @property
+    def confirmation_required(self) -> bool:
+        one_off = self.allow_one_off_sends and not self.allow_all_write_chats
+        return any(
+            (
+                self.allow_send_messages and (self.require_send_message_confirmation or one_off),
+                self.allow_send_files and (self.require_send_file_confirmation or one_off),
+                self.allow_bot_callbacks and self.require_bot_callback_confirmation,
+                self.allow_drafts and self.require_draft_overwrite_confirmation,
+            )
+        )
 
     @property
     def enabled(self) -> bool:
@@ -95,6 +123,17 @@ class CallbackReceipt(Model):
     error: Issue | None = None
 
 
+class RecipientBinding(Model):
+    """The selected peer and permission basis survive aliases and payload cleanup."""
+
+    chat_id: str
+    title: str
+    type: ChatType
+    username: str | None = None
+    selector: str
+    grant: WriteGrant
+
+
 class OutboundOperation(Model):
     operation_id: str
     account_id: str
@@ -105,6 +144,10 @@ class OutboundOperation(Model):
     chat_id: str
     random_id: int
     confirmed: bool = False
+    confirmation_source: Literal["form", "config"] | None = None
+    recipient: RecipientBinding | None = None
+    reply_selector: str | None = None
+    reply_ref: MessageRef | None = None
     dispatched: bool = False
     receipt: SendReceipt | CallbackReceipt
 

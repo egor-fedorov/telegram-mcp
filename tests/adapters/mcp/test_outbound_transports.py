@@ -31,7 +31,8 @@ async def exercise(client, expected):
 
 
 @pytest.mark.parametrize("mode", ["auto", "legacy"])
-async def test_real_stdio_confirmation(tmp_path, mode):
+@pytest.mark.parametrize("required", [False, True])
+async def test_real_stdio_confirmation(tmp_path, mode, required):
     forms = []
 
     async def confirm(context, params):
@@ -42,18 +43,26 @@ async def test_real_stdio_confirmation(tmp_path, mode):
         "from pathlib import Path; import sys; "
         "from tests.support.outbound import outbound_service; "
         "from telegram_mcp.adapters.mcp import create_server; "
-        "create_server(outbound_service(Path(sys.argv[1])).service).run()"
+        "env = outbound_service(Path(sys.argv[1])); "
+        "env.settings.require_send_message_confirmation = sys.argv[2] == 'true'; "
+        "env.settings.allow_all_write_chats = True; env.settings.allowed_write_chat_ids = []; "
+        "create_server(env.service).run()"
     )
-    parameters = StdioServerParameters(command=sys.executable, args=["-c", script, str(tmp_path)])
-    async with Client(parameters, mode=mode, elicitation_callback=confirm) as client:
+    parameters = StdioServerParameters(
+        command=sys.executable, args=["-c", script, str(tmp_path), str(required).lower()]
+    )
+    async with Client(
+        parameters, mode=mode, elicitation_callback=confirm if required else None
+    ) as client:
         await exercise(client, "sent")
-        assert len(forms) == 1
+        assert len(forms) == int(required)
 
 
 @pytest.mark.parametrize("mode", ["auto", "legacy"])
 @pytest.mark.parametrize("transport", ["http", "connect"])
 @pytest.mark.parametrize("supported", [False, True])
-async def test_http_and_connect_confirmation(tmp_path, mode, transport, supported):
+@pytest.mark.parametrize("required", [False, True])
+async def test_http_and_connect_confirmation(tmp_path, mode, transport, supported, required):
     telegram = FakeOutbound()
     forms = []
 
@@ -63,6 +72,10 @@ async def test_http_and_connect_confirmation(tmp_path, mode, transport, supporte
 
     callback = confirm if supported else None
     async with running_server(tmp_path, outbound_backend=telegram) as (settings, _):
+        settings.require_send_message_confirmation = required
+        settings.allow_all_write_chats = True
+        settings.allowed_chat_ids = settings.allowed_write_chat_ids = []
+        expected = "sent" if supported or not required else "failed"
         if transport == "http":
             async with authorized_http(settings) as http:
                 async with Client(
@@ -71,7 +84,7 @@ async def test_http_and_connect_confirmation(tmp_path, mode, transport, supporte
                     elicitation_callback=callback,
                     read_timeout_seconds=20,
                 ) as client:
-                    await exercise(client, "sent" if supported else "failed")
+                    await exercise(client, expected)
         else:
             config = tmp_path / "config.toml"
             save_settings(settings, config)
@@ -82,8 +95,9 @@ async def test_http_and_connect_confirmation(tmp_path, mode, transport, supporte
             async with Client(
                 params, mode=mode, elicitation_callback=callback, read_timeout_seconds=20
             ) as client:
-                await exercise(client, "sent" if supported else "failed")
-        assert len(forms) == int(supported) and len(telegram.send_calls) == int(supported)
+                await exercise(client, expected)
+        assert len(forms) == int(supported and required)
+        assert len(telegram.send_calls) == int(expected == "sent")
 
 
 async def test_two_http_clients_cannot_receive_each_others_confirmation(tmp_path):
