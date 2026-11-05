@@ -37,7 +37,7 @@ class OutboundStore:
                 data BLOB NOT NULL);
             CREATE TABLE IF NOT EXISTS operations (
                 id TEXT PRIMARY KEY, account TEXT NOT NULL, key TEXT NOT NULL,
-                value TEXT NOT NULL, chat_id TEXT, kind TEXT, status TEXT, created_at_us INTEGER,
+                value TEXT NOT NULL, chat_id TEXT, kind TEXT, status TEXT, created_at REAL,
                 dispatched INTEGER, UNIQUE(account, key));
             CREATE TABLE IF NOT EXISTS drafts (
                 account TEXT NOT NULL, chat TEXT NOT NULL, value TEXT NOT NULL,
@@ -202,7 +202,7 @@ class OutboundStore:
                 )
             db.execute(
                 "INSERT INTO operations (id, account, key, value, chat_id, kind, status, "
-                "created_at_us, dispatched) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "created_at, dispatched) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     operation.operation_id,
                     operation.account_id,
@@ -218,7 +218,7 @@ class OutboundStore:
     async def save_operation(self, operation: OutboundOperation) -> None:
         await self._run(
             lambda db: db.execute(
-                "UPDATE operations SET value=?, chat_id=?, kind=?, status=?, created_at_us=?, "
+                "UPDATE operations SET value=?, chat_id=?, kind=?, status=?, created_at=?, "
                 "dispatched=? WHERE id=? AND account=?",
                 (
                     operation.model_dump_json(),

@@ -14,7 +14,7 @@ A version entry describes its target artifact. Verify publication on [PyPI](http
 
 ### Outbound inspection and diagnostics
 
-- Store journal date indexes as exact integer UTC microseconds. Migrate the earlier REAL index from authoritative JSON without changing receipts or idempotency keys, including when its entries are inconsistent. This addresses Windows failures reporting `OUTBOUND_STORAGE_UNAVAILABLE` with an underlying malformed date index.
+- Open private SQLite files in binary mode on Windows so preparation cannot strip a trailing Ctrl+Z byte and corrupt data. Rebuild the affected derived journal date index while preserving operation JSON, receipts and idempotency keys. This fixes intermittent `OUTBOUND_STORAGE_UNAVAILABLE` failures during receipt updates.
 - Add recipient metadata previews without history, exact sent-message verification and account-bound operation recovery by key or paginated journal filters. Preserve original receipts separately from fresh read-back and text/attachment metadata comparisons; verification grants no access to surrounding history or attachment bytes. Migrate journal indexes without discarding legacy records or inventing unknown dates.
 - Report the running server and `connect` versions separately in `get_status`, with the server start time and packaged build commit when known. Freeze process identity across in-place updates and preserve source identity when rebuilding a wheel from an sdist.
 

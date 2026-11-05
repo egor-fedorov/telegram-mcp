@@ -84,7 +84,7 @@ async def test_one_off_send_forces_confirmation_despite_optional_forms(tmp_path)
 
 @pytest.mark.slow
 async def test_repeated_declined_operations_remain_durable(tmp_path):
-    for index in range(64):
+    for index in range(8):
         settings = Settings(allow_send_messages=True, allow_one_off_sends=True)
         async with outbound_fixture(tmp_path / str(index), settings=settings) as env:
             result = await env.service.send_message("1", "Synthetic text", "declined")

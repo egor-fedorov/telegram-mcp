@@ -2,11 +2,9 @@
 
 import json
 import sqlite3
-from datetime import UTC, datetime, timedelta, timezone
+from contextlib import closing
+from datetime import UTC, datetime
 
-import pytest
-
-from telegram_mcp.adapters.outbound_queries import timestamp_microseconds
 from telegram_mcp.adapters.outbound_store import OutboundStore
 from telegram_mcp.application.outbound_ports import OperationFilter
 from telegram_mcp.domain.outbound import OutboundOperation, SendReceipt
@@ -79,20 +77,7 @@ async def test_legacy_journal_migration_preserves_values_and_unknown_dates(tmp_p
         await store.close()
 
 
-@pytest.mark.parametrize(
-    "date,expected",
-    [
-        (datetime(1970, 1, 1, tzinfo=UTC), 0),
-        (datetime(1969, 12, 31, 23, 59, 59, 999999, tzinfo=UTC), -1),
-        (datetime(2026, 11, 5, 15, 32, 16, 565436, tzinfo=UTC), 1793892736565436),
-        (datetime(1970, 1, 1, 3, 0, 0, 1, tzinfo=timezone(timedelta(hours=3))), 1),
-    ],
-)
-def test_date_index_uses_exact_integer_microseconds(date, expected):
-    assert timestamp_microseconds(date) == expected
-
-
-async def test_real_date_index_migration_repairs_derived_data_without_rewriting_records(tmp_path):
+async def test_truncated_legacy_date_index_is_rebuilt_without_changing_receipts(tmp_path):
     session = tmp_path / "account.session"
     path = session.with_suffix(".outbound.sqlite3")
     date = datetime(2026, 11, 5, 15, 32, 16, 565436, tzinfo=UTC)
@@ -109,7 +94,7 @@ async def test_real_date_index_migration_repairs_derived_data_without_rewriting_
         receipt=SendReceipt(operation_id="original", status="pending", chat_id="1"),
     )
     original = operation.model_dump_json()
-    with sqlite3.connect(path) as db:
+    with closing(sqlite3.connect(path)) as db, db:
         db.execute(
             "CREATE TABLE operations (id TEXT PRIMARY KEY, account TEXT, key TEXT, value TEXT, "
             "chat_id TEXT, kind TEXT, status TEXT, created_at REAL, dispatched INTEGER, "
@@ -129,45 +114,23 @@ async def test_real_date_index_migration_repairs_derived_data_without_rewriting_
                 0,
             ),
         )
-        # Deliberately create a stale index in this synthetic database. Its table
-        # and JSON remain intact, matching the Windows integrity-check failure.
-        db.execute("CREATE INDEX operations_date ON operations(account, created_at + 1)")
-        db.execute("PRAGMA writable_schema=ON")
-        db.execute(
-            "UPDATE sqlite_master SET sql=? WHERE name='operations_date'",
-            ("CREATE INDEX operations_date ON operations(account, created_at)",),
-        )
-        db.execute("PRAGMA writable_schema=OFF")
-    with sqlite3.connect(path) as db:
+        db.execute("CREATE INDEX operations_date ON operations(account, created_at)")
+    content = path.read_bytes()
+    assert content.endswith(b"\x1a")
+    path.write_bytes(content[:-1])  # Reproduce the Windows CRT's text-mode truncation.
+    with closing(sqlite3.connect(path)) as db:
         assert db.execute("PRAGMA integrity_check").fetchall() != [("ok",)]
     store = OutboundStore(session)
     try:
         batch = await store.operations(
-            "account",
-            OperationFilter(date_from=date, date_to=date + timedelta(microseconds=1)),
-            before=None,
-            limit=10,
-            active_ids=(),
+            "account", OperationFilter(date_from=date), before=None, limit=10, active_ids=()
         )
         assert batch.operations == [operation]
-        with sqlite3.connect(path) as db:
+        with closing(sqlite3.connect(path)) as db:
             assert db.execute("PRAGMA integrity_check").fetchall() == [("ok",)]
             assert db.execute("SELECT value FROM operations").fetchone()[0] == original
-            assert db.execute(
-                "SELECT created_at_us, typeof(created_at_us) FROM operations"
-            ).fetchone() == (1793892736565436, "integer")
-            assert not db.execute(
-                "SELECT 1 FROM sqlite_master WHERE name='operations_date'"
-            ).fetchall()
         operation.receipt.status = "failed"
         await store.save_operation(operation)
         assert await store.operation("account", "key") == operation
-        assert not (
-            await store.operations(
-                "account", OperationFilter(date_to=date), before=None, limit=10, active_ids=()
-            )
-        ).operations
-        with sqlite3.connect(path) as db:
-            assert db.execute("PRAGMA integrity_check").fetchall() == [("ok",)]
     finally:
         await store.close()

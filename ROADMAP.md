@@ -299,12 +299,13 @@ publication remain pending; no real messages were sent for these checks.
 Local `make check` passes Ruff, ty and 2003 tests with two platform-specific skips;
 the updated Agent Skill also passes its standalone validator.
 
-Follow-up Windows diagnosis reproduced a malformed `operations_date` REAL index during
-the first receipt update. Journal filtering now uses exact integer UTC microseconds;
-an atomic migration drops the old derived index and rebuilds from preserved operation JSON.
-Regression coverage includes first writes across fresh databases, microsecond boundaries
-and an intentionally inconsistent legacy date index. Production error redaction remains.
-Local `make check` passes Ruff, ty and 2009 tests with two platform-specific skips.
+Follow-up Windows diagnosis traced malformed journal indexes to a text-mode `os.open`:
+the CRT removed a trailing Ctrl+Z byte before SQLite opened the file. Private databases
+now use binary mode; the affected derived date index is rebuilt from preserved table data.
+Regression coverage verifies byte-for-byte preservation, native Windows truncation without
+a write, and recovery of a deterministically truncated journal index. Production error
+redaction and journal timestamp formats remain unchanged.
+Local `make check` passes Ruff, ty and 2006 tests with three platform-specific skips.
 
 ### Outbound recipient and confirmation policies (unreleased)
 

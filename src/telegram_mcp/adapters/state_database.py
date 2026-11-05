@@ -13,7 +13,9 @@ def open_private_database(path: Path) -> sqlite3.Connection:
         candidate = Path(str(path) + suffix)
         if candidate.is_symlink() or candidate.is_junction():
             raise OSError("Redirected database file")
-    fd = os.open(path, os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    # Windows text mode can remove a trailing CTRL+Z merely by opening the file.
+    flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+    fd = os.open(path, flags, 0o600)
     os.close(fd)
     protect_private_path(path)
     return sqlite3.connect(path, timeout=1)
