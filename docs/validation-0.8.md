@@ -39,7 +39,9 @@ The full serialized 30-message response is 32,327 bytes for 10,260 source-text c
 | Default read-only | 23 | 28,826 bytes | 125,722 bytes |
 | Outbound enabled | 36 | 38,297 bytes | 152,078 bytes |
 
-The main CI run [42061821159](https://github.com/egor-fedorov/telegram-mcp/actions/runs/42061821159) passed all supported OS/Python combinations, package builds and the aggregate `checks` job without a rerun. Release-candidate artifact checks and publication verification are recorded below when complete.
+The main CI run [42061821159](https://github.com/egor-fedorov/telegram-mcp/actions/runs/42061821159) passed all supported OS/Python combinations, package builds and the aggregate `checks` job without a rerun. On clean candidate commit `1e306408a217c916ede7746ae59bd4e1e8142a8a`, isolated wheel and sdist installations passed Registry launch, CLI, STDIO, HTTP and proxy checks in compact/full schema modes, plus extraction-extra parser/worker probes. Both archives embed that exact build commit. MCPB validation passed the official manifest validator, a byte-identical rebuild and an isolated installation/proxy smoke test. Its lock contains `pyasn1==0.6.5`. The release workflow will rebuild from the final tagged commit.
+
+Release notes were checked for unwrapped paragraphs/list items. Disposable live state, probe scripts and the synthetic local file were removed. The normal shared service was confirmed active, authorized, connected and read-only after restoration.
 
 ## Coverage limits
 
