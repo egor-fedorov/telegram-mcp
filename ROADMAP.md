@@ -299,6 +299,13 @@ publication remain pending; no real messages were sent for these checks.
 Local `make check` passes Ruff, ty and 2003 tests with two platform-specific skips;
 the updated Agent Skill also passes its standalone validator.
 
+Follow-up Windows diagnosis reproduced a malformed `operations_date` REAL index during
+the first receipt update. Journal filtering now uses exact integer UTC microseconds;
+an atomic migration drops the old derived index and rebuilds from preserved operation JSON.
+Regression coverage includes first writes across fresh databases, microsecond boundaries
+and an intentionally inconsistent legacy date index. Production error redaction remains.
+Local `make check` passes Ruff, ty and 2009 tests with two platform-specific skips.
+
 ### Outbound recipient and confirmation policies (unreleased)
 
 Implemented local-only all-chat writes, one-off confirmed sends to people/private bots,

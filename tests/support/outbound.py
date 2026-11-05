@@ -1,7 +1,6 @@
 """Offline native-write substitute and an isolated real outbound database."""
 
 import hashlib
-import sqlite3
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
@@ -131,12 +130,6 @@ async def outbound_fixture(path, **kwargs):
         while cause is not None:
             cause.__suppress_context__ = False
             cause = cause.__context__
-        if env.store.path.exists():
-            with sqlite3.connect(env.store.path.as_uri() + "?mode=ro", uri=True) as db:
-                exc.add_note(
-                    f"SQLite {sqlite3.sqlite_version}: {db.execute('PRAGMA integrity_check').fetchall()}"
-                )
-                exc.add_note("Synthetic database: " + "\n".join(db.iterdump()))
         raise
     finally:
         await env.service.close()

@@ -1,9 +1,15 @@
 """Indexed journal queries and an additive migration that preserves original records."""
 
 import sqlite3
+from datetime import UTC, datetime
 
 from telegram_mcp.application.outbound_ports import OperationBatch, OperationFilter
 from telegram_mcp.domain.outbound import OutboundOperation
+
+
+def timestamp_microseconds(value: datetime) -> int:
+    delta = value.astimezone(UTC) - datetime(1970, 1, 1, tzinfo=UTC)
+    return (delta.days * 86400 + delta.seconds) * 1_000_000 + delta.microseconds
 
 
 def index_values(operation: OutboundOperation) -> tuple:
@@ -11,29 +17,34 @@ def index_values(operation: OutboundOperation) -> tuple:
         operation.chat_id,
         operation.kind,
         operation.receipt.status,
-        operation.created_at.timestamp() if operation.created_at else None,
+        timestamp_microseconds(operation.created_at) if operation.created_at else None,
         int(operation.dispatched),
     )
 
 
 def prepare_indexes(db: sqlite3.Connection) -> None:
-    if "chat_id" not in {row[1] for row in db.execute("PRAGMA table_info(operations)")}:
+    columns = {row[1] for row in db.execute("PRAGMA table_info(operations)")}
+    if "created_at_us" not in columns:
         with db:
             db.execute("BEGIN IMMEDIATE")
+            # The legacy REAL date index can be inconsistent on Windows. Remove
+            # that derived index before updating rows, keeping their JSON intact.
+            db.execute("DROP INDEX IF EXISTS operations_date")
             for name, kind in (
                 ("chat_id", "TEXT"),
                 ("kind", "TEXT"),
                 ("status", "TEXT"),
-                ("created_at", "REAL"),
+                ("created_at_us", "INTEGER"),
                 ("dispatched", "INTEGER"),
             ):
-                db.execute(f"ALTER TABLE operations ADD COLUMN {name} {kind}")
-            rows = db.execute("SELECT id, value FROM operations")
+                if name not in columns:
+                    db.execute(f"ALTER TABLE operations ADD COLUMN {name} {kind}")
+            rows = db.execute("SELECT id, value FROM operations NOT INDEXED")
             while batch := rows.fetchmany(256):
                 for ident, value in batch:
                     operation = OutboundOperation.model_validate_json(value)
                     db.execute(
-                        "UPDATE operations SET chat_id=?, kind=?, status=?, created_at=?, "
+                        "UPDATE operations SET chat_id=?, kind=?, status=?, created_at_us=?, "
                         "dispatched=? WHERE id=?",
                         (*index_values(operation), ident),
                     )
@@ -41,7 +52,7 @@ def prepare_indexes(db: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS operations_account ON operations(account);
         CREATE INDEX IF NOT EXISTS operations_chat ON operations(account, chat_id);
         CREATE INDEX IF NOT EXISTS operations_status ON operations(account, status);
-        CREATE INDEX IF NOT EXISTS operations_date ON operations(account, created_at);
+        CREATE INDEX IF NOT EXISTS operations_date_us ON operations(account, created_at_us);
     """)
 
 
@@ -64,8 +75,8 @@ def query_operations(
             params.append(value)
     for comparison, date in ((">=", filters.date_from), ("<", filters.date_to)):
         if date is not None:
-            clauses.append(f"created_at {comparison} ?")
-            params.append(date.timestamp())
+            clauses.append(f"created_at_us {comparison} ?")
+            params.append(timestamp_microseconds(date))
     if filters.status is not None:
         raw_states = ("pending", "unknown") if filters.status == "unknown" else (filters.status,)
         clauses.append(f"status IN ({','.join('?' for _ in raw_states)})")
