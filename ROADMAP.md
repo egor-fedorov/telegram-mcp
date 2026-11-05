@@ -283,6 +283,11 @@ OCR remain deferred; other clients' outbound confirmation UIs remain unverified.
 
 ## Later decisions
 
+The next maintenance task is to review [Dependabot PR #84](https://github.com/egor-fedorov/telegram-mcp/pull/84),
+which updates `pyasn1` to 0.6.5 for four decoder CPU-exhaustion advisories, then ship
+the patched lock in a subsequent bundle. The [0.7.0 validation record](docs/validation-0.7.md#dependency-follow-up-identified-after-publication)
+records the affected locked dependency and the bounded reachability review.
+
 File drafts, OCR and voice transcription, editing/deleting sent messages and
 administration remain separate decisions with explicit permission contracts.
 

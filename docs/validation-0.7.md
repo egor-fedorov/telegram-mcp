@@ -145,3 +145,19 @@ checks, PyPI publishing, GitHub Release creation and Registry publication.
 - MCPB SHA-256 is `7fa1bd8186f095896b6833d94532c197ad8cd20265830c765f140712dafa6953`. Its manifest version is 0.7.0, and the embedded wheel is byte-identical to the published wheel. Temporary verification downloads were removed.
 - The [Registry entry](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.egor-fedorov%2Ftelegram-mcp/versions/0.7.0) is active and matches the tagged manifest. `check_registry.py --tag v0.7.0 --check-pypi --require-published` passed.
 - A fresh, isolated PyPI invocation with `[extraction]` returned `telegram-mcp 0.7.0`. Updating the persistent shared-server installation remains a separate local upgrade step.
+
+## Dependency follow-up identified after publication
+
+GitHub created four high-severity `pyasn1` alerts on 2026-11-05 after publication.
+The 0.7.0 lockfile and MCPB pin 0.6.4. The advisories cover excessive decoder CPU use
+in [schemaless containers](https://github.com/advisories/GHSA-fm9c-5rcf-2q5p),
+[strings/ANY](https://github.com/advisories/GHSA-9m75-vc3g-4x39),
+[BIT STRING](https://github.com/advisories/GHSA-2qm8-x737-gmw5) and
+[REAL](https://github.com/advisories/GHSA-mm57-4v3p-rchx); all are fixed in 0.6.5.
+The verified fresh PyPI installation resolved 0.6.5 already.
+
+Inspection of the installed Telethon 1.45.0 path found ASN.1 decoding through `rsa`
+for its built-in public keys; no path from Telegram message/attachment content to
+that decoder was identified. This is a bounded reachability review, not a dismissal
+of the dependency alerts. [Dependabot PR #84](https://github.com/egor-fedorov/telegram-mcp/pull/84)
+tracks the lockfile update; a subsequent bundle release is needed to ship that fix.
