@@ -1,8 +1,8 @@
 # 0.7.0 validation record
 
-Status: 0.7.0 release candidate; the selected-source checks below passed after the follow-up fixes.
-Local release-version and distribution checks passed; remote publication remains pending. This record is not a
-publication announcement or a claim that every client supports confirmed writes.
+Release: 0.7.0. PyPI, GitHub Release and MCP Registry publication were verified on
+2026-11-05. The checks below establish the listed coverage; other clients' outbound
+confirmation UIs remain unverified.
 
 The release candidate changes metadata, installation pins and documentation only;
 runtime behavior and locked dependency versions match the live-validated code.
@@ -126,8 +126,39 @@ in both schema modes; every text character is preserved.
 | Default reading | 23 | 28,819 | 124,641 |
 | Outbound tools enabled | 33 | 35,314 | 142,087 |
 
-The GitHub release pipeline repeats autonomous checks and distribution/bundle probes
-on the tagged commit, including Windows/macOS and Python 3.12–3.15. Publication must
-be verified separately following [releasing](releasing.md). Other clients' outbound
+The GitHub release pipeline repeated autonomous checks and distribution/bundle probes
+on the tagged commit, including Windows/macOS and Python 3.12–3.15. Publication was
+verified separately following [releasing](releasing.md). Other clients' outbound
 confirmation UIs remain unverified; the earlier Windows Desktop read-only report does
 not imply write support.
+
+## Publication verification
+
+Annotated tag `v0.7.0` points to release commit
+`b78237698b85508d8f16340ef35e7ea9e0f9133e` from [PR #83](https://github.com/egor-fedorov/telegram-mcp/pull/83).
+The [release workflow](https://github.com/egor-fedorov/telegram-mcp/actions/runs/42012691679)
+passed the Linux/Python 3.12–3.15 and Windows/macOS 3.12/3.15 matrix, package/MCPB
+checks, PyPI publishing, GitHub Release creation and Registry publication.
+
+- [PyPI 0.7.0](https://pypi.org/project/telegram-context-mcp/0.7.0/) contains a non-yanked wheel and source distribution. Their SHA-256 values match the corresponding GitHub assets.
+- [GitHub Release v0.7.0](https://github.com/egor-fedorov/telegram-mcp/releases/tag/v0.7.0) contains exactly four assets: wheel (230,872 bytes), sdist (575,751 bytes), MCPB (378,813 bytes) and its checksum. Notes match the tagged changelog without manual wrapping inside paragraphs or list items.
+- MCPB SHA-256 is `7fa1bd8186f095896b6833d94532c197ad8cd20265830c765f140712dafa6953`. Its manifest version is 0.7.0, and the embedded wheel is byte-identical to the published wheel. Temporary verification downloads were removed.
+- The [Registry entry](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.egor-fedorov%2Ftelegram-mcp/versions/0.7.0) is active and matches the tagged manifest. `check_registry.py --tag v0.7.0 --check-pypi --require-published` passed.
+- A fresh, isolated PyPI invocation with `[extraction]` returned `telegram-mcp 0.7.0`. Updating the persistent shared-server installation remains a separate local upgrade step.
+
+## Dependency follow-up identified after publication
+
+GitHub created four high-severity `pyasn1` alerts during the 2026-11-05 release workflow;
+they were noticed on the post-publication documentation push.
+The 0.7.0 lockfile and MCPB pin 0.6.4. The advisories cover excessive decoder CPU use
+in [schemaless containers](https://github.com/advisories/GHSA-fm9c-5rcf-2q5p),
+[strings/ANY](https://github.com/advisories/GHSA-9m75-vc3g-4x39),
+[BIT STRING](https://github.com/advisories/GHSA-2qm8-x737-gmw5) and
+[REAL](https://github.com/advisories/GHSA-mm57-4v3p-rchx); all are fixed in 0.6.5.
+The verified fresh PyPI installation resolved 0.6.5 already.
+
+Inspection of the installed Telethon 1.45.0 path found ASN.1 decoding through `rsa`
+for its built-in public keys; no path from Telegram message/attachment content to
+that decoder was identified. This is a bounded reachability review, not a dismissal
+of the dependency alerts. [Dependabot PR #84](https://github.com/egor-fedorov/telegram-mcp/pull/84)
+tracks the lockfile update; a subsequent bundle release is needed to ship that fix.

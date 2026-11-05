@@ -27,14 +27,14 @@ need a concrete contract before implementation; no delivery dates are assigned.
 | M5 | Complete for 0.5 | Bounded multi-source history, archived watch batches and usable monitoring prompts |
 | R6 | Done | Feature-organized MCP and wire modules, bounded complexity, shared storage and faster tests |
 | M6 | Released in 0.6.0 | Optional PDF/DOCX text extraction with bounded continuation and source/page provenance |
-| M7 | Complete for 0.7.0; publication pending | Buttons/direction/membership, auth-notice omission and opt-in drafts, reusable files, confirmed sends and bot callbacks |
+| M7 | Released in 0.7.0 | Buttons/direction/membership, auth-notice omission and opt-in drafts, reusable files, confirmed sends and bot callbacks |
 
-The [0.6.0 changelog](CHANGELOG.md#060---2026-10-29) and
-[validation record](docs/validation-0.6.md) describe the current release scope.
-Publication of 0.6.0 was verified on
-[PyPI](https://pypi.org/project/telegram-context-mcp/0.6.0/),
-[GitHub Releases](https://github.com/egor-fedorov/telegram-mcp/releases/tag/v0.6.0), and the
-[MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.egor-fedorov%2Ftelegram-mcp/versions/0.6.0).
+The [0.7.0 changelog](CHANGELOG.md#070---2026-11-05) and
+[validation record](docs/validation-0.7.md) describe the current release scope.
+Publication of 0.7.0 was verified on
+[PyPI](https://pypi.org/project/telegram-context-mcp/0.7.0/),
+[GitHub Releases](https://github.com/egor-fedorov/telegram-mcp/releases/tag/v0.7.0), and the
+[MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.egor-fedorov%2Ftelegram-mcp/versions/0.7.0).
 The [0.4 migration guide](docs/migration-0.4.md) applies to upgrades from 0.3;
 [0.4](docs/validation-0.4.md) and [0.3](docs/validation-0.3.md) retain earlier validation.
 
@@ -246,7 +246,7 @@ Dependabot groups pytest's supporting packages with development tools.
 Validation uses the current extraction and MCPB implementation, including transport,
 clean-install and portable-bundle checks.
 
-## M7: outbound workflows (0.7.0 release candidate)
+## M7: outbound workflows (released in 0.7.0)
 
 The agreed stage is implemented in one focused PR: button metadata and revisions,
 outgoing filters, channel membership, conservative authentication-notice omission,
@@ -275,10 +275,18 @@ The maintainer-selected private bot also passed button metadata, revision reject
 confirmed callback, stored-receipt and duplicate-key checks. Selected-source live
 validation is complete. The 0.7.0 release candidate updates package/Registry versions,
 installation pins and release notes. Full local checks and isolated wheel/sdist installs,
-extraction probes, MCPB validation/rebuild and bundle smoke checks passed. Remote
-publication remains pending; the release workflow repeats checks on the tagged commit.
+extraction probes, MCPB validation/rebuild and bundle smoke checks passed. The release
+workflow repeated checks on the tagged commit and published successfully on 2026-11-05.
+PyPI/GitHub artifact hashes, the MCPB's embedded wheel and checksum, exact release notes,
+the active Registry entry and a fresh PyPI invocation were verified. File drafts and
+OCR remain deferred; other clients' outbound confirmation UIs remain unverified.
 
 ## Later decisions
+
+The next maintenance task is to review [Dependabot PR #84](https://github.com/egor-fedorov/telegram-mcp/pull/84),
+which updates `pyasn1` to 0.6.5 for four decoder CPU-exhaustion advisories, then ship
+the patched lock in a subsequent bundle. The [0.7.0 validation record](docs/validation-0.7.md#dependency-follow-up-identified-after-publication)
+records the affected locked dependency and the bounded reachability review.
 
 File drafts, OCR and voice transcription, editing/deleting sent messages and
 administration remain separate decisions with explicit permission contracts.
