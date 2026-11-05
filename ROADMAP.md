@@ -283,6 +283,22 @@ OCR remain deferred; other clients' outbound confirmation UIs remain unverified.
 
 ## Later decisions
 
+### Outbound inspection and build diagnostics (unreleased)
+
+Implemented recipient metadata previews without history, exact sent-message verification,
+receipt lookup by idempotency key and bounded account-bound journal pages. Verification
+separates the persisted receipt, fresh reread and text/attachment metadata comparisons;
+it grants no surrounding-history or download access. Indexed journal migration preserves
+legacy records and keys; unknown timestamps/digests remain unknown. Server/proxy versions
+are reported separately with a frozen source-build commit when available.
+
+Offline coverage includes lost-response recovery, restart and permission revocation,
+account/peer isolation, changed or unavailable messages, legacy migration, pagination and
+all three MCP transports in both protocol modes. Selected-recipient live validation and
+publication remain pending; no real messages were sent for these checks.
+Local `make check` passes Ruff, ty and 1992 tests with two platform-specific skips;
+the updated Agent Skill also passes its standalone validator.
+
 ### Outbound recipient and confirmation policies (unreleased)
 
 Implemented local-only all-chat writes, one-off confirmed sends to people/private bots,

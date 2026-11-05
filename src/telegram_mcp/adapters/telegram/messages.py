@@ -107,7 +107,12 @@ class MessageGateway:
         chat = await self.chats.resolve_chat(chat_id)
         raw_messages = await self.runtime.call(client.get_messages(int(chat_id), ids=unique_ids))
         for raw in raw_messages:
-            if raw and not isinstance(raw, types.MessageEmpty) and raw.id in result:
+            if (
+                raw
+                and not isinstance(raw, types.MessageEmpty)
+                and raw.id in result
+                and peer_id(raw.peer_id) == chat_id
+            ):
                 result[raw.id] = normalize_message(raw, chat)
         return result
 

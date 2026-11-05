@@ -1,6 +1,7 @@
 """Narrow ports for outbound storage, Telegram writes and client confirmation."""
 
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
@@ -8,6 +9,8 @@ from telegram_mcp.domain.models import Message, MessageRef
 from telegram_mcp.domain.outbound import (
     CallbackReceipt,
     Draft,
+    JournalState,
+    OperationKind,
     OutboundOperation,
     RegisteredFile,
     SendReceipt,
@@ -15,6 +18,21 @@ from telegram_mcp.domain.outbound import (
 )
 
 Confirm = Callable[[str], Awaitable[bool]]
+
+
+@dataclass(frozen=True)
+class OperationFilter:
+    chat_id: str | None = None
+    kind: OperationKind | None = None
+    status: JournalState | None = None
+    date_from: datetime | None = None
+    date_to: datetime | None = None
+
+
+@dataclass
+class OperationBatch:
+    operations: list[OutboundOperation]
+    before: int | None
 
 
 class ConfirmationPending(Exception):
@@ -52,6 +70,15 @@ class OutboundStorePort(Protocol):
     async def lookup_operation(self, account: str, operation_id: str) -> OutboundOperation: ...
     async def save_operation(self, operation: OutboundOperation) -> None: ...
     async def create_operation(self, operation: OutboundOperation) -> OutboundOperation: ...
+    async def operations(
+        self,
+        account: str,
+        filters: OperationFilter,
+        *,
+        before: int | None,
+        limit: int,
+        active_ids: tuple[str, ...],
+    ) -> OperationBatch: ...
     async def owned_draft(self, account: str, chat: str) -> Draft | None: ...
     async def save_draft(self, account: str, draft: Draft, previous: Draft) -> None: ...
     async def close(self) -> None: ...

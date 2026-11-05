@@ -67,6 +67,12 @@ and [publishing guide](https://docs.pypi.org/trusted-publishers/using-a-publishe
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for the regular check commands and branch rules.
 Build outputs under `dist/` are generated artifacts; do not commit them.
 
+The build hook embeds the clean source commit in wheel and source distributions.
+Wheels rebuilt from the source distribution retain that record without requiring Git.
+Build release artifacts from a clean checkout; dirty/editable or unknown-source builds
+report a null commit. `get_status` freezes the running server/proxy identities and reports
+them separately. Check the packaged commit against the tagged source, not a later checkout.
+
 ## Tag and publish
 
 After merging, update the local `main`, verify the exact commit, then create and push

@@ -25,9 +25,11 @@ from mcp_types import (
     TextContent,
 )
 
+from telegram_mcp.adapters.bridge_status import status_result, status_tool
 from telegram_mcp.adapters.config import Settings
 from telegram_mcp.adapters.http_token import load_token
 from telegram_mcp.adapters.transport import endpoint
+from telegram_mcp.adapters.version import get_build_info
 from telegram_mcp.domain.models import ToolError
 
 
@@ -74,12 +76,36 @@ async def confirmed_call(
     return await client.call_tool(params.name, params.arguments, meta=params.meta)
 
 
+async def routed_call(
+    upstream: Client,
+    context,
+    params: CallToolRequestParams,
+    confirmation_client: Callable[[ElicitationFnT | None], AbstractAsyncContextManager[Client]]
+    | None,
+) -> CallToolResult | InputRequiredResult:
+    if confirmation_client is not None and params.name in {
+        "update_draft",
+        "send_message",
+        "send_file",
+        "invoke_button",
+        "get_status",
+        "resolve_recipient",
+    }:
+        # Bind confirmation and capability reporting to the originating downstream client.
+        async with confirmation_client(confirmation_callback(context)) as isolated:
+            return await confirmed_call(isolated, context, params)
+    return await upstream.call_tool(params.name, params.arguments, meta=params.meta)
+
+
 def create_bridge(
     upstream: Client,
     *,
     confirmation_client: Callable[[ElicitationFnT | None], AbstractAsyncContextManager[Client]]
     | None = None,
 ) -> Server:
+    connect_info = get_build_info()
+    upstream_version = getattr(upstream.server_info, "version", None)
+
     async def forward[R](call: Callable[[], Awaitable[R]]) -> R:
         try:
             return await call()
@@ -94,9 +120,10 @@ def create_bridge(
             ) from None
 
     async def list_tools(_context, params: PaginatedRequestParams | None):
-        return await forward(
+        result = await forward(
             lambda: upstream.list_tools(cursor=params.cursor if params is not None else None)
         )
+        return result.model_copy(update={"tools": [status_tool(tool) for tool in result.tools]})
 
     async def list_resources(_context, params: PaginatedRequestParams | None):
         return await forward(
@@ -117,18 +144,10 @@ def create_bridge(
         _context, params: CallToolRequestParams
     ) -> CallToolResult | InputRequiredResult:
         try:
-            if confirmation_client is not None and params.name in {
-                "update_draft",
-                "send_message",
-                "send_file",
-                "invoke_button",
-                "get_status",
-            }:
-                # Each confirmation-capable call owns an upstream session. Its closure binds
-                # only this downstream request, including under concurrent client calls.
-                async with confirmation_client(confirmation_callback(_context)) as isolated:
-                    return await confirmed_call(isolated, _context, params)
-            return await upstream.call_tool(params.name, params.arguments, meta=params.meta)
+            result = await routed_call(upstream, _context, params, confirmation_client)
+            if params.name == "get_status" and isinstance(result, CallToolResult):
+                return status_result(result, connect_info, upstream_version)
+            return result
         except MCPError:
             raise
         except Exception:

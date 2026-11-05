@@ -36,7 +36,7 @@ from telegram_mcp.adapters.mcp.tools import (
 )
 from telegram_mcp.adapters.prompts import PromptCatalog
 from telegram_mcp.adapters.tool_gate import ToolCallGate
-from telegram_mcp.adapters.version import get_version
+from telegram_mcp.adapters.version import get_build_info
 from telegram_mcp.application.change_ports import EXPORT_RESOURCE_PREFIX
 from telegram_mcp.application.service import Service
 from telegram_mcp.domain.models import ToolError
@@ -152,7 +152,7 @@ def create_server(
         schema_mode=schema_mode,
         timezone=timezone,
         name="Telegram Context",
-        version=get_version(),
+        version=get_build_info()["version"],
         lifespan=lifespan,
         log_level="WARNING",
         instructions=(

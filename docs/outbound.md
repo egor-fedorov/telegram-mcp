@@ -4,7 +4,7 @@ The default server remains read-only. These tools require server and proxy versi
 0.7.0 or later, explicit capability flags and permitted recipients. No OCR, joining channels, folder edits,
 bulk sends, scheduled sends or editing/deleting sent messages are included.
 
-The additional recipient modes and per-action confirmation settings below are
+The additional recipient modes, inspection tools and per-action confirmation settings below are
 **unreleased**. They require a server built from this checkout; the published 0.7.0
 package supports only the original read+write allowlist with required forms.
 
@@ -68,7 +68,7 @@ Only actual TOML booleans are accepted. There are no MCP arguments, CLI switches
 environment overrides for these six policies. `configure` preserves them without prompting
 to broaden access. Proxy settings never override the session-owning server's policy.
 
-With every write flag off, the extra ten tools are absent from `tools/list`. With any
+With every write flag off, the extra thirteen tools are absent from `tools/list`. With any
 write flag on, refresh client tool discovery. Each tool still checks its own flag.
 `get_status` reports `read_write`, individual flags, write IDs, active cooldown scopes
 and whether the current MCP client advertises form confirmation. This is server policy,
@@ -76,6 +76,21 @@ not a guarantee that Telegram will accept a particular action.
 The six policy fields report exact settings. `confirmation_required` is an aggregate:
 at least one enabled action may require a form (including one-off sends). A client without
 elicitation can execute only actions whose effective policy does not require a form.
+
+### Preview a recipient
+
+`resolve_recipient(chat_ref)` accepts an ID, exact username or Telegram chat link and
+returns the numeric ID, name, username and type without reading message history. Use
+that ID when sending. `send_message` and `send_file` report separate local permission
+decisions, grant bases and confirmation requirements. A denied action has an error;
+temporary metadata/access failures remain errors rather than a false denial.
+`confirmation_supported` describes the calling client and `retry_after_seconds` reports
+the current persisted account/recipient send cooldown.
+
+These are local policy decisions, not a Telegram delivery guarantee. No trial send,
+joining, bot start or permission change happens. Sending rechecks the recipient and
+policy; a preview is neither a reservation nor approval. Read access through folders
+can require catalog metadata to evaluate the original read+write allowlist mode.
 
 ## Register one reusable file
 
@@ -142,10 +157,29 @@ the automated tests use real MCP transports with synthetic client callbacks.
 
 Receipts contain an operation ID, `pending`, `sent`, `failed` or `unknown`, and the exact
 message reference/time when Telegram supplied them. Inspect `error` and `retry_at`.
-`get_send_status(operation_id)` reads the journal without dispatching anything. Its
+`get_send_status(operation_id=...)` or `get_send_status(idempotency_key=...)` reads the
+current account's journal without resolving a recipient or dispatching anything.
+Supply exactly one selector. These local receipts remain inspectable after recipient
+or action permission is revoked, including legacy records. Its
 response is `{"result": {...}}`, where `result` is a send or callback receipt; inspect
 `result.status`, `result.error` and `result.retry_at`. Direct send/callback calls return
 the receipt at the top level. This envelope matches the advertised MCP union schema.
+
+`list_operations(chat_id?, date_from?, date_to?, kind?, status?, limit=30, cursor?)`
+lists compact account-bound records, including keys and recipient snapshots. The scope
+is explicitly `mcp_journal`: sends made manually or by other software are not included.
+Use a numeric chat ID and timezone-aware **creation** dates in `[date_from, date_to)`;
+the default limit is 30 and maximum 100. Entries appear newest first by journal insertion.
+Continue with unchanged filters. Later insertions do not shift continuation pages;
+statuses are evaluated on each page, so this is not a snapshot of concurrent status changes.
+Interrupted dispatched `pending` entries appear as `unknown` consistently with status lookup.
+
+The database migration adds query indexes and timestamps for new records while preserving
+old JSON and all idempotency identities. Unknown legacy creation/update times stay absent;
+date filters exclude records with unknown creation times. No body or file bytes are returned
+by the list. Existing records are not evicted to make room for new ones.
+Like the other outbound tools, inspection tools are advertised while at least one write
+capability is enabled. If all are disabled, the local `operations list` CLI remains available.
 
 - Reuse the **same key and arguments** after an interrupted send. A different payload
   under the same key fails with `IDEMPOTENCY_CONFLICT`.
@@ -172,6 +206,37 @@ keys, digests, random IDs and receipts remain. The journal refuses new operation
 100,000 records or 128 MiB of operation JSON; it does not evict old keys. Telegram's
 [random-ID contract](https://core.telegram.org/api/updates#updatemessageid-updates) supplies
 remote deduplication; network uncertainty is reported instead of guessed from message text.
+
+### Verify a sent message
+
+`verify_sent_message(operation_id)` performs one exact message lookup using a successful
+send receipt belonging to the current account. Its narrow grant does not require ordinary
+chat read access and survives write-policy revocation. It never opens surrounding history,
+reads replies, follows forwards or downloads attachments. The message must match the
+receipt's peer/message ID and be marked outgoing. Authentication-notice filtering still
+applies. Callback operations cannot be checked through this tool.
+
+The result keeps the original `receipt` separate from `verification`:
+
+| Verification | Meaning |
+| --- | --- |
+| `not_checked` | No successful send receipt with an exact message reference is available |
+| `verified` | Message reread; text and attachment metadata match the recorded expectation |
+| `mismatch` | Message reread; at least one comparison differs, for example after a manual edit |
+| `read_back` | Message reread, but a comparison is unknown, for example a legacy text digest |
+| `unavailable` | Rereading failed or identity/outgoing/filter checks prevented disclosure; inspect issues |
+
+`checked_at` timestamps the attempt. The bounded `message` contains actual text/caption,
+message reference, outgoing flag, dates and attachment name/size/MIME metadata. Text beyond
+12,000 Unicode characters is marked truncated. Comparisons use the complete text.
+`text_matches` and `attachment_metadata_matches` are independently true, false or null.
+`attachment_bytes_verified` is always false: matching metadata does not establish remote
+byte integrity or prove the original SHA-256. There is no delivery/read-receipt claim.
+
+New send records retain a text digest after terminal payload cleanup. Legacy digests are
+not invented. A failed reread does not change `sent` to a failure or prove deletion. An
+`unknown` send without a message reference is never guessed from matching history text.
+Verification is an observation at call time, not a saved or continuously refreshed status.
 
 ## Bot buttons
 

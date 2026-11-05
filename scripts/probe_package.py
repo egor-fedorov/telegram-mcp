@@ -19,7 +19,7 @@ from mcp.client.stdio import StdioServerParameters
 from mcp.client.streamable_http import streamable_http_client
 
 import telegram_mcp
-from telegram_mcp.adapters.version import get_version
+from telegram_mcp.adapters.version import get_build_info, get_version
 
 OUTBOUND_TOOLS = {
     "register_file",
@@ -31,6 +31,9 @@ OUTBOUND_TOOLS = {
     "send_message",
     "send_file",
     "get_send_status",
+    "resolve_recipient",
+    "verify_sent_message",
+    "list_operations",
     "invoke_button",
 }
 
@@ -107,6 +110,11 @@ async def probe_client(
     assert status["authorized"] is False
     assert status["mode"] == ("read_write" if outbound else "read_only")
     assert status["allow_drafts"] is outbound
+    assert status["server"]["version"] == version
+    assert status["server"]["build_commit"] == get_build_info()["build_commit"]
+    assert "started_at" in status["server"]
+    if status["connect"] is not None:
+        assert status["connect"] == get_build_info()
     assert status["error"]["code"] == "AUTH_REQUIRED"
     assert status["text_extraction_available"] is False
     assert status["text_extraction_formats"] == []

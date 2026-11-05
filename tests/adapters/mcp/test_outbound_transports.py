@@ -11,11 +11,14 @@ from mcp_types import ElicitResult
 
 from telegram_mcp.adapters.config import save_settings
 from telegram_mcp.adapters.transport import endpoint
+from tests.support.fakes import FakeBackend, msg
 from tests.support.outbound import FakeOutbound
 from tests.support.transport import authorized_http, running_server
 
 
-async def exercise(client, expected):
+async def exercise(client, expected, *, proxy=False):
+    preview = await client.call_tool("resolve_recipient", {"chat_ref": "1"})
+    assert not preview.is_error and preview.structured_content["send_message"]["allowed"]
     result = await client.call_tool(
         "send_message",
         {"chat_ref": "1", "text": "Only synthetic content", "idempotency_key": "transport-test"},
@@ -27,6 +30,23 @@ async def exercise(client, expected):
     )
     assert not status.is_error, status
     assert status.structured_content == {"result": result.structured_content}
+    recovered = await client.call_tool("get_send_status", {"idempotency_key": "transport-test"})
+    assert recovered.structured_content == status.structured_content
+    journal = await client.call_tool("list_operations", {"chat_id": "1"})
+    assert (
+        journal.structured_content["operations"][0]["operation_id"]
+        == result.structured_content["operation_id"]
+    )
+    checked = await client.call_tool(
+        "verify_sent_message", {"operation_id": result.structured_content["operation_id"]}
+    )
+    assert not checked.is_error, checked
+    assert checked.structured_content["verification"] == (
+        "verified" if expected == "sent" else "not_checked"
+    )
+    runtime = await client.call_tool("get_status", {})
+    assert runtime.structured_content["server"]["version"]
+    assert (runtime.structured_content["connect"] is not None) is proxy
     return result
 
 
@@ -42,8 +62,11 @@ async def test_real_stdio_confirmation(tmp_path, mode, required):
     script = (
         "from pathlib import Path; import sys; "
         "from tests.support.outbound import outbound_service; "
+        "from tests.support.fakes import msg; "
         "from telegram_mcp.adapters.mcp import create_server; "
         "env = outbound_service(Path(sys.argv[1])); "
+        "own = msg('1', 10, 'Only synthetic content'); own.outgoing = True; "
+        "env.backend.stored_messages = [own]; "
         "env.settings.require_send_message_confirmation = sys.argv[2] == 'true'; "
         "env.settings.allow_all_write_chats = True; env.settings.allowed_write_chat_ids = []; "
         "create_server(env.service).run()"
@@ -71,7 +94,12 @@ async def test_http_and_connect_confirmation(tmp_path, mode, transport, supporte
         return ElicitResult(action="accept", content={"approve": True})
 
     callback = confirm if supported else None
-    async with running_server(tmp_path, outbound_backend=telegram) as (settings, _):
+    own = msg("1", 10, "Only synthetic content")
+    own.outgoing = True
+    async with running_server(tmp_path, FakeBackend([own]), outbound_backend=telegram) as (
+        settings,
+        _,
+    ):
         settings.require_send_message_confirmation = required
         settings.allow_all_write_chats = True
         settings.allowed_chat_ids = settings.allowed_write_chat_ids = []
@@ -95,7 +123,7 @@ async def test_http_and_connect_confirmation(tmp_path, mode, transport, supporte
             async with Client(
                 params, mode=mode, elicitation_callback=callback, read_timeout_seconds=20
             ) as client:
-                await exercise(client, expected)
+                await exercise(client, expected, proxy=True)
         assert len(forms) == int(supported and required)
         assert len(telegram.send_calls) == int(expected == "sent")
 

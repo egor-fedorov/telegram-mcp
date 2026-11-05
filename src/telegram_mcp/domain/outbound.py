@@ -7,9 +7,11 @@ from typing import Literal
 
 from pydantic import AwareDatetime, Field
 
-from telegram_mcp.domain.models import ChatType, Issue, MessageRef, Model, ToolError
+from telegram_mcp.domain.models import ChatType, ContentType, Issue, MessageRef, Model, ToolError
 
 OperationState = Literal["pending", "sent", "failed", "unknown"]
+OperationKind = Literal["message", "file", "callback"]
+JournalState = Literal["pending", "sent", "completed", "failed", "unknown"]
 WriteGrant = Literal["allowlist", "one_off", "all_chats"]
 
 
@@ -134,11 +136,78 @@ class RecipientBinding(Model):
     grant: WriteGrant
 
 
+class RecipientPermission(Model):
+    allowed: bool
+    grant: WriteGrant | None = None
+    confirmation_required: bool | None = None
+    error: Issue | None = None
+
+
+class RecipientResolution(Model):
+    chat_id: str
+    title: str
+    type: ChatType
+    username: str | None = None
+    send_message: RecipientPermission
+    send_file: RecipientPermission
+    confirmation_supported: bool | None = None
+    retry_after_seconds: int = 0
+    resolved_at: AwareDatetime
+
+
+class SentAttachment(Model):
+    type: ContentType
+    name: str | None = None
+    mime_type: str | None = None
+    size: int | None = None
+
+
+class SentMessage(Model):
+    message_ref: MessageRef
+    text: str
+    text_truncated: bool = False
+    outgoing: bool
+    sent_at: AwareDatetime
+    edited_at: AwareDatetime | None = None
+    attachments: list[SentAttachment] = Field(default_factory=list)
+
+
+class SendVerification(Model):
+    receipt: SendReceipt
+    verification: Literal["not_checked", "read_back", "verified", "mismatch", "unavailable"]
+    checked_at: AwareDatetime | None = None
+    message: SentMessage | None = None
+    text_matches: bool | None = None
+    attachment_metadata_matches: bool | None = None
+    attachment_bytes_verified: Literal[False] = False
+    issues: list[Issue] = Field(default_factory=list)
+
+
+class OperationSummary(Model):
+    operation_id: str
+    idempotency_key: str
+    kind: OperationKind
+    status: JournalState
+    chat_id: str
+    recipient: RecipientBinding | None = None
+    created_at: AwareDatetime | None = None
+    updated_at: AwareDatetime | None = None
+    message_ref: MessageRef | None = None
+    sent_at: AwareDatetime | None = None
+    error: Issue | None = None
+
+
+class OperationPage(Model):
+    scope: Literal["mcp_journal"] = "mcp_journal"
+    operations: list[OperationSummary]
+    next_cursor: str | None = None
+
+
 class OutboundOperation(Model):
     operation_id: str
     account_id: str
     idempotency_key: str
-    kind: Literal["message", "file", "callback"]
+    kind: OperationKind
     request_hash: str
     payload: dict = Field(default_factory=dict)
     chat_id: str
@@ -150,6 +219,13 @@ class OutboundOperation(Model):
     reply_ref: MessageRef | None = None
     dispatched: bool = False
     receipt: SendReceipt | CallbackReceipt
+    created_at: AwareDatetime | None = None
+    updated_at: AwareDatetime | None = None
+    expected_text_sha256: str | None = None
+
+
+def text_digest(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def request_digest(value: object) -> str:

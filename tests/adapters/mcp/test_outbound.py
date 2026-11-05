@@ -137,7 +137,7 @@ async def test_confirmed_send_has_typed_receipt_and_bound_form(tmp_path, mode):
         server = create_server(env.service, owns_service=False, schema_mode="full")
         async with Client(server, mode=mode, elicitation_callback=confirm) as client:
             tools = {tool.name: tool for tool in (await client.list_tools()).tools}
-            assert len(tools) == 33
+            assert len(tools) == 36
             assert tools["send_message"].annotations is not None
             assert not tools["send_message"].annotations.read_only_hint
             assert tools["send_message"].annotations.idempotent_hint

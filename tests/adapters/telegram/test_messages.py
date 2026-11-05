@@ -205,3 +205,22 @@ async def test_empty_telegram_messages_advance_pagination() -> None:
     )
     page = await backend.read("1", HistoryRead(filters=ReadFilters()), limit=2)
     assert page.messages == [] and page.next_offset == 19 and not page.exhausted
+
+
+async def test_exact_lookup_rejects_same_message_number_from_another_peer() -> None:
+    settings = Settings()
+    client = SimpleNamespace(
+        is_connected=lambda: True,
+        get_messages=AsyncMock(
+            return_value=[
+                types.Message(id=10, peer_id=types.PeerUser(2), date=BASE, message="Other dialog")
+            ]
+        ),
+    )
+    backend = TelegramBackend(
+        settings,
+        runtime=TelegramRuntime(settings, client=client),
+        chat_cache={"1": Chat(id="1", title="Requested", type="private")},
+    )
+    assert await backend.message(MessageRef(chat_id="1", message_id=10)) is None
+    client.get_messages.assert_awaited_once_with(1, ids=[10])

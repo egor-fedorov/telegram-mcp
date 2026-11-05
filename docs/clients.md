@@ -320,6 +320,19 @@ The first `uvx` launch may need to download Python or dependencies. Run the pinn
 `--version` command in a terminal first if the client startup timeout is too short.
 For connection and authorization errors, see [troubleshooting](troubleshooting.md).
 
+### Running build diagnostics (unreleased)
+
+The checkout's `get_status` includes `server.version`, `server.build_commit` and
+`server.started_at`, plus a separate `connect.version`/`connect.build_commit` when using
+an updated proxy. A direct STDIO/HTTP connection reports `connect=null`. These identify
+the loaded processes, not a newer checkout or package installed after they started.
+Update and restart the shared server as well as the proxies when capabilities differ.
+
+Build commits are embedded in clean wheel/sdist builds. Dirty, editable or unknown-source
+builds report `build_commit=null`. An updated proxy can report an older server's version
+from MCP discovery/initialization; its missing commit/start time remain unknown. An older
+proxy cannot report its own identity, so `connect=null` alone is not proof of a direct link.
+
 ## Optional outbound confirmation (0.7+)
 
 Enabling a write capability makes the HTTP server sessionful with SSE; restart the

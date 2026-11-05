@@ -1,5 +1,6 @@
 """Locally permitted drafts, immutable files, sends and bot callbacks."""
 
+from datetime import datetime
 from typing import Annotated, Any
 
 from mcp.server import MCPServer
@@ -7,12 +8,13 @@ from mcp.server.mcpserver.context import Context
 from mcp_types import CallToolResult, ToolAnnotations
 
 from telegram_mcp.adapters import wire
-from telegram_mcp.adapters.mcp.confirmation import ConfirmationRounds
+from telegram_mcp.adapters.mcp.confirmation import ConfirmationRounds, supports_confirmation
 from telegram_mcp.adapters.mcp.errors import Expose
 from telegram_mcp.adapters.mcp.params import READONLY
 from telegram_mcp.adapters.tool_gate import ToolCallGate
 from telegram_mcp.adapters.wire import outbound as dto
 from telegram_mcp.application.service import Service
+from telegram_mcp.domain.outbound import JournalState, OperationKind
 
 WRITE = ToolAnnotations(
     read_only_hint=False, destructive_hint=True, idempotent_hint=True, open_world_hint=True
@@ -147,11 +149,63 @@ def register(server: MCPServer[None], service: Service, expose: Expose, gate: To
     @server.tool(annotations=READONLY)
     @expose
     async def get_send_status(
-        operation_id: str,
+        operation_id: str | None = None,
+        idempotency_key: str | None = None,
     ) -> Annotated[CallToolResult, dto.SendReceipt | dto.CallbackReceipt]:
-        """Read a durable operation receipt in result, without dispatching or retrying it."""
+        """Read this account's MCP receipt in result. Supply operation_id XOR idempotency_key.
+
+        Never dispatches or retries. A receipt is not a fresh verification of the message.
+        """
         # A union's schema requires a result envelope even for explicit CallToolResult output.
-        return wire.encode({"result": await service.get_send_status(operation_id)})
+        return wire.encode({"result": await service.get_send_status(operation_id, idempotency_key)})
+
+    @server.tool(annotations=READONLY)
+    @expose
+    async def resolve_recipient(
+        chat_ref: str, ctx: Context[None, Any]
+    ) -> Annotated[CallToolResult, dto.RecipientResolution]:
+        """Resolve an exact recipient to ID/name/type and local send/form policies without history.
+
+        Use the numeric ID for sending. This preview grants no access and does not guarantee
+        Telegram will accept a send. No joining, bot starting or trial messages.
+        """
+        result = await service.resolve_recipient(chat_ref)
+        result.confirmation_supported = supports_confirmation(ctx)
+        return wire.encode(result)
+
+    @server.tool(annotations=READONLY)
+    @expose
+    async def verify_sent_message(
+        operation_id: str,
+    ) -> Annotated[CallToolResult, dto.SendVerification]:
+        """Re-read only the exact outgoing message from this account's MCP send receipt.
+
+        Does not grant history, replies or downloads. Separates receipt from read-back and
+        content comparison; attachment metadata matches never prove byte integrity.
+        Unavailable does not prove deletion; unknown sends without a reference cannot be checked.
+        """
+        return wire.encode(await service.verify_sent_message(operation_id))
+
+    @server.tool(annotations=READONLY)
+    @expose
+    async def list_operations(
+        chat_id: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        kind: OperationKind | None = None,
+        status: JournalState | None = None,
+        limit: int = 30,
+        cursor: str | None = None,
+    ) -> Annotated[CallToolResult, dto.OperationPage]:
+        """List this account's MCP journal, newest entries first. Manual Telegram sends are absent.
+
+        Use numeric chat_id, timezone-aware creation dates [date_from, date_to), limit 1..100
+        and unchanged filters for cursors. Legacy entries with unknown dates are excluded by
+        date filters. Status is evaluated per page. Never dispatches or retries operations.
+        """
+        return wire.encode(
+            await service.list_operations(chat_id, date_from, date_to, kind, status, limit, cursor)
+        )
 
     @server.tool(annotations=WRITE)
     @rounds.wrap

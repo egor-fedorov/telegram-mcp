@@ -34,6 +34,29 @@
       ],
       "type": "object"
     },
+    "BuildInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "build_commit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "build_commit"
+      ],
+      "type": "object"
+    },
     "CallbackReceipt": {
       "additionalProperties": false,
       "properties": {
@@ -809,6 +832,69 @@
       "title": "MessageRef",
       "type": "object"
     },
+    "OperationSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "chat_id": {
+          "pattern": "^-?[1-9]\\d*$",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "error": {
+          "$ref": "#/$defs/Issue"
+        },
+        "idempotency_key": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "message",
+            "file",
+            "callback"
+          ],
+          "type": "string"
+        },
+        "message_ref": {
+          "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
+          "type": "string"
+        },
+        "operation_id": {
+          "type": "string"
+        },
+        "recipient": {
+          "$ref": "#/$defs/RecipientBinding"
+        },
+        "sent_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "sent",
+            "completed",
+            "failed",
+            "unknown"
+          ],
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation_id",
+        "idempotency_key",
+        "kind",
+        "status",
+        "chat_id"
+      ],
+      "type": "object"
+    },
     "PageSpan": {
       "additionalProperties": false,
       "properties": {
@@ -1057,6 +1143,84 @@
         "is_min",
         "reactions_as_tags",
         "results"
+      ],
+      "type": "object"
+    },
+    "RecipientBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "chat_id": {
+          "pattern": "^-?[1-9]\\d*$",
+          "type": "string"
+        },
+        "grant": {
+          "enum": [
+            "allowlist",
+            "one_off",
+            "all_chats"
+          ],
+          "type": "string"
+        },
+        "selector": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "private",
+            "group",
+            "channel",
+            "bot",
+            "saved"
+          ],
+          "type": "string"
+        },
+        "username": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "chat_id",
+        "title",
+        "type",
+        "selector",
+        "grant"
+      ],
+      "type": "object"
+    },
+    "RecipientPermission": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed": {
+          "type": "boolean"
+        },
+        "confirmation_required": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error": {
+          "$ref": "#/$defs/Issue"
+        },
+        "grant": {
+          "enum": [
+            "allowlist",
+            "one_off",
+            "all_chats"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "allowed",
+        "confirmation_required"
       ],
       "type": "object"
     },
@@ -1315,6 +1479,103 @@
       },
       "required": [
         "type"
+      ],
+      "type": "object"
+    },
+    "SentAttachment": {
+      "additionalProperties": false,
+      "properties": {
+        "mime_type": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "type": {
+          "enum": [
+            "text",
+            "photo",
+            "video",
+            "voice",
+            "audio",
+            "document",
+            "other"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    },
+    "SentMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "attachments": {
+          "items": {
+            "$ref": "#/$defs/SentAttachment"
+          },
+          "type": "array"
+        },
+        "edited_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "message_ref": {
+          "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
+          "type": "string"
+        },
+        "outgoing": {
+          "type": "boolean"
+        },
+        "sent_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "text_truncated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "message_ref",
+        "text",
+        "text_truncated",
+        "outgoing",
+        "sent_at"
+      ],
+      "type": "object"
+    },
+    "ServerInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "build_commit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "started_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "build_commit"
       ],
       "type": "object"
     },
@@ -3122,14 +3383,31 @@
       },
       "input": {
         "properties": {
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Idempotency Key"
+          },
           "operation_id": {
-            "title": "Operation Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Operation Id"
           }
         },
-        "required": [
-          "operation_id"
-        ],
         "title": "get_send_statusArguments",
         "type": "object"
       },
@@ -3313,6 +3591,16 @@
               }
             ]
           },
+          "connect": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/BuildInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "connected": {
             "type": "boolean"
           },
@@ -3360,6 +3648,9 @@
           "require_send_message_confirmation": {
             "type": "boolean"
           },
+          "server": {
+            "$ref": "#/$defs/ServerInfo"
+          },
           "text_extraction_available": {
             "type": "boolean"
           },
@@ -3375,6 +3666,8 @@
           }
         },
         "required": [
+          "server",
+          "connect",
           "authorized",
           "connected",
           "mode",
@@ -3987,6 +4280,143 @@
         "type": "object"
       }
     },
+    "list_operations": {
+      "annotations": {
+        "destructive_hint": null,
+        "idempotent_hint": null,
+        "open_world_hint": true,
+        "read_only_hint": true,
+        "title": null
+      },
+      "input": {
+        "properties": {
+          "chat_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Chat Id"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Cursor"
+          },
+          "date_from": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Date From"
+          },
+          "date_to": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Date To"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "message",
+                  "file",
+                  "callback"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Kind"
+          },
+          "limit": {
+            "default": 30,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "pending",
+                  "sent",
+                  "completed",
+                  "failed",
+                  "unknown"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          }
+        },
+        "title": "list_operationsArguments",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "operations": {
+            "items": {
+              "$ref": "#/$defs/OperationSummary"
+            },
+            "type": "array"
+          },
+          "scope": {
+            "const": "mcp_journal",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "operations",
+          "next_cursor"
+        ],
+        "type": "object"
+      }
+    },
     "list_topics": {
       "annotations": {
         "destructive_hint": null,
@@ -4193,6 +4623,87 @@
           "size",
           "sha256",
           "created_at"
+        ],
+        "type": "object"
+      }
+    },
+    "resolve_recipient": {
+      "annotations": {
+        "destructive_hint": null,
+        "idempotent_hint": null,
+        "open_world_hint": true,
+        "read_only_hint": true,
+        "title": null
+      },
+      "input": {
+        "properties": {
+          "chat_ref": {
+            "title": "Chat Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "chat_ref"
+        ],
+        "title": "resolve_recipientArguments",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "chat_id": {
+            "pattern": "^-?[1-9]\\d*$",
+            "type": "string"
+          },
+          "confirmation_supported": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resolved_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "retry_after_seconds": {
+            "type": "integer"
+          },
+          "send_file": {
+            "$ref": "#/$defs/RecipientPermission"
+          },
+          "send_message": {
+            "$ref": "#/$defs/RecipientPermission"
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "private",
+              "group",
+              "channel",
+              "bot",
+              "saved"
+            ],
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "chat_id",
+          "title",
+          "type",
+          "send_message",
+          "send_file",
+          "confirmation_supported",
+          "retry_after_seconds",
+          "resolved_at"
         ],
         "type": "object"
       }
@@ -4785,6 +5296,92 @@
           "exists",
           "owned",
           "supported"
+        ],
+        "type": "object"
+      }
+    },
+    "verify_sent_message": {
+      "annotations": {
+        "destructive_hint": null,
+        "idempotent_hint": null,
+        "open_world_hint": true,
+        "read_only_hint": true,
+        "title": null
+      },
+      "input": {
+        "properties": {
+          "operation_id": {
+            "title": "Operation Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id"
+        ],
+        "title": "verify_sent_messageArguments",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "attachment_bytes_verified": {
+            "const": false,
+            "type": "boolean"
+          },
+          "attachment_metadata_matches": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "checked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/$defs/Issue"
+            },
+            "type": "array"
+          },
+          "message": {
+            "$ref": "#/$defs/SentMessage"
+          },
+          "receipt": {
+            "$ref": "#/$defs/SendReceipt"
+          },
+          "text_matches": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "verification": {
+            "enum": [
+              "not_checked",
+              "read_back",
+              "verified",
+              "mismatch",
+              "unavailable"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "receipt",
+          "verification",
+          "text_matches",
+          "attachment_metadata_matches",
+          "attachment_bytes_verified",
+          "issues"
         ],
         "type": "object"
       }

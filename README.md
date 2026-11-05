@@ -129,7 +129,7 @@ do not paste it into client configuration. This is a local, single-user integrat
 
 | Tool | Purpose |
 | --- | --- |
-| `get_status` | Authorization, connection, permitted sources |
+| `get_status` | Authorization, connection, permitted sources; running server/proxy build identity (unreleased) |
 | `list_folders` | Folders, IDs, order, inclusion/exclusion rules |
 | `list_chats` | Chats filtered by name, type, or folders |
 | `get_chat` | Description and linked discussion group |
@@ -160,11 +160,14 @@ its own capability flag and explicit recipient permission:
 | `create_draft` / `update_draft` | Prepare plain-text drafts with conflict checks and local confirmation policy |
 | `register_file` / `list_files` | Register and discover immutable files for reuse in sends |
 | `send_message` / `send_file` | Send one text or file under local permission/form policy with a durable idempotency key |
-| `get_send_status` | Read a stored send or callback receipt without dispatching |
+| `get_send_status` | Read a stored send/callback receipt by operation ID or idempotency key (key lookup unreleased) |
+| `resolve_recipient` (unreleased) | Exact recipient metadata and local send/form policy without history |
+| `verify_sent_message` (unreleased) | Reread only this MCP's sent message and compare text/attachment metadata |
+| `list_operations` (unreleased) | Filter and page through this account's MCP journal; excludes manual sends |
 | `invoke_button` | Invoke one ordinary callback in a selected private bot dialog under local form policy |
 
-The checkout adds unreleased all-chat/one-off recipient modes and independent form
-settings. Published 0.7.0 keeps the original allowlist and required confirmations;
+The checkout adds unreleased all-chat/one-off recipient modes, independent form settings
+and outbound inspection/recovery. Published 0.7.0 keeps the original tools, allowlist and confirmations;
 see [outbound policies](docs/outbound.md#recipient-modes-and-independent-forms).
 
 Two prompts package these tools for monitoring: `watch_digest` turns

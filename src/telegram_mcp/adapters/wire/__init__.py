@@ -53,6 +53,22 @@ from telegram_mcp.adapters.wire.messages import (
     TraversalBudget,
     WebPage,
 )
+from telegram_mcp.adapters.wire.outbound import (
+    CallbackReceipt,
+    Draft,
+    DraftList,
+    FileList,
+    OperationPage,
+    OperationSummary,
+    RecipientBinding,
+    RecipientPermission,
+    RecipientResolution,
+    RegisteredFile,
+    SendReceipt,
+    SendVerification,
+    SentAttachment,
+    SentMessage,
+)
 from telegram_mcp.adapters.wire.status import Status
 from telegram_mcp.adapters.wire.watches import (
     WatchAcknowledgement,
@@ -64,6 +80,20 @@ from telegram_mcp.adapters.wire.watches import (
 )
 
 __all__ = [
+    "CallbackReceipt",
+    "Draft",
+    "DraftList",
+    "FileList",
+    "OperationPage",
+    "OperationSummary",
+    "RecipientBinding",
+    "RecipientPermission",
+    "RecipientResolution",
+    "RegisteredFile",
+    "SendReceipt",
+    "SendVerification",
+    "SentAttachment",
+    "SentMessage",
     "AlbumResult",
     "Attachment",
     "Change",

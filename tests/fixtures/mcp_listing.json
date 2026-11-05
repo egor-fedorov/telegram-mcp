@@ -39,7 +39,7 @@
     },
     {
       "name": "get_status",
-      "description": "Check fresh Telegram authorization, connection, discovery policy and read scope.\n\nauthorized is true if confirmed, false if missing/revoked, or null if the check failed.\nerror explains a failure; connected is reported independently."
+      "description": "Check running build identity, fresh Telegram authorization and configured capabilities.\n\nauthorized is true if confirmed, false if missing/revoked, or null if the check failed.\nerror explains a failure; connected is reported independently."
     },
     {
       "name": "search_public_channels",
@@ -127,7 +127,19 @@
     },
     {
       "name": "get_send_status",
-      "description": "Read a durable operation receipt in result, without dispatching or retrying it."
+      "description": "Read this account's MCP receipt in result. Supply operation_id XOR idempotency_key.\n\nNever dispatches or retries. A receipt is not a fresh verification of the message."
+    },
+    {
+      "description": "Resolve an exact recipient to ID/name/type and local send/form policies without history.\n\nUse the numeric ID for sending. This preview grants no access and does not guarantee\nTelegram will accept a send. No joining, bot starting or trial messages.",
+      "name": "resolve_recipient"
+    },
+    {
+      "description": "Re-read only the exact outgoing message from this account's MCP send receipt.\n\nDoes not grant history, replies or downloads. Separates receipt from read-back and\ncontent comparison; attachment metadata matches never prove byte integrity.\nUnavailable does not prove deletion; unknown sends without a reference cannot be checked.",
+      "name": "verify_sent_message"
+    },
+    {
+      "description": "List this account's MCP journal, newest entries first. Manual Telegram sends are absent.\n\nUse numeric chat_id, timezone-aware creation dates [date_from, date_to), limit 1..100\nand unchanged filters for cursors. Legacy entries with unknown dates are excluded by\ndate filters. Status is evaluated per page. Never dispatches or retries operations.",
+      "name": "list_operations"
     },
     {
       "name": "invoke_button",

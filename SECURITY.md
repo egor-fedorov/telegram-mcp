@@ -40,6 +40,11 @@ Outbound capabilities are off by default. The default recipient policy requires 
 IDs and ordinary read access. Unreleased local-only settings also permit one-off confirmed
 sends to people/private bots or writes to all supported chats. They never grant retrieval
 access; drafts, callbacks and replies retain their existing-content read checks.
+The unreleased `verify_sent_message` grants only an exact outgoing-message reread from
+the current account's stored successful send receipt. It does not permit arbitrary
+references, surrounding messages, replies or attachment downloads. Authentication-notice
+filtering remains enforced. Local journal queries are account-bound and remain available
+after recipient permission revocation; no recovery query dispatches an action.
 Separate local switches can disable message, file, callback or user-draft overwrite forms.
 One-off sends always require a form, and draft revisions remain mandatory. When forms are
 required, the MCP client controls their UI and can auto-answer; elicitation is not

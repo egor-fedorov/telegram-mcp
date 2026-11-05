@@ -13,6 +13,11 @@ from telegram_mcp.domain import changes, models, watches
 _NULL_CONTROLS = {
     "authorized",
     "confirmation_supported",
+    "confirmation_required",
+    "text_matches",
+    "attachment_metadata_matches",
+    "build_commit",
+    "connect",
     "next_cursor",
     "next_checkpoint",
     "next_text_offset",

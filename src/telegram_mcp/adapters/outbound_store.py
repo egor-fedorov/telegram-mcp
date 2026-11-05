@@ -10,7 +10,9 @@ from datetime import datetime
 from pathlib import Path
 
 from telegram_mcp.adapters.local_uploads import read_allowed_file
+from telegram_mcp.adapters.outbound_queries import index_values, prepare_indexes, query_operations
 from telegram_mcp.adapters.state_database import open_private_database
+from telegram_mcp.application.outbound_ports import OperationBatch, OperationFilter
 from telegram_mcp.domain.models import ToolError
 from telegram_mcp.domain.outbound import Draft, OutboundOperation, RegisteredFile
 
@@ -35,7 +37,8 @@ class OutboundStore:
                 data BLOB NOT NULL);
             CREATE TABLE IF NOT EXISTS operations (
                 id TEXT PRIMARY KEY, account TEXT NOT NULL, key TEXT NOT NULL,
-                value TEXT NOT NULL, UNIQUE(account, key));
+                value TEXT NOT NULL, chat_id TEXT, kind TEXT, status TEXT, created_at REAL,
+                dispatched INTEGER, UNIQUE(account, key));
             CREATE TABLE IF NOT EXISTS drafts (
                 account TEXT NOT NULL, chat TEXT NOT NULL, value TEXT NOT NULL,
                 previous TEXT NOT NULL, PRIMARY KEY(account, chat));
@@ -43,6 +46,11 @@ class OutboundStore:
                 account TEXT NOT NULL, scope TEXT NOT NULL, until TEXT NOT NULL,
                 PRIMARY KEY(account, scope));
         """)
+        try:
+            prepare_indexes(db)
+        except BaseException:
+            db.close()
+            raise
         return db
 
     async def _run[T](self, action: Callable[[sqlite3.Connection], T]) -> T:
@@ -193,12 +201,14 @@ class OutboundStore:
                     "Journal capacity reached; existing operations remain recoverable.",
                 )
             db.execute(
-                "INSERT INTO operations VALUES (?, ?, ?, ?)",
+                "INSERT INTO operations (id, account, key, value, chat_id, kind, status, "
+                "created_at, dispatched) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     operation.operation_id,
                     operation.account_id,
                     operation.idempotency_key,
                     operation.model_dump_json(),
+                    *index_values(operation),
                 ),
             )
             return operation
@@ -208,9 +218,28 @@ class OutboundStore:
     async def save_operation(self, operation: OutboundOperation) -> None:
         await self._run(
             lambda db: db.execute(
-                "UPDATE operations SET value=? WHERE id=? AND account=?",
-                (operation.model_dump_json(), operation.operation_id, operation.account_id),
+                "UPDATE operations SET value=?, chat_id=?, kind=?, status=?, created_at=?, "
+                "dispatched=? WHERE id=? AND account=?",
+                (
+                    operation.model_dump_json(),
+                    *index_values(operation),
+                    operation.operation_id,
+                    operation.account_id,
+                ),
             )
+        )
+
+    async def operations(
+        self,
+        account: str,
+        filters: OperationFilter,
+        *,
+        before: int | None,
+        limit: int,
+        active_ids: tuple[str, ...],
+    ) -> OperationBatch:
+        return await self._run(
+            lambda db: query_operations(db, account, filters, before, limit, active_ids)
         )
 
     async def owned_draft(self, account: str, chat: str) -> Draft | None:

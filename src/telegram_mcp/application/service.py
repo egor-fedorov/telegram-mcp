@@ -29,8 +29,14 @@ from telegram_mcp.application.incremental import IncrementalContext
 from telegram_mcp.application.message_pager import MessagePager
 from telegram_mcp.application.messages import MessageReader
 from telegram_mcp.application.outbound_access import OutboundContext
+from telegram_mcp.application.outbound_inspection import OutboundInspection
 from telegram_mcp.application.outbound_journal import OperationJournal
-from telegram_mcp.application.outbound_ports import Confirm, OutboundPort, OutboundStorePort
+from telegram_mcp.application.outbound_ports import (
+    Confirm,
+    OperationFilter,
+    OutboundPort,
+    OutboundStorePort,
+)
 from telegram_mcp.application.ports import (
     Backend,
     Clock,
@@ -73,8 +79,13 @@ from telegram_mcp.domain.outbound import (
     Draft,
     DraftList,
     FileList,
+    JournalState,
+    OperationKind,
+    OperationPage,
+    RecipientResolution,
     RegisteredFile,
     SendReceipt,
+    SendVerification,
     WritePolicy,
 )
 from telegram_mcp.domain.watches import (
@@ -151,6 +162,7 @@ class Service:
             self._files = FileService(self._outbound, self._attachments)
             self._drafts = DraftService(self._outbound)
             self._journal = OperationJournal(self._outbound)
+            self._inspection = OutboundInspection(self._outbound, self._journal, backend, cursors)
             self._sending = SendService(self._outbound, self._files, self._journal, backend)
             self._callbacks = CallbackService(self._outbound, self._journal, backend)
 
@@ -224,9 +236,34 @@ class Service:
             chat_ref, caption, idempotency_key, file_id, reply_to, confirm
         )
 
-    async def get_send_status(self, operation_id: str) -> SendReceipt | CallbackReceipt:
+    async def get_send_status(
+        self, operation_id: str | None = None, idempotency_key: str | None = None
+    ) -> SendReceipt | CallbackReceipt:
         self._require_outbound()
-        return await self._journal.status(operation_id)
+        return await self._journal.status(operation_id, idempotency_key)
+
+    async def resolve_recipient(self, chat_ref: str) -> RecipientResolution:
+        self._require_outbound()
+        return await self._inspection.resolve(chat_ref)
+
+    async def verify_sent_message(self, operation_id: str) -> SendVerification:
+        self._require_outbound()
+        return await self._inspection.verify(operation_id)
+
+    async def list_operations(
+        self,
+        chat_id: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        kind: OperationKind | None = None,
+        status: JournalState | None = None,
+        limit: int = 30,
+        cursor: str | None = None,
+    ) -> OperationPage:
+        self._require_outbound()
+        return await self._inspection.list(
+            OperationFilter(chat_id, kind, status, date_from, date_to), limit, cursor
+        )
 
     async def invoke_button(
         self,

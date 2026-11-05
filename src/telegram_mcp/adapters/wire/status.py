@@ -2,7 +2,7 @@
 
 from typing import Annotated, Literal, NotRequired
 
-from pydantic import Field, with_config
+from pydantic import AwareDatetime, Field, with_config
 from typing_extensions import TypedDict
 
 from telegram_mcp.adapters.wire.common import CONFIG, ChatID, Issue
@@ -15,7 +15,20 @@ class Cooldown(TypedDict):
 
 
 @with_config(CONFIG)
+class BuildInfo(TypedDict):
+    version: str
+    build_commit: str | None
+
+
+@with_config(CONFIG)
+class ServerInfo(BuildInfo):
+    started_at: NotRequired[AwareDatetime]
+
+
+@with_config(CONFIG)
 class Status(TypedDict):
+    server: ServerInfo
+    connect: BuildInfo | None
     authorized: bool | None
     connected: bool
     error: NotRequired[Issue]
