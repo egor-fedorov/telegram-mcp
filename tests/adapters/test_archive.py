@@ -192,18 +192,21 @@ async def test_archive_manifest_preserves_provenance_and_original_unicode_name(a
 async def test_archive_fsync_keeps_event_loop_responsive_and_cancel_removes_bundle(
     archive_store, monkeypatch
 ):
-    entered, release = threading.Event(), threading.Event()
+    entered, release = asyncio.Event(), threading.Event()
+    loop = asyncio.get_running_loop()
     original = os.fsync
 
     def held(fd):
-        entered.set()
-        assert release.wait(5)
+        loop.call_soon_threadsafe(entered.set)
+        assert release.wait(30)
         original(fd)
 
     monkeypatch.setattr("telegram_mcp.adapters.archive.os.fsync", held)
     task = asyncio.create_task(save_file(archive_store, b"x" * (20 * 1024 * 1024)))
     try:
-        assert await asyncio.wait_for(asyncio.to_thread(entered.wait, 3), 4)
+        # Windows ACL setup and 20 MiB writes may be slow on shared CI disks.
+        # Measure responsiveness only after the worker has entered the held fsync.
+        await asyncio.wait_for(entered.wait(), 30)
         assert await asyncio.wait_for(asyncio.sleep(0, result="responsive"), 0.5) == "responsive"
         task.cancel()
         await asyncio.sleep(0)

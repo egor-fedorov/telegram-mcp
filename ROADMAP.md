@@ -299,6 +299,9 @@ restart recovery and MCP transports. Local `make check` passes Ruff, ty and 1945
 with two platform-specific skips; skill metadata/API checks and its standalone validator
 also pass. Live validation of these new policies and publication
 remain separate steps; no test-recipient or production configuration is changed by this PR.
+The Windows CI follow-up makes the existing archive responsiveness test wait for an
+explicit worker signal with a filesystem-setup budget, retaining the short event-loop
+responsiveness assertion and cancellation cleanup checks.
 
 [Dependabot PR #84](https://github.com/egor-fedorov/telegram-mcp/pull/84) updates the
 reviewed `pyasn1` lock entry to 0.6.5 for four decoder CPU-exhaustion advisories.
