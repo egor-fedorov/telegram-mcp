@@ -123,6 +123,14 @@ async def outbound_fixture(path, **kwargs):
     env = outbound_service(path, **kwargs)
     try:
         yield env
+    except Exception as exc:
+        # These fixtures contain only synthetic data. Preserve the underlying
+        # OS/SQLite failure in CI while production errors remain sanitized.
+        cause = exc
+        while cause is not None:
+            cause.__suppress_context__ = False
+            cause = cause.__context__
+        raise
     finally:
         await env.service.close()
 

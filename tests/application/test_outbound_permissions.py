@@ -82,6 +82,19 @@ async def test_one_off_send_forces_confirmation_despite_optional_forms(tmp_path)
         assert (await env.service.get_status())["confirmation_required"] is True
 
 
+@pytest.mark.slow
+async def test_repeated_declined_operations_remain_durable(tmp_path):
+    settings = Settings(allow_send_messages=True, allow_one_off_sends=True)
+    async with outbound_fixture(tmp_path, settings=settings) as env:
+        for index in range(256):
+            key = f"declined-{index}"
+            result = await env.service.send_message("1", "Synthetic text", key)
+            assert result.error.code == "CONFIRMATION_UNSUPPORTED"
+            stored = await env.store.operation("101", key)
+            assert stored.receipt == result and not stored.dispatched
+        assert not env.telegram.send_calls
+
+
 @pytest.mark.parametrize("mode", ["one_off", "all_chats"])
 async def test_reply_requires_read_access_before_fetching_message(tmp_path, mode):
     settings = Settings(
