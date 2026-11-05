@@ -27,7 +27,7 @@ need a concrete contract before implementation; no delivery dates are assigned.
 | M5 | Complete for 0.5 | Bounded multi-source history, archived watch batches and usable monitoring prompts |
 | R6 | Done | Feature-organized MCP and wire modules, bounded complexity, shared storage and faster tests |
 | M6 | Released in 0.6.0 | Optional PDF/DOCX text extraction with bounded continuation and source/page provenance |
-| M7 | Implemented; live validation and release pending | Buttons/direction/membership, auth-notice omission and opt-in drafts, reusable files, confirmed sends and bot callbacks |
+| M7 | Implemented; selected-source validation passed, release pending | Buttons/direction/membership, auth-notice omission and opt-in drafts, reusable files, confirmed sends and bot callbacks |
 
 The [0.6.0 changelog](CHANGELOG.md#060---2026-10-29) and
 [validation record](docs/validation-0.6.md) describe the current release scope.
@@ -267,9 +267,13 @@ restart. It exposed a `get_send_status` union-envelope mismatch and a rejected n
 file draft. The follow-up fixes receipt encoding and adds MCP/transport regression tests.
 File drafts are deferred by maintainer decision: `file_id` now fails before any upload
 or write, while reusable files and confirmed file sends remain available. See the
-[0.7 validation record](docs/validation-0.7.md) for remaining checks. The follow-up passed
+[0.7 validation record](docs/validation-0.7.md) for evidence and coverage limits. The follow-up passed
 `make check` (1846 tests, two skips) and live receipt/refusal checks without new sends;
-publication is pending.
+additional selected-channel checks verified outgoing/incoming search and synthetic
+authentication-notice omission in direct reads, checkpoint output and saved JSONL exports.
+The maintainer-selected private bot also passed button metadata, revision rejection,
+confirmed callback, stored-receipt and duplicate-key checks. Selected-source live
+validation is complete; release-version, distribution and publication checks remain.
 
 ## Later decisions
 
