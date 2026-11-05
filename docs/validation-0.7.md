@@ -161,4 +161,5 @@ Inspection of the installed Telethon 1.45.0 path found ASN.1 decoding through `r
 for its built-in public keys; no path from Telegram message/attachment content to
 that decoder was identified. This is a bounded reachability review, not a dismissal
 of the dependency alerts. [Dependabot PR #84](https://github.com/egor-fedorov/telegram-mcp/pull/84)
-tracks the lockfile update; a subsequent bundle release is needed to ship that fix.
+updates the source lockfile to 0.6.5 after review; a subsequent bundle release is needed
+to ship that fix. The 0.7.0 artifacts and the release-time measurements above are unchanged.

@@ -6,6 +6,10 @@ A version entry describes its target artifact. Verify publication on [PyPI](http
 
 ## [Unreleased]
 
+### Security
+
+- Update locked `pyasn1` from 0.6.4 to 0.6.5 for four ASN.1 decoder CPU-exhaustion advisories (GHSA-fm9c-5rcf-2q5p, GHSA-9m75-vc3g-4x39, GHSA-2qm8-x737-gmw5 and GHSA-mm57-4v3p-rchx). Source installs using the updated lock and future MCPB builds use the patched dependency. The published 0.7.0 bundle remains unchanged; distributing the corrected bundle requires a new release.
+
 ## [0.7.0] - 2026-11-05
 
 ### Reading

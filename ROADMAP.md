@@ -283,10 +283,14 @@ OCR remain deferred; other clients' outbound confirmation UIs remain unverified.
 
 ## Later decisions
 
-The next maintenance task is to review [Dependabot PR #84](https://github.com/egor-fedorov/telegram-mcp/pull/84),
-which updates `pyasn1` to 0.6.5 for four decoder CPU-exhaustion advisories, then ship
-the patched lock in a subsequent bundle. The [0.7.0 validation record](docs/validation-0.7.md#dependency-follow-up-identified-after-publication)
-records the affected locked dependency and the bounded reachability review.
+[Dependabot PR #84](https://github.com/egor-fedorov/telegram-mcp/pull/84) updates the
+reviewed `pyasn1` lock entry to 0.6.5 for four decoder CPU-exhaustion advisories.
+Source installs and future MCPB builds use the patched lock. Shipping it to bundle
+users requires a new release; the published 0.7.0 artifact remains immutable. The
+[0.7.0 validation record](docs/validation-0.7.md#dependency-follow-up-identified-after-publication)
+retains the release-time dependency and bounded reachability review.
+Validation passed: `make check` (1846 tests, two skips), PyPI artifact-hash comparison,
+and a disposable MCPB's manifest/rebuild/proxy checks with 0.6.5 in its embedded lock.
 
 File drafts, OCR and voice transcription, editing/deleting sent messages and
 administration remain separate decisions with explicit permission contracts.
