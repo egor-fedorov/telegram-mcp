@@ -21,16 +21,21 @@ def invoke(monkeypatch, path, args):
     main(CliDependencies(unused, unused, unused, unused, unused))
 
 
+@pytest.mark.parametrize("file_id", ["a" * 43, "-" + "a" * 42])
 def test_files_cleanup_previews_then_removes_without_a_telegram_account(
-    tmp_path, monkeypatch, capsys
+    tmp_path, monkeypatch, capsys, file_id
 ):
+    monkeypatch.setattr(
+        "telegram_mcp.adapters.outbound_store.secrets.token_urlsafe", lambda _: file_id
+    )
     store = OutboundStore(tmp_path / "account.session")
     file = asyncio.run(store.register("101", "cv.pdf", "application/pdf", b"CV", BASE))
-    invoke(monkeypatch, tmp_path, ["files", "remove", "--file-id", file.file_id])
+    assert file.file_id == file_id
+    invoke(monkeypatch, tmp_path, ["files", "remove", f"--file-id={file.file_id}"])
     assert json.loads(capsys.readouterr().out)["applied"] is False
     invoke(monkeypatch, tmp_path, ["files", "list"])
     assert json.loads(capsys.readouterr().out)["files"][0]["file_id"] == file.file_id
-    invoke(monkeypatch, tmp_path, ["files", "remove", "--file-id", file.file_id, "--apply"])
+    invoke(monkeypatch, tmp_path, ["files", "remove", f"--file-id={file.file_id}", "--apply"])
     assert json.loads(capsys.readouterr().out)["applied"] is True
     invoke(monkeypatch, tmp_path, ["files", "list"])
     assert json.loads(capsys.readouterr().out)["files"] == []

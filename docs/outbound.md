@@ -261,11 +261,14 @@ make no Telegram requests:
 
 ```sh
 telegram-mcp files list
-telegram-mcp files remove --file-id FILE_ID
-telegram-mcp files remove --file-id FILE_ID --apply
+telegram-mcp files remove --file-id=FILE_ID
+telegram-mcp files remove --file-id=FILE_ID --apply
 telegram-mcp operations list
 telegram-mcp operations prune-payloads --apply
 ```
+
+Use `--file-id=VALUE`, including the equals sign: opaque IDs can start with `-`, which
+the argument parser would otherwise interpret as another option.
 
 Removal without `--apply` is a preview. Removing a file may prevent continuation of an
 uncertain file send; retain files while operations need them. Payload cleanup preserves

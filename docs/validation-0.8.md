@@ -62,3 +62,7 @@ Tag `v0.8.0` points to squash commit `87684b7d5adc05c782e61f20367580f9f9a31b95`.
 - A fresh `uvx --refresh --python 3.12 --from telegram-context-mcp==0.8.0 telegram-mcp --version` invocation returned `telegram-mcp 0.8.0`. Refresh was needed immediately after upload because the earlier cached index did not yet list the version.
 
 Publication does not update an already running server or client proxy. Existing permission and confirmation defaults remain unchanged when users upgrade.
+
+## Post-publication documentation check
+
+The publication-record PR exposed a random CLI-test failure: a generated file ID began with `-`, so the space-separated `--file-id ID` invocation was parsed as a missing argument. The [maintenance guide](outbound.md#local-maintenance) and test now use `--file-id=ID`, which already works in the published 0.8.0 CLI. Deterministic fixtures cover both ordinary and leading-hyphen IDs, including preview and removal. Follow-up `make check` passed with 2007 tests and three platform-specific skips. Runtime code and published artifacts are unchanged.

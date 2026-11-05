@@ -37,6 +37,8 @@ checks passed, and publication was verified on
 [GitHub Releases](https://github.com/egor-fedorov/telegram-mcp/releases/tag/v0.8.0), and the
 [MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.egor-fedorov%2Ftelegram-mcp/versions/0.8.0).
 The [0.7 validation record](docs/validation-0.7.md) preserves the initial outbound checks.
+Post-release CLI guidance uses `--file-id=ID`, with a deterministic test for IDs starting
+with `-`; this syntax already works in 0.8.0 and does not change the runtime.
 The [0.4 migration guide](docs/migration-0.4.md) applies to upgrades from 0.3;
 [0.4](docs/validation-0.4.md) and [0.3](docs/validation-0.3.md) retain earlier validation.
 
