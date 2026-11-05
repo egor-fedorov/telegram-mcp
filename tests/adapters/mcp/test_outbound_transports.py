@@ -22,6 +22,11 @@ async def exercise(client, expected):
     )
     assert not result.is_error, result
     assert result.structured_content["status"] == expected, result
+    status = await client.call_tool(
+        "get_send_status", {"operation_id": result.structured_content["operation_id"]}
+    )
+    assert not status.is_error, status
+    assert status.structured_content == {"result": result.structured_content}
     return result
 
 

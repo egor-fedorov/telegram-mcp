@@ -1,4 +1,4 @@
-"""Native drafts, including one uploaded document, through the supported raw API."""
+"""Native text drafts with conservative handling of unsupported Telegram content."""
 
 import hashlib
 from typing import Any
@@ -9,7 +9,7 @@ from telegram_mcp.adapters.telegram.mapping import peer_id, utc
 from telegram_mcp.adapters.telegram.runtime import TelegramRuntime
 from telegram_mcp.domain.auth_notifications import authentication_notice
 from telegram_mcp.domain.models import ToolError
-from telegram_mcp.domain.outbound import Draft, RegisteredFile
+from telegram_mcp.domain.outbound import Draft
 
 
 def normalize_draft(chat: str, raw: Any) -> Draft:
@@ -22,7 +22,7 @@ def normalize_draft(chat: str, raw: Any) -> Draft:
     # Hash every field, including reply targets and media references, not just visible text.
     revision = hashlib.sha256(bytes(raw)).hexdigest()
     supported = isinstance(raw, types.DraftMessage) and not any(
-        getattr(raw, field, None) for field in ("rich_message", "suggested_post", "effect")
+        getattr(raw, field, None) for field in ("media", "rich_message", "suggested_post", "effect")
     )
     return Draft(
         chat_id=chat,
@@ -42,35 +42,6 @@ def media_identity(media: Any) -> str | None:
     if isinstance(media, types.InputMediaPhoto):
         return f"photo:{media.id.id}"
     return None
-
-
-async def upload_document(
-    runtime: TelegramRuntime, peer: Any, file: RegisteredFile, data: bytes
-) -> types.InputMediaDocument:
-    client = await runtime.ensure()
-    uploaded = await runtime.call(client.upload_file(data, file_name=file.name))
-    result = await runtime.write_call(
-        client(
-            functions.messages.UploadMediaRequest(
-                peer=peer,
-                media=types.InputMediaUploadedDocument(
-                    file=uploaded,
-                    mime_type=file.mime_type,
-                    attributes=[types.DocumentAttributeFilename(file_name=file.name)],
-                    force_file=True,
-                ),
-            )
-        ),
-        scope="uploads",
-    )
-    if not isinstance(result, types.MessageMediaDocument) or not isinstance(
-        result.document, types.Document
-    ):
-        raise ToolError("FILE_UNAVAILABLE", "Telegram did not return the uploaded document.")
-    document = result.document
-    return types.InputMediaDocument(
-        types.InputDocument(document.id, document.access_hash, document.file_reference)
-    )
 
 
 class DraftGateway:
@@ -97,25 +68,16 @@ class DraftGateway:
         )
         return normalize_draft(chat, raw)
 
-    async def save(
-        self, chat: str, text: str, file: RegisteredFile | None, data: bytes | None
-    ) -> str | None:
+    async def save(self, chat: str, text: str) -> None:
         client = await self.runtime.ensure()
         peer = await self.runtime.call(client.get_input_entity(int(chat)))
-        media = (
-            await upload_document(self.runtime, peer, file, data)
-            if file and data is not None
-            else None
-        )
         await self.runtime.write_call(
             client(
                 functions.messages.SaveDraftRequest(
                     peer=peer,
                     message=text,
                     no_webpage=True,
-                    media=media,
                 )
             ),
             scope=f"draft:{chat}",
         )
-        return media_identity(media)

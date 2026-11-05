@@ -95,7 +95,7 @@
     },
     {
       "name": "register_file",
-      "description": "Register immutable file bytes for reuse in drafts/sends. Supply attachment_id XOR path.\n\nLocal paths must be inside allowed_upload_directories. Telegram sources require\ndownload permission and are rechecked on reuse. Limits: 20 MiB/file, 100 MiB/32 files.\nFiles persist until removed with the local files CLI; no automatic eviction."
+      "description": "Register immutable file bytes for confirmed sends. Supply attachment_id XOR path.\n\nLocal paths must be inside allowed_upload_directories. Telegram sources require\ndownload permission and are rechecked on reuse. Limits: 20 MiB/file, 100 MiB/32 files.\nFiles persist until removed with the local files CLI; no automatic eviction."
     },
     {
       "name": "list_files",
@@ -111,11 +111,11 @@
     },
     {
       "name": "create_draft",
-      "description": "Create a native draft only when empty. Optional one registered file plus caption.\n\nChanges Telegram state but does not send. Requires allow_drafts and read+write grants.\nAn existing draft returns DRAFT_EXISTS; read it before choosing update_draft."
+      "description": "Create a native text-only draft when empty. file_id is currently unsupported.\n\nChanges Telegram state but does not send. Requires allow_drafts and read+write grants.\nAn existing draft returns DRAFT_EXISTS; read it before choosing update_draft.\nSupplying file_id returns DRAFT_ATTACHMENT_UNSUPPORTED before any upload or write."
     },
     {
       "name": "update_draft",
-      "description": "Replace a draft at its expected revision. Replacing a user draft requires elicitation.\n\nServer-owned unchanged drafts need no prompt. Telegram has no atomic compare-and-swap;\na user edit during the save can still race. Optional one registered file plus caption."
+      "description": "Replace a draft at its expected revision. Replacing a user draft requires elicitation.\n\nServer-owned unchanged drafts need no prompt. Telegram has no atomic compare-and-swap;\na user edit during the save can still race. Only plain text is supported.\nSupplying file_id returns DRAFT_ATTACHMENT_UNSUPPORTED before any upload or write."
     },
     {
       "name": "send_message",
@@ -127,7 +127,7 @@
     },
     {
       "name": "get_send_status",
-      "description": "Read a durable operation receipt without dispatching or retrying it."
+      "description": "Read a durable operation receipt in result, without dispatching or retrying it."
     },
     {
       "name": "invoke_button",

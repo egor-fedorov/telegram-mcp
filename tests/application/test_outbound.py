@@ -227,34 +227,54 @@ async def test_draft_changed_during_confirmation_is_not_overwritten(tmp_path):
         assert (await env.service.get_draft("1")).text == "New"
 
 
-async def test_one_file_draft_keeps_caption_and_can_be_cleared(tmp_path):
-    path = tmp_path / "cv.docx"
-    path.write_bytes(b"CV")
+async def test_text_draft_can_be_cleared(tmp_path):
     async with outbound_fixture(tmp_path) as env:
-        file = await env.service.register_file(path=str(path))
-        draft = await env.service.create_draft("1", "Hello", file.file_id)
-        assert draft.has_media and draft.file == file and draft.text == "Hello"
+        draft = await env.service.create_draft("1", "Hello")
+        assert not draft.has_media and draft.file is None and draft.text == "Hello"
         empty = await env.service.update_draft("1", "", draft.revision)
         assert not empty.exists and not empty.has_media
 
 
 async def test_draft_post_save_media_conflict_does_not_claim_ownership(tmp_path, monkeypatch):
-    path = tmp_path / "cv.pdf"
-    path.write_bytes(b"CV")
     async with outbound_fixture(tmp_path) as env:
-        file = await env.service.register_file(path=str(path))
         original = env.telegram.save_draft
 
         async def concurrent_change(*args):
-            identity = await original(*args)
+            await original(*args)
+            env.telegram.drafts["1"].has_media = True
             env.telegram.drafts["1"].media_identity = "different-file"
             env.telegram.drafts["1"].revision = "user-change"
-            return identity
 
         monkeypatch.setattr(env.telegram, "save_draft", concurrent_change)
         with pytest.raises(ToolError, match="DRAFT_CONFLICT"):
-            await env.service.create_draft("1", "My CV", file.file_id)
+            await env.service.create_draft("1", "My CV")
         assert not (await env.service.get_draft("1")).owned
+
+
+@pytest.mark.parametrize("update", [False, True])
+@pytest.mark.parametrize("file_id", ["registered-file", ""])
+async def test_file_draft_is_refused_before_access_upload_confirmation_or_write(
+    tmp_path, monkeypatch, update, file_id
+):
+    async with outbound_fixture(tmp_path) as env:
+        existing = Draft(chat_id="1", text="User text", revision="user", exists=True)
+        env.telegram.drafts["1"] = existing
+
+        async def unexpected(*args, **kwargs):
+            pytest.fail("File drafts must be rejected before any backend or file operation")
+
+        for name in ("account_id", "draft", "save_draft"):
+            monkeypatch.setattr(env.telegram, name, unexpected)
+        monkeypatch.setattr(env.backend, "resolve_chat", unexpected)
+        monkeypatch.setattr(env.store, "file", unexpected)
+        with pytest.raises(ToolError, match="DRAFT_ATTACHMENT_UNSUPPORTED"):
+            if update:
+                await env.service.update_draft(
+                    "1", "Changed", "user", file_id=file_id, confirm=unexpected
+                )
+            else:
+                await env.service.create_draft("1", "Hello", file_id)
+        assert env.telegram.drafts["1"] == existing
 
 
 @pytest.mark.parametrize(

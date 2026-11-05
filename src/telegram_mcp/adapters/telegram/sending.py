@@ -4,7 +4,6 @@ from typing import Any
 
 from telethon import functions, types
 
-from telegram_mcp.adapters.telegram.drafts import upload_document
 from telegram_mcp.adapters.telegram.mapping import peer_id, utc
 from telegram_mcp.adapters.telegram.runtime import TelegramRuntime
 from telegram_mcp.domain.models import MessageRef, ToolError
@@ -48,6 +47,35 @@ def send_receipt(response: Any, operation: OutboundOperation) -> SendReceipt:
         chat_id=operation.chat_id,
         message_ref=MessageRef(chat_id=operation.chat_id, message_id=message_id),
         sent_at=utc(raw.date) if raw is not None else None,
+    )
+
+
+async def upload_document(
+    runtime: TelegramRuntime, peer: Any, file: RegisteredFile, data: bytes
+) -> types.InputMediaDocument:
+    client = await runtime.ensure()
+    uploaded = await runtime.call(client.upload_file(data, file_name=file.name))
+    result = await runtime.write_call(
+        client(
+            functions.messages.UploadMediaRequest(
+                peer=peer,
+                media=types.InputMediaUploadedDocument(
+                    file=uploaded,
+                    mime_type=file.mime_type,
+                    attributes=[types.DocumentAttributeFilename(file_name=file.name)],
+                    force_file=True,
+                ),
+            )
+        ),
+        scope="uploads",
+    )
+    if not isinstance(result, types.MessageMediaDocument) or not isinstance(
+        result.document, types.Document
+    ):
+        raise ToolError("FILE_UNAVAILABLE", "Telegram did not return the uploaded document.")
+    document = result.document
+    return types.InputMediaDocument(
+        types.InputDocument(document.id, document.access_hash, document.file_reference)
     )
 
 

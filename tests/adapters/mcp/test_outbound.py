@@ -1,6 +1,7 @@
 """MCP-native confirmation, capability reporting, and non-blocking human waits."""
 
 import asyncio
+import json
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -13,7 +14,49 @@ from telegram_mcp.adapters.mcp import create_server
 from telegram_mcp.adapters.mcp.confirmation import ConfirmationRounds, FormRequired
 from telegram_mcp.adapters.tool_gate import ToolCallGate
 from telegram_mcp.domain.models import ToolError
+from telegram_mcp.domain.outbound import CallbackReceipt, OutboundOperation, SendReceipt
 from tests.support.outbound import outbound_fixture
+
+
+@pytest.mark.parametrize("mode", ["auto", "legacy"])
+@pytest.mark.parametrize("schema_mode", ["compact", "full"])
+@pytest.mark.parametrize("kind", ["message", "file", "callback"])
+@pytest.mark.parametrize("state", ["pending", "success", "failed", "unknown"])
+async def test_get_send_status_returns_persisted_receipt_without_dispatch(
+    tmp_path, mode, schema_mode, kind, state
+):
+    status = ("completed" if kind == "callback" else "sent") if state == "success" else state
+    receipt = (
+        CallbackReceipt.model_validate(
+            {"operation_id": "stored", "status": status, "message": "Callback response"}
+        )
+        if kind == "callback"
+        else SendReceipt.model_validate(
+            {"operation_id": "stored", "status": status, "chat_id": "1"}
+        )
+    )
+    async with outbound_fixture(tmp_path) as env:
+        await env.store.create_operation(
+            OutboundOperation(
+                operation_id="stored",
+                account_id="101",
+                idempotency_key="stored-key",
+                kind=kind,
+                request_hash="hash",
+                chat_id="2" if kind == "callback" else "1",
+                random_id=42,
+                receipt=receipt,
+            )
+        )
+        server = create_server(env.service, owns_service=False, schema_mode=schema_mode)
+        async with Client(server, mode=mode) as client:
+            result = await client.call_tool("get_send_status", {"operation_id": "stored"})
+        assert not result.is_error, result
+        assert result.structured_content["result"]["status"] == status
+        assert result.structured_content["result"]["operation_id"] == "stored"
+        assert result.content[0].type == "text"
+        assert json.loads(result.content[0].text) == result.structured_content
+        assert not env.telegram.send_calls and env.telegram.callback_calls == 0
 
 
 @pytest.mark.parametrize("changed", ["description", "expired", "unsolicited", "reused"])

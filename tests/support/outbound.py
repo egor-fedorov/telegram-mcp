@@ -13,7 +13,6 @@ from telegram_mcp.domain.outbound import (
     CallbackReceipt,
     Draft,
     OutboundOperation,
-    RegisteredFile,
     SendReceipt,
     SendRequest,
 )
@@ -39,20 +38,14 @@ class FakeOutbound:
             deep=True
         )
 
-    async def save_draft(
-        self, chat_id: str, text: str, file: RegisteredFile | None, data: bytes | None
-    ) -> str | None:
-        identity = file.sha256 if file else None
+    async def save_draft(self, chat_id: str, text: str) -> None:
         self.drafts[chat_id] = Draft(
             chat_id=chat_id,
             text=text,
             file=None,
-            revision=hashlib.sha256((text + str(identity)).encode()).hexdigest(),
-            has_media=file is not None,
-            media_identity=identity,
-            exists=bool(text or file),
+            revision=hashlib.sha256(text.encode()).hexdigest(),
+            exists=bool(text),
         )
-        return identity
 
     async def send(
         self, operation: OutboundOperation, request: SendRequest, data: bytes | None

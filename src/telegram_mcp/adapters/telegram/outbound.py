@@ -10,7 +10,6 @@ from telegram_mcp.domain.outbound import (
     CallbackReceipt,
     Draft,
     OutboundOperation,
-    RegisteredFile,
     SendReceipt,
     SendRequest,
 )
@@ -33,10 +32,8 @@ class OutboundGateway:
     async def draft(self, chat_id: str) -> Draft:
         return await self.drafts.get(chat_id)
 
-    async def save_draft(
-        self, chat_id: str, text: str, file: RegisteredFile | None, data: bytes | None
-    ) -> str | None:
-        return await self.drafts.save(chat_id, text, file, data)
+    async def save_draft(self, chat_id: str, text: str) -> None:
+        await self.drafts.save(chat_id, text)
 
     async def send(
         self, operation: OutboundOperation, request: SendRequest, data: bytes | None

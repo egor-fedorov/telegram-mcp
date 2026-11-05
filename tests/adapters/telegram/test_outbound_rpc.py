@@ -63,7 +63,7 @@ async def test_send_request_has_stable_random_id_plain_text_and_no_paid_send():
     assert rpc.allow_paid_stars == 0 and rpc.schedule_date is None
 
 
-async def test_native_draft_upload_keeps_file_and_caption():
+async def test_file_send_upload_keeps_file_and_caption():
     client = AsyncMock()
     client.is_connected = Mock(return_value=True)
     client.get_input_entity.return_value = types.InputPeerUser(1, 2)
@@ -80,8 +80,11 @@ async def test_native_draft_upload_keeps_file_and_caption():
         dc_id=2,
         attributes=[],
     )
-    client.side_effect = [types.MessageMediaDocument(document=document), True]
-    gateway = DraftGateway(TelegramRuntime(Settings(), client=client))
+    client.side_effect = [
+        types.MessageMediaDocument(document=document),
+        types.UpdateShortSentMessage(id=7, pts=1, pts_count=1, date=BASE),
+    ]
+    gateway = SendGateway(TelegramRuntime(Settings(), client=client))
     file = RegisteredFile(
         file_id="file",
         name="cv.pdf",
@@ -90,14 +93,35 @@ async def test_native_draft_upload_keeps_file_and_caption():
         sha256="0" * 64,
         created_at=BASE,
     )
-    assert await gateway.save("1", "My CV", file, b"CV") == "document:123"
+    op = operation()
+    op.kind = "file"
+    op.payload = {"file": file.model_dump(mode="json")}
+    request = SendRequest(chat_ref="1", text="My CV", file_id=file.file_id)
+    assert (await gateway.send(op, request, b"CV")).status == "sent"
+    rpc = client.call_args.args[0]
+    assert isinstance(rpc, functions.messages.SendMediaRequest)
+    assert rpc.message == "My CV" and isinstance(rpc.media, types.InputMediaDocument)
+    assert rpc.media.id.id == 123 and rpc.random_id == op.random_id and not rpc.clear_draft
+
+
+async def test_native_text_draft_never_uploads_media():
+    client = AsyncMock()
+    client.is_connected = Mock(return_value=True)
+    client.get_input_entity.return_value = types.InputPeerUser(1, 2)
+    gateway = DraftGateway(TelegramRuntime(Settings(), client=client))
+    await gateway.save("1", "My draft")
     rpc = client.call_args.args[0]
     assert isinstance(rpc, functions.messages.SaveDraftRequest)
-    assert rpc.message == "My CV" and isinstance(rpc.media, types.InputMediaDocument)
-    assert rpc.media.id.id == 123 and rpc.no_webpage
-    raw = types.DraftMessage(message="My CV", date=BASE, media=rpc.media)
+    assert rpc.message == "My draft" and rpc.no_webpage and rpc.media is None
+    assert client.await_count == 1
+    client.upload_file.assert_not_awaited()
+
+
+def test_native_media_draft_is_readable_but_not_replaceable():
+    media = types.InputMediaDocument(types.InputDocument(123, 456, b"private"))
+    raw = types.DraftMessage(message="My CV", date=BASE, media=media)
     draft = normalize_draft("1", raw)
-    assert draft.has_media and draft.media_identity == "document:123"
+    assert draft.has_media and draft.media_identity == "document:123" and not draft.supported
     raw.media = types.InputMediaDocument(types.InputDocument(124, 456, b"private"))
     assert normalize_draft("1", raw).revision != draft.revision
 

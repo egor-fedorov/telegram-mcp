@@ -48,18 +48,24 @@ explicit local removal; they are independent of 15-minute download resources.
 ## Native drafts
 
 - `get_draft(chat_ref)` reads the ordinary dialog's one native draft and its revision.
-- `create_draft(chat_ref, text, file_id?)` refuses to replace a nonempty draft.
-- `update_draft(chat_ref, text, expected_revision, file_id?)` replaces a matching draft.
+- `create_draft(chat_ref, text)` refuses to replace a nonempty draft.
+- `update_draft(chat_ref, text, expected_revision)` replaces a matching draft.
 - `list_drafts(limit, cursor?)` scans the configured write IDs; inspect per-chat issues.
 
-Text is plain text. With a file, it is the caption (at most 1024 UTF-16 units); without
-a file, at most 4096 units. Use an empty text in `update_draft` without `file_id` to clear
+Text is plain text, at most 4096 UTF-16 units. Use an empty text in `update_draft` to clear
 an existing draft. A server-owned draft can be updated without confirmation while its
 native revision is unchanged. Replacing a user-created or user-modified draft requires
 client form confirmation. The previous snapshot is saved locally before replacement.
 
-The implementation uses Telegram's raw `messages.saveDraft` media support, available
-in the pinned Telethon layer. It does not use the text-only custom Draft helper.
+File drafts are deferred. The optional `file_id` argument remains recognized but returns
+`DRAFT_ATTACHMENT_UNSUPPORTED` before any file read, upload, confirmation or draft write.
+Registered files remain available for a separately confirmed `send_file`; a draft request
+never falls back to sending. Native drafts containing media or other unsupported rich
+content remain readable but cannot be replaced by these text-only tools.
+
+The implementation uses Telegram's raw `messages.saveDraft` for text. A live document
+draft was rejected with `MediaInvalidError`; the presence of a `media` field in the
+TL schema was insufficient evidence for arbitrary file-draft support.
 Draft operations serialize per peer and recheck before and after saving. Telegram has
 no atomic draft compare-and-swap: another Telegram client can still edit during the
 save. A detected mismatch reports `DRAFT_CONFLICT`; do not overwrite it automatically.
@@ -86,7 +92,10 @@ the automated tests use real MCP transports with synthetic client callbacks.
 
 Receipts contain an operation ID, `pending`, `sent`, `failed` or `unknown`, and the exact
 message reference/time when Telegram supplied them. Inspect `error` and `retry_at`.
-`get_send_status(operation_id)` reads the journal without dispatching anything.
+`get_send_status(operation_id)` reads the journal without dispatching anything. Its
+response is `{"result": {...}}`, where `result` is a send or callback receipt; inspect
+`result.status`, `result.error` and `result.retry_at`. Direct send/callback calls return
+the receipt at the top level. This envelope matches the advertised MCP union schema.
 
 - Reuse the **same key and arguments** after an interrupted send. A different payload
   under the same key fails with `IDEMPOTENCY_CONFLICT`.
@@ -143,11 +152,11 @@ all deduplication records and does not remove pending/unknown operation payloads
 Offline tests cover permissions, draft races, immutable files, restart recovery, quota
 refusal, Telegram request/receipt mapping, button filtering, and confirmations over
 STDIO, HTTP and `connect` in legacy and modern MCP modes. Before publishing, use an
-explicitly chosen test recipient/private bot to check one native draft with a file,
+explicitly chosen test recipient/private bot to check a text draft and revision conflict,
 one confirmed text send, one file+caption, duplicate-key recovery, and one callback.
 Check acceptance and refusal in the intended real MCP client's UI. Never use login
-notifications or real job applications as test data. Live outbound validation has
-not yet been performed for this implementation.
+notifications or real job applications as test data. The [0.7 validation record](validation-0.7.md)
+records selected-channel checks in Codex, discovered failures and remaining coverage.
 
 The earlier [PR #32](https://github.com/egor-fedorov/telegram-mcp/pull/32) supplied a
 useful write-permission/confirmation proposal. Its documentation-only design was

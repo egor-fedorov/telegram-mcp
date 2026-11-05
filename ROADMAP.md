@@ -250,7 +250,7 @@ clean-install and portable-bundle checks.
 
 The agreed stage is implemented in one focused PR: button metadata and revisions,
 outgoing filters, channel membership, conservative authentication-notice omission,
-immutable reusable files, native drafts with one attachment/caption, durable idempotent
+immutable reusable files, native text drafts, durable idempotent
 sends and confirmed private-bot callbacks. OCR is excluded. The
 [outbound guide](docs/outbound.md) records permission, confirmation, storage and
 recovery contracts, including limitations inherited from Telegram and MCP clients.
@@ -259,15 +259,22 @@ was used as design input, not merged as implementation.
 
 Autonomous validation covers synthetic Telegram RPCs, restart recovery and actual
 STDIO/HTTP/connect transports with test confirmation clients. Before release, validate
-native file drafts, one text/file send, duplicate receipts and callbacks on explicitly
-selected test recipients; check form acceptance/refusal in the intended real client.
-No live outbound action, user service reconfiguration or package publication is part
-of the implementation validation. Follow the release procedure after these checks.
+text drafts and revision conflicts, one text/file send, duplicate receipts and callbacks
+on explicitly selected test recipients; check form acceptance/refusal in the intended client.
+Selected-channel live validation in Codex on 2026-11-05 verified confirmation acceptance
+and refusal, text drafts/conflicts, file integrity and duplicate receipts across a server
+restart. It exposed a `get_send_status` union-envelope mismatch and a rejected native
+file draft. The follow-up fixes receipt encoding and adds MCP/transport regression tests.
+File drafts are deferred by maintainer decision: `file_id` now fails before any upload
+or write, while reusable files and confirmed file sends remain available. See the
+[0.7 validation record](docs/validation-0.7.md) for remaining checks. The follow-up passed
+`make check` (1846 tests, two skips) and live receipt/refusal checks without new sends;
+publication is pending.
 
 ## Later decisions
 
-OCR and voice transcription, editing/deleting sent messages and administration remain
-separate decisions with explicit permission contracts.
+File drafts, OCR and voice transcription, editing/deleting sent messages and
+administration remain separate decisions with explicit permission contracts.
 
 Broader change journals, multi-source exports, saved searches, local text/semantic
 indexes, scheduled monitoring, administration and isolated account profiles also

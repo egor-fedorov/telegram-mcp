@@ -149,7 +149,7 @@ class Service:
                 outbound_backend, outbound_store, access, backend, write_policy, clock
             )
             self._files = FileService(self._outbound, self._attachments)
-            self._drafts = DraftService(self._outbound, self._files)
+            self._drafts = DraftService(self._outbound)
             self._journal = OperationJournal(self._outbound)
             self._sending = SendService(self._outbound, self._files, self._journal, backend)
             self._callbacks = CallbackService(self._outbound, self._journal, backend)

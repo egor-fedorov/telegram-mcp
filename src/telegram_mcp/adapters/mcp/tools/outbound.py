@@ -30,7 +30,7 @@ def register(server: MCPServer[None], service: Service, expose: Expose, gate: To
     async def register_file(
         attachment_id: str | None = None, path: str | None = None
     ) -> Annotated[CallToolResult, dto.RegisteredFile]:
-        """Register immutable file bytes for reuse in drafts/sends. Supply attachment_id XOR path.
+        """Register immutable file bytes for confirmed sends. Supply attachment_id XOR path.
 
         Local paths must be inside allowed_upload_directories. Telegram sources require
         download permission and are rechecked on reuse. Limits: 20 MiB/file, 100 MiB/32 files.
@@ -63,10 +63,11 @@ def register(server: MCPServer[None], service: Service, expose: Expose, gate: To
     async def create_draft(
         chat_ref: str, text: str, file_id: str | None = None
     ) -> Annotated[CallToolResult, dto.Draft]:
-        """Create a native draft only when empty. Optional one registered file plus caption.
+        """Create a native text-only draft when empty. file_id is currently unsupported.
 
         Changes Telegram state but does not send. Requires allow_drafts and read+write grants.
         An existing draft returns DRAFT_EXISTS; read it before choosing update_draft.
+        Supplying file_id returns DRAFT_ATTACHMENT_UNSUPPORTED before any upload or write.
         """
         return wire.encode(await service.create_draft(chat_ref, text, file_id))
 
@@ -83,7 +84,8 @@ def register(server: MCPServer[None], service: Service, expose: Expose, gate: To
         """Replace a draft at its expected revision. Replacing a user draft requires elicitation.
 
         Server-owned unchanged drafts need no prompt. Telegram has no atomic compare-and-swap;
-        a user edit during the save can still race. Optional one registered file plus caption.
+        a user edit during the save can still race. Only plain text is supported.
+        Supplying file_id returns DRAFT_ATTACHMENT_UNSUPPORTED before any upload or write.
         """
         return wire.encode(
             await service.update_draft(
@@ -145,8 +147,9 @@ def register(server: MCPServer[None], service: Service, expose: Expose, gate: To
     async def get_send_status(
         operation_id: str,
     ) -> Annotated[CallToolResult, dto.SendReceipt | dto.CallbackReceipt]:
-        """Read a durable operation receipt without dispatching or retrying it."""
-        return wire.encode(await service.get_send_status(operation_id))
+        """Read a durable operation receipt in result, without dispatching or retrying it."""
+        # A union's schema requires a result envelope even for explicit CallToolResult output.
+        return wire.encode({"result": await service.get_send_status(operation_id)})
 
     @server.tool(annotations=WRITE)
     @rounds.wrap

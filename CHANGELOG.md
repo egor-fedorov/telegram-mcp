@@ -14,10 +14,11 @@ A version entry describes its target artifact. Verify publication on [PyPI](http
 ### Optional outbound workflows
 
 - Add separately enabled native drafts, message/file sending and private-bot callbacks. Recipients require ordinary read access and an explicit write allowlist; all capabilities default off. Outbound tools appear only when a write capability is enabled. Sending and callbacks require client form confirmation; replacing a user draft also requires confirmation and its current revision.
-- Register immutable files from selected Telegram attachments or allowed local directories, retaining name, MIME type, size and SHA-256. Support one file with a caption in drafts and sends. Local maintenance lists/removes files and inspects operation receipts without contacting Telegram.
+- Register immutable files from selected Telegram attachments or allowed local directories, retaining name, MIME type, size and SHA-256. Support one file with a caption in confirmed sends. Native drafts support plain text only; file drafts are deferred and return `DRAFT_ATTACHMENT_UNSUPPORTED` before any upload or write. Local maintenance lists/removes files and inspects operation receipts without contacting Telegram.
 - Persist account-bound idempotency keys and random IDs before sending. Repeated keys replay receipts, conflicting requests fail, uncertain sends retain their random ID, and uncertain callbacks never re-execute. Preserve deduplication records without FIFO eviction and refuse new operations at quota. Persist scoped Telegram cooldowns across restart.
 - Support legacy elicitation and modern MCP confirmation rounds through STDIO, authenticated HTTP and `connect`. Confirmation waits release tool capacity; permission, recipient, content and account checks run again before dispatch. Telegram mutations have no automatic RPC/reconnect replay; explicitly selected reads retain one bounded server-error retry.
-- Live outbound validation and publication remain pending. No version tag or package release accompanies this change.
+- Fix `get_send_status` returning an unexpected MCP error: return the send/callback receipt inside `result`, matching its advertised union output schema. Persisted operation records and direct send responses are unchanged.
+- Selected-channel live validation in Codex confirmed form acceptance/refusal, text drafts and conflicts, file integrity, and duplicate receipts across restart. See the [0.7 validation record](docs/validation-0.7.md) for remaining checks. No version tag or package release accompanies this change.
 
 ### Documentation
 
