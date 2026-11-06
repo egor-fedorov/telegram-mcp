@@ -39,6 +39,12 @@ checks passed, and publication was verified on
 The [0.7 validation record](docs/validation-0.7.md) preserves the initial outbound checks.
 Post-release CLI guidance uses `--file-id=ID`, with a deterministic test for IDs starting
 with `-`; this syntax already works in 0.8.0 and does not change the runtime.
+Reviewed dependency and CI action updates remain unreleased. Routine dependency
+changes now use one brief changelog entry per release, with details retained in PRs
+and the lockfile. The test configuration explicitly selects function-scoped async
+fixture loops to avoid an implicit default that the test plugin plans to change.
+Branch protection still requires successful `checks`, including for owners, without
+requiring every PR to be updated after each merge to `main`.
 The [0.4 migration guide](docs/migration-0.4.md) applies to upgrades from 0.3;
 [0.4](docs/validation-0.4.md) and [0.3](docs/validation-0.3.md) retain earlier validation.
 
