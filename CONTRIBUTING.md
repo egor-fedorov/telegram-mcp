@@ -124,6 +124,10 @@ catalog and messages. A new tool in an existing feature touches only that featur
    merge after review; the final PR title becomes the squash commit message. Do not push feature work
    directly to `main`.
 
+The required `checks` job applies to repository owners too. Branch protection does
+not require updating every PR after each merge to `main`. Update and retest a branch
+when conflicts or overlapping changes need integration checks.
+
 Keep changes focused. Propose a new direction with a feature request before expanding
 an agreed milestone. Add or update roadmap completion records only when their acceptance
 criteria are met; distinguish offline checks from any separately performed live validation.
@@ -148,6 +152,9 @@ groups, and require manual review and passing CI too. When an update fails, fix 
 compatibility issue or narrow that update; do not disable checks or enable auto-merge.
 
 Changes intended for users should have a concise entry in [CHANGELOG.md](CHANGELOG.md).
+Summarize routine dependency updates in one short entry per release; keep individual
+package versions and review details in the dependency PRs and `uv.lock`. Describe
+security impact or required upgrade actions separately when users need to act.
 Release preparation belongs in a PR; a version tag is pushed only after that PR has
 been squash-merged and checked. Follow [the release procedure](docs/releasing.md) for
 PyPI Trusted Publisher setup, artifact checks, tagging, and publication verification.

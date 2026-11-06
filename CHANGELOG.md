@@ -6,6 +6,10 @@ A version entry describes its target artifact. Verify publication on [PyPI](http
 
 ## [Unreleased]
 
+### Dependencies
+
+- Refresh runtime and development dependencies and CI actions, including upstream security fixes.
+
 ### Documentation and tests
 
 - Use `--file-id=ID` in local file-removal examples so opaque IDs beginning with `-` are parsed as values. Cover that case deterministically in the CLI test; the syntax already works in 0.8.0 and requires no runtime change.
