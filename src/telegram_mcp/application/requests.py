@@ -15,6 +15,7 @@ class ReadFilters:
     oldest_first: bool = False
     has_link: bool | None = None
     direction: Literal["all", "incoming", "outgoing"] = "all"
+    include_button_urls: bool = False
 
 
 @dataclass(frozen=True)

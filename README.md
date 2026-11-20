@@ -224,6 +224,8 @@ The [0.7 validation record](https://github.com/egor-fedorov/telegram-mcp/blob/ma
 tracks outbound workflows, authentication-notice omission and release checks.
 The [0.8 validation record](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/validation-0.8.md)
 covers recipient policies, send inspection, Windows storage repair and publication.
+The [0.8.1 validation record](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/validation-0.8.1.md)
+covers the selected-source download, bundle audit and published artifacts.
 
 The code is [MIT licensed](https://github.com/egor-fedorov/telegram-mcp/blob/main/LICENSE).
 This does not grant rights to Telegram content. Secret chats are unsupported; attachment

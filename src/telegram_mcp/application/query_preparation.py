@@ -66,6 +66,7 @@ class QuerySpec:
                 read.filters.content_type,
                 read.filters.has_link,
                 read.filters.direction,
+                read.filters.include_button_urls,
                 "oldest_first" if read.filters.oldest_first else "newest_first",
                 read.thread_id if isinstance(read, ThreadRead) else None,
                 self.selection.source_ref,

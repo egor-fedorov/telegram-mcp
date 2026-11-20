@@ -1,4 +1,5 @@
 import json
+from datetime import timedelta
 
 import pytest
 from mcp.client import Client
@@ -10,10 +11,12 @@ from telegram_mcp.domain.models import (
     Chat,
     ForumTopic,
     Message,
+    MessageButton,
     PollResults,
     ReactionSummary,
+    ReplyMarkup,
 )
-from tests.support.fakes import FakeBackend, msg
+from tests.support.fakes import BASE, FakeBackend, msg
 from tests.support.message_metadata import METADATA_FIELDS, assert_metadata, rich_message
 
 
@@ -25,6 +28,30 @@ def rich_backend(messages: list[Message]) -> FakeBackend:
     backend.topics[(forum.id, 7)] = ForumTopic(id=7, chat_id=forum.id, title="Metadata")
     backend.pinned_message_keys = {message.message_ref.key for message in messages}
     return backend
+
+
+@pytest.mark.parametrize("schema_mode", ["compact", "full"])
+async def test_search_returns_url_buttons_through_mcp(schema_mode):
+    post = msg("1", 1)
+    url = "https://example.test/apply"
+    post.reply_markup = ReplyMarkup(
+        type="inline", rows=[[MessageButton(button_id="b", text="Apply", type="url", url=url)]]
+    )
+    service = Service(FakeBackend([post]), Settings(allowed_chat_ids=["1"]))
+    args = {
+        "query": "",
+        "chat_ids": ["1"],
+        "date_from": BASE.isoformat(),
+        "date_to": (BASE + timedelta(days=1)).isoformat(),
+    }
+    async with Client(create_server(service, schema_mode=schema_mode), cache=None) as client:
+        ordinary = await client.call_tool("search_messages", {**args, "has_link": True})
+        assert not ordinary.is_error and ordinary.structured_content
+        assert ordinary.structured_content["messages"] == []
+        inclusive = await client.call_tool("search_messages", {**args, "include_button_urls": True})
+        assert not inclusive.is_error and inclusive.structured_content
+        (message,) = inclusive.structured_content["messages"]
+        assert message["reply_markup"]["rows"][0][0]["url"] == url
 
 
 @pytest.mark.parametrize("mode", ["auto", "legacy"])
