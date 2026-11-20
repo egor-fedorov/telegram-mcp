@@ -420,10 +420,11 @@ async def probe(
     backend = backend_factory(restricted)
     recorder = Recorder(emit)
     temporary = TemporaryDirectory(prefix="telegram-mcp-probe-")
-    root = Path(temporary.name)
     service: Service | None = None
     try:
         async with asyncio.timeout(MAX_SECONDS):
+            # macOS can expose system temp through /var rather than /private/var.
+            root = await asyncio.to_thread(Path(temporary.name).resolve)
             selected: dict[str, Chat] = {}
             for ref in chats:
                 chat = await backend.resolve_chat(ref, refresh=True)

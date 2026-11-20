@@ -154,7 +154,18 @@ class ArtifactProbeFake(ProbeFake):
 
 
 @pytest.mark.parametrize("present", [True, False])
-async def test_attachment_only_probe_never_scans_the_chat(present):
+async def test_attachment_only_probe_never_scans_the_chat(present, tmp_path, monkeypatch):
+    parent = tmp_path / "temp"
+    parent.mkdir()
+    alias = tmp_path / "system-temp"
+    try:
+        alias.symlink_to(parent, target_is_directory=True)
+    except OSError:
+        alias = parent
+    monkeypatch.setattr(
+        "scripts.probe_telegram.TemporaryDirectory",
+        lambda **kwargs: tempfile.TemporaryDirectory(dir=alias, **kwargs),
+    )
     backend = ArtifactProbeFake()
     attachment_id = "1:10:document"
     if present:
@@ -176,6 +187,7 @@ async def test_attachment_only_probe_never_scans_the_chat(present):
         "attachment_resource_and_archive" if present else "probe",
     ]
     assert checks[-1].issue_codes == ([] if present else ["VALIDATION_MISMATCH"])
+    assert list(parent.iterdir()) == []
 
 
 async def test_artifact_probe_exercises_m3_m4_without_leaving_files_or_private_output(
