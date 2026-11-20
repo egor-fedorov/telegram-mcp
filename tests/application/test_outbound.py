@@ -195,6 +195,28 @@ async def test_registered_file_keeps_original_bytes_and_receipt_after_removal(tm
         assert len(env.telegram.send_calls) == 1
 
 
+@pytest.mark.parametrize(
+    "code", ["RATE_LIMITED", "CONNECTION_ERROR", "AUTH_REQUIRED", "ACCESS_DENIED"]
+)
+async def test_file_listing_distinguishes_unavailable_sources_from_failed_checks(tmp_path, code):
+    async with outbound_fixture(tmp_path) as env:
+        env.settings.allow_attachment_downloads = True
+        now = env.clock.utc_now()
+        local = await env.store.register("101", "local", "text/plain", b"local", now)
+        await env.store.register(
+            "101", "selected", "text/plain", b"source", now, "1:1:document", "doc:1"
+        )
+        env.backend.authorization_fault = ToolError(
+            code, "Source check failed.", 30 if code == "RATE_LIMITED" else None
+        )
+        if code == "ACCESS_DENIED":
+            assert (await env.service.list_files()).files == [local]
+        else:
+            with pytest.raises(ToolError, match=code) as failure:
+                await env.service.list_files()
+            assert failure.value.retry_after == env.backend.authorization_fault.retry_after
+
+
 async def test_drafts_preserve_user_state_and_use_optimistic_revision(tmp_path):
     async with outbound_fixture(tmp_path) as env:
         created = await env.service.create_draft("1", "First")

@@ -76,6 +76,10 @@ uv run --locked python scripts/probe_telegram.py \
 
 The value above is illustrative; use the actual ID returned for the selected post.
 
+Add `--attachment-only` with one selected `--chat` and one `--attachment-id` to
+check just that message, its download, resource and disposable archive copy. This
+mode skips history, searches, neighboring messages and account-wide catalogs.
+
 ### Selected PDF/DOCX extraction
 
 Install the optional extra in the probe environment. With the session-owning server

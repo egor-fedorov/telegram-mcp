@@ -27,8 +27,8 @@ async def test_selected_download_and_resource_preserve_original_bytes(tmp_path: 
                 "application/octet-stream",
             )
         assert backend.downloads == 1
-        assert backend.backend_calls.count("authorization") == 3
-        assert backend.backend_calls.count("prepare_attachment") == 3
+        assert backend.backend_calls.count("authorization") == 4
+        assert backend.backend_calls.count("prepare_attachment") == 4
         path = Path(result.local_path)
     assert not await asyncio.to_thread(path.exists)
 
@@ -83,12 +83,42 @@ async def test_explicit_public_source_is_rechecked_before_resource_output(tmp_pa
             Chat(id="-1001", title="Source", type="channel", username="source")
         ]
         result = await service.download_attachment("-1001:10:document")
-        assert backend.public_checks == ["-1001"]
+        assert backend.public_checks == ["-1001", "-1001"]
         backend.public_faults["-1001"] = ToolError("ACCESS_DENIED", "Source became private.")
         with pytest.raises(ToolError, match="ACCESS_DENIED"):
             await service.read_download_resource(result.resource_uri)
-        assert backend.public_checks == ["-1001", "-1001"]
+        assert backend.public_checks == ["-1001", "-1001", "-1001"]
         assert backend.downloads == 1
+
+
+@pytest.mark.parametrize("save", [False, True])
+@pytest.mark.parametrize("change", ["folder", "protection", "identity", "network"])
+async def test_first_delivery_rechecks_downloaded_source(tmp_path, save, change):
+    async with setup_downloads(tmp_path, archive=True) as (service, backend, settings, _, _):
+        folder = Folder(id=1, title="Allowed", position=0, included_chat_ids=["1"])
+        settings.allowed_chat_ids = []
+        settings.allowed_folder_ids = [1]
+        backend.chats = [Chat(id="1", type="private", title="Selected")]
+        backend.folders = [folder]
+        backend.resume = asyncio.Event()
+        task = asyncio.create_task(service.download_attachment("1:10:document", save=save))
+        await asyncio.wait_for(backend.entered.wait(), 2)
+        if change == "folder":
+            folder.included_chat_ids = []
+            expected = "ACCESS_DENIED"
+        elif change == "identity":
+            backend.source = replace(backend.source, identity="replacement")
+            expected = "ATTACHMENT_UNAVAILABLE"
+        else:
+            expected = "ATTACHMENT_PROTECTED" if change == "protection" else "CONNECTION_ERROR"
+            backend.prepare_error = ToolError(expected, "Unavailable for delivery.")
+        backend.resume.set()
+        with pytest.raises(ToolError, match=expected):
+            await task
+        assert backend.downloads == 1
+        assert not list((tmp_path / "downloads").glob("*.bin"))
+        assert not list((tmp_path / "downloads").glob("*.part"))
+        assert not (tmp_path / "archive").exists()
 
 
 @pytest.mark.parametrize(

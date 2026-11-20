@@ -208,9 +208,11 @@ async def test_folder_name_resolution_reads_folder_definitions_only():
             Folder(id=3, title="Jobs", position=0),
             Folder(id=4, title="News", position=1),
             Folder(id=5, title="news ", position=2),
+            Folder(id=6, title="jobs", position=3),
         ]
     )
-    async with Client(server_for(backend)) as client:
+    service = build_service(backend, Settings(allowed_folder_ids=[3, 4, 5]))
+    async with Client(create_server(service)) as client:
         text = prompt_text(
             await client.get_prompt("period_digest", {"folder_name": " jobs ", "days": "1"})
         )

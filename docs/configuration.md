@@ -96,6 +96,11 @@ Folder IDs are integers; chat IDs are strings containing Telethon marked peer ID
 Run `telegram-mcp catalog` while the server is stopped to inspect your account's
 folder/chat metadata. The local catalog does not output message text.
 
+MCP folder listings and title lookups expose only the configured folders, or all
+folders under `allow_all_chats`. Their explicit peer lists include only readable
+chats. An allowed chat ID on its own makes no folder visible. Use the local catalog
+to find folder IDs when setting up an empty allowlist.
+
 | Setting | Effect |
 | --- | --- |
 | `allowed_folder_ids` | Permits chats selected by those Telegram folder rules |

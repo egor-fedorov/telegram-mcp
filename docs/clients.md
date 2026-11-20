@@ -13,7 +13,9 @@ to start the shared server at login. Each client below launches a STDIO `connect
 profile; no Telegram credentials or HTTP token belong in these client configurations.
 It never starts the HTTP server automatically.
 
-The examples target package version 0.8.0 and Python 3.12 through `uvx`. Check
+If the editor can find the installed `telegram-mcp` on PATH, review the shared-server setup in [Cursor](https://cursor.com/en/install-mcp?name=telegram&config=eyJjb21tYW5kIjoidGVsZWdyYW0tbWNwIiwiYXJncyI6WyJjb25uZWN0Il19) or [VS Code](https://vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522telegram%2522%252C%2522command%2522%253A%2522telegram-mcp%2522%252C%2522args%2522%253A%255B%2522connect%2522%255D%257D). Both installation links configure `telegram-mcp connect`. The manual examples below also support a pinned `uvx` executable.
+
+The examples target package version 0.8.1 and Python 3.12 through `uvx`. Check
 [PyPI](https://pypi.org/project/telegram-context-mcp/) for published versions. For an
 unreleased revision, use an absolute executable path from a [source checkout](../README.md#run-from-source),
 with `args = ["connect"]` or its JSON equivalent. A persistent `uv tool install`
@@ -39,7 +41,7 @@ Merge this table into your existing `~/.codex/config.toml`, preserving other set
 ```toml
 [mcp_servers.telegram]
 command = "uvx"
-args = ["--python", "3.12", "--from", "telegram-context-mcp==0.8.0", "telegram-mcp", "connect"]
+args = ["--python", "3.12", "--from", "telegram-context-mcp==0.8.1", "telegram-mcp", "connect"]
 startup_timeout_sec = 20
 tool_timeout_sec = 120
 enabled_tools = [
@@ -56,12 +58,14 @@ Codex uses `[mcp_servers.NAME]` for STDIO command/argument configuration. Check 
 server in Codex's MCP settings and call `get_status`. See the
 [official Codex MCP documentation](https://learn.chatgpt.com/docs/extend/mcp?surface=cli).
 
+If you enable outbound tools on the server, also add the names you use to Codex's `enabled_tools` list. For example, add `resolve_recipient`, `send_message`, `get_send_status` and `verify_sent_message` for text sends and recovery. Add `register_file` and `send_file` for attachments. Restart the client to reload its tool list.
+
 ## Claude Desktop
 
 The optional [MCPB extension](mcpb.md) packages this same `connect` proxy and provides
 a configuration-file picker. Initial Windows connection and catalog checks passed;
 see the [Desktop validation record](mcpb.md#windows-report-2026-10-29) for versions and coverage.
-The [0.8.0 release](https://github.com/egor-fedorov/telegram-mcp/releases/tag/v0.8.0) includes the bundle and checksum.
+Download the bundle and its checksum from the [matching release](https://github.com/egor-fedorov/telegram-mcp/releases).
 The manual setup below remains available.
 
 Open Settings → Developer → Edit Config and merge this `mcpServers` entry into
@@ -72,7 +76,7 @@ Open Settings → Developer → Edit Config and merge this `mcpServers` entry in
   "mcpServers": {
     "telegram": {
       "command": "uvx",
-      "args": ["--python", "3.12", "--from", "telegram-context-mcp==0.8.0", "telegram-mcp", "connect"]
+      "args": ["--python", "3.12", "--from", "telegram-context-mcp==0.8.1", "telegram-mcp", "connect"]
     }
   }
 }
@@ -88,7 +92,7 @@ Use the file opened by the app; the standard locations include
 Add the proxy in user scope so it is available across your projects:
 
 ```sh
-claude mcp add --transport stdio --scope user telegram -- uvx --python 3.12 --from telegram-context-mcp==0.8.0 telegram-mcp connect
+claude mcp add --transport stdio --scope user telegram -- uvx --python 3.12 --from telegram-context-mcp==0.8.1 telegram-mcp connect
 claude mcp get telegram
 ```
 
@@ -102,7 +106,7 @@ the configuration is:
     "telegram": {
       "type": "stdio",
       "command": "uvx",
-      "args": ["--python", "3.12", "--from", "telegram-context-mcp==0.8.0", "telegram-mcp", "connect"]
+      "args": ["--python", "3.12", "--from", "telegram-context-mcp==0.8.1", "telegram-mcp", "connect"]
     }
   }
 }
@@ -122,7 +126,7 @@ Cursor also supports project-local `.cursor/mcp.json`.
   "mcpServers": {
     "telegram": {
       "command": "uvx",
-      "args": ["--python", "3.12", "--from", "telegram-context-mcp==0.8.0", "telegram-mcp", "connect"]
+      "args": ["--python", "3.12", "--from", "telegram-context-mcp==0.8.1", "telegram-mcp", "connect"]
     }
   }
 }
@@ -139,7 +143,7 @@ Use the current guided setup for the selected agent harness:
 2. Choose **Command (stdio)** and enter:
 
    ```sh
-   uvx --python 3.12 --from telegram-context-mcp==0.8.0 telegram-mcp connect
+   uvx --python 3.12 --from telegram-context-mcp==0.8.1 telegram-mcp connect
    ```
 
 3. Name the server `telegram`. For a personal Copilot setup, choose **Global**, then
@@ -162,7 +166,7 @@ use its `servers` format instead. It is distinct from the portable Copilot forma
     "telegram": {
       "type": "stdio",
       "command": "uvx",
-      "args": ["--python", "3.12", "--from", "telegram-context-mcp==0.8.0", "telegram-mcp", "connect"]
+      "args": ["--python", "3.12", "--from", "telegram-context-mcp==0.8.1", "telegram-mcp", "connect"]
     }
   }
 }
@@ -178,7 +182,7 @@ For one client, stop the shared HTTP server and change the final `connect` argum
 to `serve` in that client's configuration. The complete command becomes:
 
 ```sh
-uvx --python 3.12 --from telegram-context-mcp==0.8.0 telegram-mcp serve
+uvx --python 3.12 --from telegram-context-mcp==0.8.1 telegram-mcp serve
 ```
 
 The client now starts and owns a standalone STDIO server. Do not start another
@@ -243,6 +247,13 @@ and trust rules typed as an ordinary request. Prompts do not add permissions; to
 access policy and acknowledgements behave exactly as when called directly.
 
 ## Agent Skill
+
+After connecting the MCP server, install its instructions in a supported client:
+
+```sh
+npx skills add egor-fedorov/telegram-mcp --skill telegram-mcp
+```
+
 
 The optional [telegram-mcp skill](../skills/telegram-mcp/SKILL.md) teaches an agent
 when to use each workflow, how to bound reading, and when to acknowledge watch batches.
@@ -311,7 +322,7 @@ For a custom configuration, insert `--config` and its absolute path after
 `telegram-mcp` and before `connect` or `serve`:
 
 ```json
-["--python", "3.12", "--from", "telegram-context-mcp==0.8.0", "telegram-mcp", "--config", "/absolute/private/config.toml", "connect"]
+["--python", "3.12", "--from", "telegram-context-mcp==0.8.1", "telegram-mcp", "--config", "/absolute/private/config.toml", "connect"]
 ```
 
 Run the HTTP server with that same configuration. All clients share its account,

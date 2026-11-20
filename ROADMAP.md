@@ -10,6 +10,17 @@ are preserved in [docs/specs](docs/specs/README.md); current behavior is describ
 [usage](docs/usage.md) and [configuration](docs/configuration.md). Future milestones
 need a concrete contract before implementation; no delivery dates are assigned.
 
+### 0.8.1 maintenance and next priorities
+
+The patch scopes folder metadata to read permissions, rechecks the source before
+attachment delivery, preserves rich drafts, reports file-listing failures and protects
+server-owned files from import. Release builds audit the actual bundled lockfile.
+The short setup and [privacy guide](docs/privacy.md) cover the local server and client.
+The [validation record](docs/validation-0.8.1.md) covers the offline suite and selected-source download.
+
+Next, extend selected-source searches to URL buttons over a bounded period. Other
+follow-ups are repeat registration of identical files and batched draft retrieval.
+
 ## Milestones
 
 | ID | Status | Outcome |

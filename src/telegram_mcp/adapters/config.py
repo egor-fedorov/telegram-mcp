@@ -9,8 +9,8 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Literal
 
-from platformdirs import user_config_path, user_data_path
-from pydantic import Field, SecretStr, ValidationError, field_validator
+from platformdirs import user_cache_path, user_config_path, user_data_path
+from pydantic import Field, PrivateAttr, SecretStr, ValidationError, field_validator
 
 from telegram_mcp.domain.models import Model, ToolError
 from telegram_mcp.domain.outbound import WritePolicy
@@ -20,6 +20,7 @@ from telegram_mcp.domain.references import is_canonical_chat_id
 
 
 class Settings(Model):
+    _source_path: Path | None = PrivateAttr(default=None)
     api_id: int | None = Field(default=None, gt=0)
     api_hash: SecretStr | None = Field(default=None, min_length=1)
     session_path: Path = Field(
@@ -57,6 +58,18 @@ class Settings(Model):
     http_token_path: Path = Field(
         default_factory=lambda: user_data_path("telegram-mcp") / "mcp.token"
     )
+
+    def private_upload_paths(self) -> tuple[Path, ...]:
+        data = user_data_path("telegram-mcp")
+        paths = (
+            self.http_token_path,
+            self._source_path or config_path(),
+            user_config_path("telegram-mcp"),
+            user_cache_path("telegram-mcp"),
+            data / "watches",
+            data / "checkpoints",
+        )
+        return (*paths, self.archive_directory) if self.archive_directory is not None else paths
 
     @field_validator("timezone")
     @classmethod
@@ -193,6 +206,7 @@ def load_settings(path: Path | None = None) -> Settings:
     settings.allowed_upload_directories = [
         path.expanduser().absolute() for path in settings.allowed_upload_directories
     ]
+    settings._source_path = path.absolute()
     return settings
 
 

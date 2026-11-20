@@ -51,7 +51,7 @@
     },
     {
       "name": "list_folders",
-      "description": "Discover folder IDs, names, order and rules. Optional case-insensitive name substring."
+      "description": "List permitted folders and visible peers. Optional case-insensitive name substring."
     },
     {
       "name": "list_chats",

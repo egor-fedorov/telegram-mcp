@@ -14,6 +14,7 @@ from telegram_mcp.adapters.telegram.sending import SendGateway, send_receipt
 from telegram_mcp.domain.models import Chat, MessageRef, ToolError
 from telegram_mcp.domain.outbound import OutboundOperation, RegisteredFile, SendReceipt, SendRequest
 from tests.support.fakes import BASE, FakeClock
+from tests.support.outbound import outbound_fixture
 
 
 def operation():
@@ -115,6 +116,25 @@ async def test_native_text_draft_never_uploads_media():
     assert rpc.message == "My draft" and rpc.no_webpage and rpc.media is None
     assert client.await_count == 1
     client.upload_file.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"entities": [types.MessageEntityBold(0, 2)]},
+        {"reply_to": types.InputReplyToMessage(reply_to_msg_id=12)},
+    ],
+)
+async def test_manual_draft_structure_cannot_be_discarded(tmp_path, fields):
+    draft = normalize_draft("1", types.DraftMessage(message="My draft", date=BASE, **fields))
+    assert draft.exists and draft.text == "My draft" and not draft.supported
+    async with outbound_fixture(tmp_path) as env:
+        env.telegram.drafts["1"] = draft
+        confirm = AsyncMock()
+        with pytest.raises(ToolError, match="DRAFT_UNSUPPORTED"):
+            await env.service.update_draft("1", "Replacement", draft.revision, confirm=confirm)
+        confirm.assert_not_awaited()
+        assert env.telegram.drafts["1"] == draft
 
 
 def test_native_media_draft_is_readable_but_not_replaceable():

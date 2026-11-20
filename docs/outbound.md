@@ -97,11 +97,13 @@ can require catalog metadata to evaluate the original read+write allowlist mode.
 Call `register_file(path="/absolute/private/cv/resume.pdf")`, or select an
 `attachments[].id` from a message and pass `attachment_id` instead. Exactly one selector
 is required. Local paths must be regular files under `allowed_upload_directories`;
-symlinks and junctions are refused. Telegram imports require attachment-download
+symlinks, junctions, hard links, server credentials and private state paths are refused.
+Telegram imports require attachment-download
 permission, current source access and an unrestricted, non-authentication source.
 
 The returned `file_id`, original name, size, MIME type and SHA-256 identify an immutable
-private copy. Editing the original local file does not alter this copy. `list_files`
+private copy. Temporary failures checking a Telegram source surface in `list_files`
+with the available retry delay. Editing the original local file does not alter this copy. `list_files`
 lists the account's accessible copies. Telegram provenance is checked again before reuse.
 The library allows 20 MiB per file, 100 MiB total and 32 files, without FIFO eviction.
 Copying, hashing and SQLite writes run outside the event loop. Files persist until
@@ -112,6 +114,7 @@ explicit local removal; they are independent of 15-minute download resources.
 - `get_draft(chat_ref)` reads the ordinary dialog's one native draft and its revision.
 - `create_draft(chat_ref, text)` refuses to replace a nonempty draft.
 - `update_draft(chat_ref, text, expected_revision)` replaces a matching draft.
+  Formatted drafts and drafts with reply targets return `DRAFT_UNSUPPORTED` before replacement.
 - `list_drafts(limit, cursor?)` scans the configured write IDs, or readable sources with
   all-chat writes enabled; inspect per-chat issues. Each page reads at most `limit` drafts.
 

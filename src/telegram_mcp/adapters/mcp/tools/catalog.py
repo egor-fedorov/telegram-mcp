@@ -19,7 +19,7 @@ def register(server: MCPServer[None], service: Service, expose: Expose) -> None:
     async def list_folders(
         query: str | None = None,
     ) -> Annotated[CallToolResult, wire.FolderResult]:
-        """Discover folder IDs, names, order and rules. Optional case-insensitive name substring."""
+        """List permitted folders and visible peers. Optional case-insensitive name substring."""
         return wire.encode(await service.list_folders(query))
 
     @server.tool(annotations=READONLY)
