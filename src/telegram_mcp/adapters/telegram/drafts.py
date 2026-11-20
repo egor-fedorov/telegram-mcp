@@ -22,7 +22,8 @@ def normalize_draft(chat: str, raw: Any) -> Draft:
     # Hash every field, including reply targets and media references, not just visible text.
     revision = hashlib.sha256(bytes(raw)).hexdigest()
     supported = isinstance(raw, types.DraftMessage) and not any(
-        getattr(raw, field, None) for field in ("media", "rich_message", "suggested_post", "effect")
+        getattr(raw, field, None)
+        for field in ("media", "rich_message", "suggested_post", "effect", "entities", "reply_to")
     )
     return Draft(
         chat_id=chat,

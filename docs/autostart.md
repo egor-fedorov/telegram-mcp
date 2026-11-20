@@ -20,7 +20,7 @@ Stop any manually started server and standalone STDIO clients using this session
 1. Install a persistent, pinned executable:
 
    ```sh
-   uv tool install --python 3.12 telegram-context-mcp==0.8.0
+   uv tool install --python 3.12 telegram-context-mcp==0.8.1
    uv tool dir --bin
    "$HOME/.local/bin/telegram-mcp" --version
    systemctl --user is-system-running

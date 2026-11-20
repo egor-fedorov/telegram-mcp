@@ -4,6 +4,7 @@ import os
 
 import pytest
 
+from telegram_mcp.adapters.config import load_settings
 from telegram_mcp.adapters.local_uploads import read_allowed_file
 from telegram_mcp.adapters.outbound_store import OutboundStore
 from telegram_mcp.domain.models import ToolError
@@ -29,6 +30,45 @@ async def test_files_are_private_account_bound_and_integrity_checked(tmp_path):
             await store.file("one", file.file_id)
     finally:
         await store.close()
+
+
+async def test_wide_upload_directory_excludes_server_credentials_and_state(tmp_path):
+    config = tmp_path / "custom.toml"
+    config.write_text("", encoding="utf-8")
+    settings = load_settings(config)
+    session = tmp_path / "selected.session"
+    settings.http_token_path = tmp_path / "custom-token"
+    settings.archive_directory = tmp_path / "saved"
+    settings.archive_directory.mkdir()
+    store = OutboundStore(session, (tmp_path,), private_paths=settings.private_upload_paths())
+    try:
+        paths = [
+            config,
+            session,
+            tmp_path / "selected.session-wal",
+            settings.http_token_path,
+            store.path,
+            settings.archive_directory / "copy",
+        ]
+        for path in paths:
+            path.write_bytes(b"synthetic")
+            with pytest.raises(ToolError, match="FILE_ACCESS_DENIED"):
+                await store.import_local("one", str(path), BASE)
+        assert not store.path.with_name(store.path.name + "-journal").exists()
+    finally:
+        await store.close()
+
+
+def test_local_upload_rejects_hard_link_alias(tmp_path):
+    original = tmp_path / "original"
+    original.write_bytes(b"synthetic")
+    alias = tmp_path / "alias"
+    try:
+        alias.hardlink_to(original)
+    except OSError:
+        pytest.skip("Hard links are unavailable on this filesystem")
+    with pytest.raises(ToolError, match="FILE_ACCESS_DENIED"):
+        read_allowed_file(alias, (tmp_path,), 100, (original,))
 
 
 async def test_quota_never_evicts_registered_files(tmp_path, monkeypatch):

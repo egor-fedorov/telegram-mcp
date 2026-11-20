@@ -51,8 +51,17 @@ class FileService:
         for file in await self.context.store.files(account):
             try:
                 await self._authorize(file)
-            except ToolError:
-                continue
+            except ToolError as exc:
+                if exc.code in {
+                    "ACCESS_DENIED",
+                    "ATTACHMENT_UNAVAILABLE",
+                    "ATTACHMENT_PROTECTED",
+                    "AUTH_NOTIFICATION_FILTERED",
+                    "DOWNLOADS_DISABLED",
+                    "FILE_UNAVAILABLE",
+                }:
+                    continue
+                raise
             visible.append(file)
         return FileList(files=visible)
 

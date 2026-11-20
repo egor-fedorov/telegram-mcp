@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "telegram-context-mcp"
-version = "0.8.0"
-description = "Local Telegram MCP server with folder-aware reading and opt-in confirmed writes"
+version = "0.8.1"
+description = "Local Telegram MCP server for folder-aware reading, monitoring, and optional outbound actions"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -14,7 +14,8 @@ dependencies = [
   "anyio>=4.15.1,<5",
   "httpx2>=2.5,<3",
   "mcp>=2.2,<3",
-  "pydantic>=2.14.1,<3",
+  "opentelemetry-api>=1.45.2",
+  "pydantic>=2.14.2,<3",
   "telethon>=1.45,<2",
   "platformdirs>=4,<5",
   "portalocker>=4.4.1,<5",

@@ -384,11 +384,24 @@ async def probe(
     m4: bool = False,
     monitoring: bool = False,
     extract: bool = False,
+    attachment_only: bool = False,
     backend_factory: Callable[[Settings], ProbeBackend] = LiveBackend,
     emit: Callable[[Check], None] = lambda _: None,
 ) -> list[Check]:
     """Run only selected reads; temporary probe data is removed on every exit path."""
     validate_selectors(chats, message_refs, query, monitoring=monitoring)
+    if attachment_only and (
+        len(chats) != 1
+        or attachment_id is None
+        or message_refs
+        or extract
+        or m4
+        or monitoring
+        or topics
+    ):
+        raise ToolError(
+            "INVALID_ARGUMENT", "--attachment-only requires one --chat and one --attachment-id."
+        )
     if extract and (attachment_id is None or monitoring or m4 or topics or message_refs):
         raise ToolError("INVALID_ARGUMENT", "--extract requires --attachment-id and --chat only.")
     if monitoring and (message_refs or topics or attachment_id or m4):
@@ -447,6 +460,25 @@ async def probe(
                 ExtractionStore(restricted.session_path, clock, root=root / "extractions"),
             )
             await recorder.call("status", service.get_status())
+            if attachment_only:
+                assert attachment_id is not None
+                ref, _ = parse_attachment_id(attachment_id)
+                result = await recorder.call(
+                    "selected_message", service.get_messages([ref], text_limit=1)
+                )
+                if (
+                    result is None
+                    or len(result.messages) != 1
+                    or not any(item.id == attachment_id for item in result.messages[0].attachments)
+                ):
+                    raise ToolError(
+                        "VALIDATION_MISMATCH",
+                        "The selected message does not contain this attachment.",
+                    )
+                await recorder.call(
+                    "attachment_resource_and_archive", check_attachment(service, attachment_id)
+                )
+                return recorder.checks
             if extract:
                 assert attachment_id is not None
                 await recorder.call(
@@ -617,6 +649,11 @@ def parser() -> argparse.ArgumentParser:
         help="Download and verify exactly this selected attachment (up to 20 MiB).",
     )
     result.add_argument(
+        "--attachment-only",
+        action="store_true",
+        help="Check just the selected message, attachment, resource and disposable archive.",
+    )
+    result.add_argument(
         "--extract",
         action="store_true",
         help="Check only the selected PDF/DOCX attachment and text continuation; "
@@ -657,6 +694,7 @@ def main(argv: list[str] | None = None) -> int:
                 m4=args.m4,
                 monitoring=args.monitoring,
                 extract=args.extract,
+                attachment_only=args.attachment_only,
                 emit=print_check,
             )
         )

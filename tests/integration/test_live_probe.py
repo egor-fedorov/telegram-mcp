@@ -16,7 +16,7 @@ from telegram_mcp.adapters.config import Settings
 from telegram_mcp.adapters.telegram import TelegramBackend
 from telegram_mcp.application.ports import Batch, MessageOffset, TopicBatch, TopicOffset
 from telegram_mcp.application.requests import HistoryRead, MessageRead, SearchRead
-from telegram_mcp.domain.models import Chat, ForumTopic, MessageRef, ToolError
+from telegram_mcp.domain.models import Attachment, Chat, ForumTopic, MessageRef, ToolError
 from tests.support.downloads import AttachmentBackend
 from tests.support.extraction import docx_bytes, pdf_bytes
 from tests.support.fakes import FakeBackend, msg
@@ -151,6 +151,31 @@ class ArtifactProbeFake(ProbeFake):
         assert chat_id in self.selected
         kwargs["limit"] = min(5, kwargs["limit"])
         return await super().read_incremental(chat_id, **kwargs)
+
+
+@pytest.mark.parametrize("present", [True, False])
+async def test_attachment_only_probe_never_scans_the_chat(present):
+    backend = ArtifactProbeFake()
+    attachment_id = "1:10:document"
+    if present:
+        message = next(m for m in backend.stored_messages if m.message_ref.key == "1:10")
+        message.attachments = [Attachment(id=attachment_id, type="document")]
+    checks = await probe(
+        Settings(allow_attachment_downloads=True),
+        chats=["1"],
+        message_refs=[],
+        attachment_id=attachment_id,
+        attachment_only=True,
+        backend_factory=backend.factory,
+    )
+    assert not backend.requests and backend.attachment.downloads == int(present)
+    assert [c.check for c in checks] == [
+        "selected_sources",
+        "status",
+        "selected_message",
+        "attachment_resource_and_archive" if present else "probe",
+    ]
+    assert checks[-1].issue_codes == ([] if present else ["VALIDATION_MISMATCH"])
 
 
 async def test_artifact_probe_exercises_m3_m4_without_leaving_files_or_private_output(

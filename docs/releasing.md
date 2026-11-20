@@ -55,6 +55,8 @@ and [publishing guide](https://docs.pypi.org/trusted-publishers/using-a-publishe
    STDIO arguments, ownership marker, CLI and transports without Telegram credentials.
    Build the MCPB using `scripts/build_mcpb.py --validate`, verify it with `--check`,
    and run `scripts/smoke_mcpb.py` on that artifact through `uv run --locked python`.
+   Run the same script with `--audit-only` against the finished artifact. The tag build
+   repeats the OSV audit against the packaged lockfile before publication.
    Follow the [Desktop acceptance checks](mcpb.md#build-and-validation) before the
    first bundle publication; record Windows results and the unverified macOS UI
    coverage explicitly. Update the bundle guide's version examples with the release.

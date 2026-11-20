@@ -18,7 +18,7 @@ from telegram_mcp.application.requests import (
     ThreadRead,
     TopicRead,
 )
-from telegram_mcp.domain.folders import select_chats
+from telegram_mcp.domain.folders import require_folders, select_chats
 from telegram_mcp.domain.models import Chat, Scope, ToolError, TraversalBudget
 from telegram_mcp.domain.policy import SERVICE_NOTIFICATIONS_ID
 
@@ -110,6 +110,7 @@ class QueryPreparation:
         fp = spec.fingerprint(chat_ids)
         if cursor:
             state = self._resume(spec, cursor, fp, access)
+            require_folders(set(selection.folder_ids or []), access.folders)
             if isinstance(state, GlobalQueryState):
                 return state, fp
             explicit_ids = state.explicit_chat_ids

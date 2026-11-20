@@ -109,8 +109,7 @@ Each call downloads one current attachment up to **20 MiB**, with a 60-second to
 deadline. Documents include audio, voice and video; photos use the largest available
 still image in Telegram, which may differ from the original upload. For albums, choose
 individual members from `get_album`. IDs identify a message attachment slot, not a
-historical version: a later download may retrieve an edited replacement. Resource reads
-recheck authorization, source access, protection and media identity before returning bytes.
+historical version: a later download may retrieve an edited replacement. Downloads recheck authorization, source access, protection and media identity after transfer, before returning a local path or saving a copy. Resource reads repeat this check before returning bytes.
 
 Protected or self-destructing media, webpage previews, stories, paid media and alternate
 video qualities are unavailable. Downloads never follow a forwarded source or external

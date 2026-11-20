@@ -8,7 +8,9 @@ from pathlib import Path
 from telegram_mcp.domain.models import ToolError
 
 
-def read_allowed_file(path: Path, directories: tuple[Path, ...], maximum: int) -> bytes:
+def read_allowed_file(
+    path: Path, directories: tuple[Path, ...], maximum: int, private_paths: tuple[Path, ...] = ()
+) -> bytes:
     if not path.is_absolute() or ".." in path.parts:
         raise ToolError(
             "FILE_ACCESS_DENIED", "Use an absolute path inside allowed_upload_directories."
@@ -16,19 +18,40 @@ def read_allowed_file(path: Path, directories: tuple[Path, ...], maximum: int) -
     if not any(path != root and path.is_relative_to(root) for root in directories):
         raise ToolError("FILE_ACCESS_DENIED", "Path is outside allowed_upload_directories.")
     try:
+        if _is_private_upload(path, private_paths):
+            raise ToolError(
+                "FILE_ACCESS_DENIED", "Server credentials and private storage cannot be registered."
+            )
         if sys.platform == "win32":
             return _windows_read(path, maximum)
         return _posix_read(path, maximum)
-    except OSError:
+    except (OSError, RuntimeError):
         raise ToolError(
             "FILE_ACCESS_DENIED", "Cannot read this regular file without following redirects."
         ) from None
 
 
+def _is_private_upload(path: Path, private_paths: tuple[Path, ...]) -> bool:
+    # File identities also cover filesystem-specific aliases and case-insensitive volumes.
+    ancestors = (candidate.lstat() for candidate in (path, *path.parents))
+    identities = {(info.st_dev, info.st_ino) for info in ancestors if info.st_ino}
+    for private in private_paths:
+        if path.is_relative_to(private.resolve()):
+            return True
+        try:
+            info = private.stat()
+        except FileNotFoundError:
+            continue
+        if info.st_ino and (info.st_dev, info.st_ino) in identities:
+            return True
+    return False
+
+
 def _read(fd: int, maximum: int) -> bytes:
     with os.fdopen(fd, "rb") as stream:
-        if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
-            raise ToolError("FILE_ACCESS_DENIED", "Only regular files can be registered.")
+        info = os.fstat(stream.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink > 1:
+            raise ToolError("FILE_ACCESS_DENIED", "Use a regular file without hard links.")
         data = stream.read(maximum + 1)
         if not data or len(data) > maximum:
             raise ToolError("FILE_TOO_LARGE", "Use a nonempty file no larger than 20 MiB.")
