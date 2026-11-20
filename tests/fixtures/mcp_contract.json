@@ -4834,6 +4834,11 @@
             "default": null,
             "title": "Has Link"
           },
+          "include_button_urls": {
+            "default": false,
+            "title": "Include Button Urls",
+            "type": "boolean"
+          },
           "limit": {
             "default": 30,
             "maximum": 100,

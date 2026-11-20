@@ -513,6 +513,7 @@ class Service:
         cursor: str | None = None,
         order: Literal["newest_first", "oldest_first"] = "newest_first",
         ordering: Literal["page", "global"] = "page",
+        include_button_urls: bool = False,
     ) -> Page:
         return await self._queries.search_messages(
             query=query,
@@ -523,6 +524,7 @@ class Service:
             sender_id=sender_id,
             content_type=content_type,
             has_link=has_link,
+            include_button_urls=include_button_urls,
             direction=direction,
             limit=limit,
             cursor=cursor,

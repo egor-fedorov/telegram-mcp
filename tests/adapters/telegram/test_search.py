@@ -139,6 +139,58 @@ async def test_filter_only_date_anchor_is_a_separate_budgeted_page(oldest: bool)
 
 
 @pytest.mark.parametrize("oldest", [False, True])
+async def test_button_links_use_bounded_history_and_preserve_the_origin(oldest: bool) -> None:
+    anchor_id = 9 if oldest else 20
+    backend, client = adapter(page([row(anchor_id)]))
+    filters = ReadFilters(
+        date_from=BASE + timedelta(seconds=10),
+        date_to=BASE + timedelta(seconds=20),
+        oldest_first=oldest,
+        has_link=True,
+        include_button_urls=True,
+    )
+    request = SearchRead("", filters)
+    anchor = await backend.read(CHAT.id, request)
+    assert anchor.next_offset == SearchAnchor(anchor_id + 1)
+    assert isinstance(last_request(client), functions.messages.GetHistoryRequest)
+
+    def markup(kind: Any) -> types.ReplyInlineMarkup:
+        button = types.KeyboardInlineButton(text="Open", type=kind)
+        return types.ReplyInlineMarkup(rows=[types.KeyboardInlineButtonRow(buttons=[button])])
+
+    url = "https://example.test/job"
+    keyboard = markup(types.InlineButtonTypeUrl(url=url))
+    callback = markup(types.InlineButtonTypeCallback(data=b"private"))
+    client.return_value = page(
+        [
+            row(20, reply_markup=keyboard),
+            row(18, reply_markup=callback),
+            row(12, reply_markup=keyboard),
+            row(10, entities=[types.MessageEntityUrl(0, 4)]),
+        ],
+        full=True,
+    )
+    batch = await backend.read(CHAT.id, request, offset=anchor.next_offset)
+    assert isinstance(last_request(client), functions.messages.GetHistoryRequest)
+    assert [m.message_ref.message_id for m in batch.messages] == ([10, 12] if oldest else [12, 10])
+    button_post = next(m for m in batch.messages if m.message_ref.message_id == 12)
+    assert not button_post.has_link and button_post.reply_markup is not None
+    assert button_post.reply_markup.rows[0][0].url == url
+    assert batch.exhausted and client.await_count == 2
+
+
+async def test_button_links_keep_keyword_search_without_the_native_url_filter() -> None:
+    backend, client = adapter(page([]))
+    await backend.read(
+        CHAT.id, SearchRead("Post", ReadFilters(has_link=True, include_button_urls=True))
+    )
+    rpc = last_request(client)
+    assert isinstance(rpc, functions.messages.SearchRequest) and rpc.q == "Post"
+    assert isinstance(rpc.filter, types.InputMessagesFilterEmpty)
+    client.assert_awaited_once()
+
+
+@pytest.mark.parametrize("oldest", [False, True])
 async def test_empty_date_anchor_terminates_or_starts_at_first_id(oldest: bool) -> None:
     backend, _ = adapter(page([]))
     batch = await backend.read(

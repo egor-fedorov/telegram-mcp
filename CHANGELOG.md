@@ -6,6 +6,10 @@ A version entry describes its target artifact. Verify publication on [PyPI](http
 
 ## [Unreleased]
 
+### Search
+
+- Use `search_messages(include_button_urls=true)` to find posts with links in their buttons, text or webpage preview. Supply selected chats or folders and a bounded date range.
+
 ## [0.8.1] - 2026-11-20
 
 ### Fixes

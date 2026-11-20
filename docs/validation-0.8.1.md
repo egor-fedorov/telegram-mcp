@@ -8,4 +8,10 @@ The selected-source live probe read one explicitly authorized photo post, downlo
 
 The first macOS CI run exposed a system temporary path containing an OS-level symlink. The probe now resolves its own newly created temporary directory before creating private stores. The regression test also exercises an aliased temporary parent where symlinks are available.
 
-The release workflow builds and validates the wheel, source distribution and MCPB, checks a byte-identical bundle rebuild, and audits the lockfile extracted from that bundle. Publication can be verified on [PyPI](https://pypi.org/project/telegram-context-mcp/0.8.1/), [GitHub Releases](https://github.com/egor-fedorov/telegram-mcp/releases/tag/v0.8.1) and the [MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.egor-fedorov%2Ftelegram-mcp/versions/0.8.1).
+## Published artifacts
+
+The [release workflow](https://github.com/egor-fedorov/telegram-mcp/actions/runs/44770378049) passed on Linux, macOS and Windows. The MCPB rebuilt byte for byte. OSV reported no known vulnerabilities in the 40 audited packages from its embedded lockfile. The published bundle contains `opentelemetry-api` 1.45.2 and `pydantic` 2.14.2.
+
+All four [GitHub release assets](https://github.com/egor-fedorov/telegram-mcp/releases/tag/v0.8.1) matched their SHA-256 digests. The wheel and source distribution matched their [PyPI files](https://pypi.org/project/telegram-context-mcp/0.8.1/) byte for byte and embedded the tag commit `c032ba6bb1474860d6bb463274b21afe1bad8857`. The MCPB checksum matched, its wheel matched the standalone wheel, and the release notes matched the changelog.
+
+A fresh PyPI invocation returned `telegram-mcp 0.8.1`. The [active MCP Registry entry](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.egor-fedorov%2Ftelegram-mcp/versions/0.8.1) matched the tagged manifest, including package identity, repository and STDIO launch arguments.

@@ -127,12 +127,24 @@ class QueryService:
         cursor: str | None = None,
         order: Literal["newest_first", "oldest_first"] = "newest_first",
         ordering: Literal["page", "global"] = "page",
+        include_button_urls: bool = False,
     ) -> Page:
         check_limit(limit)
         if ordering not in ("page", "global") or order not in ("newest_first", "oldest_first"):
             raise ToolError("INVALID_ARGUMENT", "Use ordering page/global and a valid order.")
         if direction not in ("all", "incoming", "outgoing"):
             raise ToolError("INVALID_ARGUMENT", "Use direction all/incoming/outgoing.")
+        if include_button_urls:
+            if not (chat_ids or folder_ids) or date_from is None or date_to is None:
+                raise ToolError(
+                    "INVALID_ARGUMENT",
+                    "Button URL search requires chat_ids or folder_ids and both date bounds.",
+                )
+            if has_link is False:
+                raise ToolError(
+                    "INVALID_ARGUMENT", "Button URL search requires a positive link filter."
+                )
+            has_link = True
         direction_only = direction != "all" and bool(chat_ids or folder_ids)
         if not query.strip() and has_link is not True and not direction_only:
             raise ToolError(
@@ -144,7 +156,13 @@ class QueryService:
         read = SearchRead(
             query,
             ReadFilters(
-                date_from, date_to, content_type, order == "oldest_first", has_link, direction
+                date_from,
+                date_to,
+                content_type,
+                order == "oldest_first",
+                has_link,
+                direction,
+                include_button_urls=include_button_urls,
             ),
             sender_id,
             ordering,

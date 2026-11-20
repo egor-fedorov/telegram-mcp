@@ -33,7 +33,7 @@ from telegram_mcp.domain.models import Chat, ToolError
 
 def native_filter(filters: ReadFilters) -> Any:
     """Push down only filters that cover the corresponding local predicate."""
-    if filters.has_link is True:
+    if filters.has_link is True and not filters.include_button_urls:
         return types.InputMessagesFilterUrl()
     constructors = {
         "photo": types.InputMessagesFilterPhotos,
@@ -113,6 +113,7 @@ class MessageSearch:
                 and (
                     not isinstance(selected_filter, types.InputMessagesFilterEmpty)
                     or filters.direction != "all"
+                    or filters.include_button_urls
                 )
             )
         ):
@@ -209,7 +210,7 @@ class MessageSearch:
         oldest = filters.oldest_first
         if (
             not request.query
-            and filters.direction != "all"
+            and (filters.direction != "all" or filters.include_button_urls)
             and isinstance(selected_filter, types.InputMessagesFilterEmpty)
         ):
             # Telegram Search rejects an empty unfiltered query. History is still
