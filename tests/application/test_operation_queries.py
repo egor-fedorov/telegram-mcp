@@ -1,6 +1,5 @@
 """Account-bound recovery and stable, bounded pages of the MCP operation journal."""
 
-import asyncio
 from datetime import timedelta
 
 import pytest
@@ -98,31 +97,27 @@ async def test_invalid_journal_filters_are_rejected(tmp_path, filters):
 async def test_status_filters_distinguish_active_pending_from_interrupted_dispatch(
     tmp_path, monkeypatch
 ):
-    entered, release = asyncio.Event(), asyncio.Event()
     async with outbound_fixture(tmp_path) as env:
-        original = env.telegram.send
+        send = env.telegram.send
 
-        async def held(*args):
-            entered.set()
-            await release.wait()
-            return await original(*args)
-
-        monkeypatch.setattr(env.telegram, "send", held)
-        task = asyncio.create_task(env.service.send_message("1", "Waiting", "key", confirm=approve))
-        await asyncio.wait_for(entered.wait(), 3)
-        try:
-            assert (await env.service.list_operations(status="pending")).operations[
-                0
-            ].status == "pending"
+        async def interrupt_after_send(operation, request, data):
+            (active,) = (await env.service.list_operations(status="pending")).operations
+            assert active.operation_id == operation.operation_id and active.status == "pending"
             assert not (await env.service.list_operations(status="unknown")).operations
-        finally:
-            release.set()
-            await task
-        operation = await env.store.operation("101", "key")
-        operation.receipt.status = "pending"
-        await env.store.save_operation(operation)
-        assert (await env.service.get_send_status(idempotency_key="key")).status == "unknown"
-        assert (await env.service.list_operations(status="unknown")).operations[
-            0
-        ].status == "unknown"
-        assert not (await env.service.list_operations(status="pending")).operations
+            receipt = await send(operation, request, data)
+            await env.store.close()  # Interrupt the journal before it can commit the receipt.
+            return receipt
+
+        monkeypatch.setattr(env.telegram, "send", interrupt_after_send)
+        with pytest.raises(ToolError, match="OUTBOUND_STORAGE_UNAVAILABLE"):
+            await env.service.send_message("1", "Waiting", "key", confirm=approve)
+        assert len(env.telegram.send_calls) == 1
+
+    async with outbound_fixture(tmp_path) as reopened:
+        stored = await reopened.store.operation(reopened.telegram.account, "key")
+        assert stored is not None and stored.dispatched and stored.receipt.status == "pending"
+        receipt = await reopened.service.get_send_status(idempotency_key="key")
+        assert receipt.operation_id == stored.operation_id and receipt.status == "unknown"
+        (unknown,) = (await reopened.service.list_operations(status="unknown")).operations
+        assert unknown.operation_id == stored.operation_id and unknown.status == "unknown"
+        assert not (await reopened.service.list_operations(status="pending")).operations
