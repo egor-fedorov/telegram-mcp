@@ -3,7 +3,7 @@
 The default server remains read-only. These tools require server and proxy version
 0.7.0 or later, explicit capability flags and permitted recipients. No OCR, joining channels, folder edits,
 bulk sends or scheduled sends are included. Single-message edits and deletions use the
-[separate local rules](#single-message-actions) in the development version.
+[separate local rules](#single-message-actions) starting in 0.9.0.
 
 The additional recipient modes, inspection tools and per-action confirmation settings below
 require server and proxy version **0.8.0**. Version 0.7.0 supports only the original

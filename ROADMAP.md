@@ -20,16 +20,17 @@ The [0.8.1 validation record](docs/validation-0.8.1.md) covers the offline suite
 selected-source download and verified publication on PyPI, GitHub and the MCP Registry.
 
 After 0.8.1, selected-source link search adds URL buttons for callers that opt in
-and supply a bounded period. This is in the unreleased changelog. Other follow-ups
+and supply a bounded period in 0.9.0. Other follow-ups
 are repeat registration of identical files and batched draft retrieval.
 
-Single-message edits and deletions are implemented for the next release. The tools use
+Single-message edits and deletions are part of 0.9.0. The tools use
 local per-chat or folder rules, current Telegram rights, revision checks and the existing
 operation journal. On 2026-11-25, a selected private two-person dialog verified editing,
 sender-only deletion and revocation for both participants through MCP forms. The sender
 reread the edited text and recovered the action receipts. The other participant confirmed
 the edited text and both deletion visibility choices. Group moderation and channel deletion
-have offline RPC coverage. See [single-message actions](docs/outbound.md#single-message-actions).
+have offline RPC coverage. See [single-message actions](docs/outbound.md#single-message-actions)
+and the [0.9.0 validation record](docs/validation-0.9.0.md).
 
 ## Milestones
 

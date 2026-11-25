@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "telegram-context-mcp"
-version = "0.8.1"
+version = "0.9.0"
 description = "Local Telegram MCP server for folder-aware reading, monitoring, and optional outbound actions"
 readme = "README.md"
 license = "MIT"

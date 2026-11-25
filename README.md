@@ -15,14 +15,14 @@ Use your own Telegram account to read selected chats, monitor folders, and colle
 Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then run:
 
 ```sh
-uv tool install --python 3.12 telegram-context-mcp==0.8.1
+uv tool install --python 3.12 telegram-context-mcp==0.9.0
 telegram-mcp --version
 telegram-mcp login
 telegram-mcp configure
 telegram-mcp status
 ```
 
-These examples target version 0.8.1; check [PyPI](https://pypi.org/project/telegram-context-mcp/)
+These examples target version 0.9.0; check [PyPI](https://pypi.org/project/telegram-context-mcp/)
 for published versions. Use the [source setup](#run-from-source) for unreleased revisions.
 Upgrading from 0.3? Read the [migration guide](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/migration-0.4.md),
 then restart the server and refresh your client's tool schemas.
@@ -44,7 +44,7 @@ The package name is **`telegram-context-mcp`**; the executable is **`telegram-mc
 You can also run a pinned version without installing a persistent command:
 
 ```sh
-uvx --python 3.12 --from telegram-context-mcp==0.8.1 telegram-mcp --version
+uvx --python 3.12 --from telegram-context-mcp==0.9.0 telegram-mcp --version
 ```
 
 The server is listed in the official MCP Registry as
@@ -66,7 +66,7 @@ telegram-mcp serve --transport http
 
 Connect your client using the [client guide](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/clients.md). Ask it to call `get_status`, then try “List my permitted folders and show the latest post from my test channel, with its source link.” An empty folder list also works with a directly allowed chat.
 
-For PDF/DOCX text, install `'telegram-context-mcp[extraction]==0.8.1'` in the session-owning server and enable attachment downloads. [Extraction guide](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/usage.md#extract-pdf-or-docx-text)
+For PDF/DOCX text, install `'telegram-context-mcp[extraction]==0.9.0'` in the session-owning server and enable attachment downloads. [Extraction guide](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/usage.md#extract-pdf-or-docx-text)
 
 On Linux with systemd, the optional
 [user-service setup](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/autostart.md)
@@ -135,7 +135,7 @@ its own capability flag and explicit recipient permission:
 | `verify_sent_message` | Reread only this MCP's sent message and compare text/attachment metadata |
 | `list_operations` | Filter and page through this account's MCP journal; excludes manual sends |
 | `invoke_button` | Invoke one ordinary callback in a selected private bot dialog under local form policy |
-| `preview_message_action` / `edit_message` / `delete_message` | Inspect and act on one revision under [local action rules](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/outbound.md#single-message-actions) (development version) |
+| `preview_message_action` / `edit_message` / `delete_message` | Inspect and act on one revision under [local action rules](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/outbound.md#single-message-actions) (0.9.0+) |
 
 For recipient permissions, confirmation settings and send recovery, see [outbound policies](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/outbound.md#recipient-modes-and-independent-forms).
 

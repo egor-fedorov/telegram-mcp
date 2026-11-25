@@ -6,6 +6,8 @@ A version entry describes its target artifact. Verify publication on [PyPI](http
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-25
+
 ### Message actions
 
 - Preview, edit or delete one permitted message with revision checks, explicit deletion visibility, local confirmation rules and a recoverable operation receipt.
@@ -13,6 +15,15 @@ A version entry describes its target artifact. Verify publication on [PyPI](http
 ### Search
 
 - Use `search_messages(include_button_urls=true)` to find posts with links in their buttons, text or webpage preview. Supply selected chats or folders and a bounded date range.
+
+### Dependencies
+
+- Refresh locked runtime and development dependencies.
+
+### Upgrade
+
+- Upgrade both the shared server and its client proxies, restart them, and refresh tool discovery. Keep the extraction extra if the server reads PDF or DOCX files. Message actions require explicit local rules.
+- Preserve the session-adjacent outbound database. Once edit or delete receipts are written, use that journal with 0.9.0 or later.
 
 ## [0.8.1] - 2026-11-20
 
