@@ -159,15 +159,14 @@ The server cannot prove that a human saw its UI. Use a client that shows confirm
 and does not auto-approve. Actual Codex/Claude UI support must be checked locally;
 the automated tests use real MCP transports with synthetic client callbacks.
 
-Receipts contain an operation ID, `pending`, `sent`, `failed` or `unknown`, and the exact
+Send receipts contain an operation ID, `pending`, `sent`, `failed` or `unknown`, and the exact
 message reference/time when Telegram supplied them. Inspect `error` and `retry_at`.
 `get_send_status(operation_id=...)` or `get_send_status(idempotency_key=...)` reads the
 current account's journal without resolving a recipient or dispatching anything.
 Supply exactly one selector. These local receipts remain inspectable after recipient
-or action permission is revoked, including legacy records. Its
-response is `{"result": {...}}`, where `result` is a send or callback receipt; inspect
-`result.status`, `result.error` and `result.retry_at`. Direct send, callback and message-action calls return
-the receipt at the top level. This envelope matches the advertised MCP union schema.
+or action permission is revoked, including legacy records. The response wraps the send,
+callback or message-action receipt in `result`. Check `result.status`, any error and
+the retry time when present. Direct calls to the action tools return a top-level receipt.
 
 `list_operations(chat_id?, date_from?, date_to?, kind?, status?, limit=30, cursor?)`
 lists compact account-bound records, including keys and recipient snapshots. The scope
