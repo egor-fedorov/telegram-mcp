@@ -13,7 +13,7 @@ from telegram_mcp.adapters.local_uploads import read_allowed_file
 from telegram_mcp.adapters.outbound_queries import index_values, prepare_indexes, query_operations
 from telegram_mcp.adapters.state_database import open_private_database
 from telegram_mcp.application.outbound_ports import OperationBatch, OperationFilter
-from telegram_mcp.domain.models import ToolError
+from telegram_mcp.domain.models import MessageRef, ToolError
 from telegram_mcp.domain.outbound import Draft, OutboundOperation, RegisteredFile
 
 MAX_FILE = 20 * 1024 * 1024
@@ -23,9 +23,24 @@ MAX_OPERATIONS = 100_000
 
 
 class OutboundStore:
-    def __init__(self, session: Path, directories: tuple[Path, ...] = ()):
+    def __init__(
+        self,
+        session: Path,
+        directories: tuple[Path, ...] = (),
+        *,
+        private_paths: tuple[Path, ...] = (),
+    ):
         self.path = session.with_suffix(".outbound.sqlite3")
         self.directories = directories
+        self.private_paths = (
+            *private_paths,
+            Path(str(session) + ".lock"),
+            *(
+                Path(str(db) + suffix)
+                for db in (session, self.path)
+                for suffix in ("", "-journal", "-wal", "-shm")
+            ),
+        )
         self._lock = asyncio.Lock()
         self._closed = False
 
@@ -119,7 +134,9 @@ class OutboundStore:
         return await self._run(write)
 
     async def import_local(self, account: str, path: str, now: datetime) -> RegisteredFile:
-        data = await asyncio.to_thread(read_allowed_file, Path(path), self.directories, MAX_FILE)
+        data = await asyncio.to_thread(
+            read_allowed_file, Path(path), self.directories, MAX_FILE, self.private_paths
+        )
         return await self.register(
             account,
             Path(path).name,
@@ -169,6 +186,19 @@ class OutboundStore:
                 "SELECT value FROM operations WHERE account=? AND key=?", (account, key)
             ).fetchone()
             return OutboundOperation.model_validate_json(row[0]) if row else None
+
+        return await self._run(read)
+
+    async def sent_source(self, account: str, ref: MessageRef) -> str | None:
+        def read(db: sqlite3.Connection) -> str | None:
+            row = db.execute(
+                "SELECT id FROM operations WHERE account=? AND chat_id=? "
+                "AND kind IN ('message','file') AND status='sent' "
+                "AND json_extract(value, '$.receipt.message_ref.chat_id')=? "
+                "AND json_extract(value, '$.receipt.message_ref.message_id')=? LIMIT 1",
+                (account, ref.chat_id, ref.chat_id, ref.message_id),
+            ).fetchone()
+            return row[0] if row else None
 
         return await self._run(read)
 

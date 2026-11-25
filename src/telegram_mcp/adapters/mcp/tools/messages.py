@@ -58,6 +58,7 @@ def register(server: MCPServer[None], service: Service, expose: Expose) -> None:
         cursor: str | None = None,
         order: Literal["newest_first", "oldest_first"] = "newest_first",
         ordering: Literal["page", "global"] = "page",
+        include_button_urls: bool = False,
     ) -> Annotated[CallToolResult, wire.Page]:
         """Search permitted chats with early results, sorted within each page by default.
 
@@ -70,6 +71,8 @@ def register(server: MCPServer[None], service: Service, expose: Expose) -> None:
         Dates include a timezone; interval is [date_from, date_to). Folder IDs form a union;
         explicit chat_ids intersect that union. Omitted selectors use all permitted dialogs.
         has_link=true selects URL-bearing posts, independently of content_type.
+        include_button_urls=true also matches links in buttons and implies has_link=true.
+        Supply chat_ids or folder_ids and both dates. Keywords still search the post text.
         An empty query also permits direction=incoming/outgoing with explicit chat_ids or
         folder_ids. Direction uses Telegram's outgoing flag; repeat it with the cursor.
         has_link=false excludes links. Omit it for either kind.
@@ -88,6 +91,7 @@ def register(server: MCPServer[None], service: Service, expose: Expose) -> None:
                 sender_id=sender_id,
                 content_type=content_type,
                 has_link=has_link,
+                include_button_urls=include_button_urls,
                 direction=direction,
                 limit=limit,
                 cursor=cursor,

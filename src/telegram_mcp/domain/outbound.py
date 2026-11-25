@@ -2,15 +2,16 @@
 
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 from pydantic import AwareDatetime, Field
 
+from telegram_mcp.domain.message_actions import Action, ActionPolicy, ActionReceipt
 from telegram_mcp.domain.models import ChatType, ContentType, Issue, MessageRef, Model, ToolError
 
 OperationState = Literal["pending", "sent", "failed", "unknown"]
-OperationKind = Literal["message", "file", "callback"]
+OperationKind = Literal["message", "file", "callback", "edit", "delete"]
 JournalState = Literal["pending", "sent", "completed", "failed", "unknown"]
 WriteGrant = Literal["allowlist", "one_off", "all_chats"]
 
@@ -28,6 +29,8 @@ class WritePolicy:
     require_send_file_confirmation: bool = True
     require_bot_callback_confirmation: bool = True
     require_draft_overwrite_confirmation: bool = True
+
+    message_actions: ActionPolicy = field(default_factory=ActionPolicy)
 
     def requires_confirmation(self, kind: str, grant: WriteGrant = "allowlist") -> bool:
         if grant == "one_off":
@@ -47,6 +50,14 @@ class WritePolicy:
                 self.allow_send_files and (self.require_send_file_confirmation or one_off),
                 self.allow_bot_callbacks and self.require_bot_callback_confirmation,
                 self.allow_drafts and self.require_draft_overwrite_confirmation,
+                bool(self.message_actions.rules)
+                and (
+                    self.message_actions.confirmation == "always"
+                    or (
+                        self.message_actions.confirmation == "per_rule"
+                        and any(r.require_confirmation for r in self.message_actions.rules)
+                    )
+                ),
             )
         )
 
@@ -54,6 +65,7 @@ class WritePolicy:
     def enabled(self) -> bool:
         return any(
             (
+                bool(self.message_actions.rules),
                 self.allow_drafts,
                 self.allow_send_messages,
                 self.allow_send_files,
@@ -187,6 +199,8 @@ class OperationSummary(Model):
     operation_id: str
     idempotency_key: str
     kind: OperationKind
+    action: Action | None = None
+    source_operation_id: str | None = None
     status: JournalState
     chat_id: str
     recipient: RecipientBinding | None = None
@@ -218,7 +232,7 @@ class OutboundOperation(Model):
     reply_selector: str | None = None
     reply_ref: MessageRef | None = None
     dispatched: bool = False
-    receipt: SendReceipt | CallbackReceipt
+    receipt: SendReceipt | CallbackReceipt | ActionReceipt
     created_at: AwareDatetime | None = None
     updated_at: AwareDatetime | None = None
     expected_text_sha256: str | None = None

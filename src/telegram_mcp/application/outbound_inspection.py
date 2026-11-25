@@ -8,6 +8,7 @@ from telegram_mcp.application.outbound_access import OutboundContext
 from telegram_mcp.application.outbound_journal import OperationJournal
 from telegram_mcp.application.outbound_ports import OperationFilter
 from telegram_mcp.application.ports import CursorPort, MessagePort
+from telegram_mcp.domain.message_actions import ActionReceipt
 from telegram_mcp.domain.models import Chat, Message, ToolError
 from telegram_mcp.domain.outbound import (
     OperationPage,
@@ -129,7 +130,14 @@ class OutboundInspection:
     def _check_filters(filters: OperationFilter) -> None:
         if filters.chat_id is not None and not is_canonical_chat_id(filters.chat_id):
             raise ToolError("INVALID_ARGUMENT", "chat_id must be a canonical numeric ID.")
-        if filters.kind not in (None, "message", "file", "callback") or filters.status not in (
+        if filters.kind not in (
+            None,
+            "message",
+            "file",
+            "callback",
+            "edit",
+            "delete",
+        ) or filters.status not in (
             None,
             "pending",
             "sent",
@@ -156,7 +164,13 @@ class OutboundInspection:
             created_at=operation.created_at,
             updated_at=operation.updated_at,
             error=receipt.error,
-            message_ref=receipt.message_ref if isinstance(receipt, SendReceipt) else None,
+            message_ref=receipt.message_ref
+            if isinstance(receipt, (SendReceipt, ActionReceipt))
+            else None,
+            action=receipt.action if isinstance(receipt, ActionReceipt) else None,
+            source_operation_id=receipt.source_operation_id
+            if isinstance(receipt, ActionReceipt)
+            else None,
             sent_at=receipt.sent_at if isinstance(receipt, SendReceipt) else None,
         )
 

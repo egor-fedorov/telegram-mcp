@@ -63,3 +63,12 @@ http_port = 8765
 # Default: platformdirs user data directory for telegram-mcp, file mcp.token.
 # The server creates a private bearer-token file; clients read it locally.
 # http_token_path = "/absolute/private/path/mcp.token"
+
+# Single-message actions are enabled only by local rules. Keep TOML tables last.
+[message_actions]
+confirmation = "per_rule"  # per_rule, always, never
+# [[message_actions.rules]]
+# chat_ids = ["123456789"]  # or folder_ids = [7], or all_chats = true
+# targets = ["own"]         # mcp_sent, own, group_others, private_incoming
+# actions = ["edit", "delete_for_me", "delete_for_everyone"]
+# require_confirmation = true

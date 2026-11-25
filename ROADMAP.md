@@ -10,6 +10,27 @@ are preserved in [docs/specs](docs/specs/README.md); current behavior is describ
 [usage](docs/usage.md) and [configuration](docs/configuration.md). Future milestones
 need a concrete contract before implementation; no delivery dates are assigned.
 
+### 0.8.1 maintenance and subsequent work
+
+The patch scopes folder metadata to read permissions, rechecks the source before
+attachment delivery, preserves rich drafts, reports file-listing failures and protects
+server-owned files from import. Release builds audit the actual bundled lockfile.
+The short setup and [privacy guide](docs/privacy.md) cover the local server and client.
+The [0.8.1 validation record](docs/validation-0.8.1.md) covers the offline suite,
+selected-source download and verified publication on PyPI, GitHub and the MCP Registry.
+
+After 0.8.1, selected-source link search adds URL buttons for callers that opt in
+and supply a bounded period. This is in the unreleased changelog. Other follow-ups
+are repeat registration of identical files and batched draft retrieval.
+
+Single-message edits and deletions are implemented for the next release. The tools use
+local per-chat or folder rules, current Telegram rights, revision checks and the existing
+operation journal. On 2026-11-25, a selected private two-person dialog verified editing,
+sender-only deletion and revocation for both participants through MCP forms. The sender
+reread the edited text and recovered the action receipts. The other participant confirmed
+the edited text and both deletion visibility choices. Group moderation and channel deletion
+have offline RPC coverage. See [single-message actions](docs/outbound.md#single-message-actions).
+
 ## Milestones
 
 | ID | Status | Outcome |
@@ -30,7 +51,7 @@ need a concrete contract before implementation; no delivery dates are assigned.
 | M7 | Released in 0.7.0 | Buttons/direction/membership, auth-notice omission and opt-in drafts, reusable files, confirmed sends and bot callbacks |
 
 The [0.8.0 changelog](CHANGELOG.md#080---2026-11-05) and
-[validation record](docs/validation-0.8.md) describe the current release: recipient
+[validation record](docs/validation-0.8.md) cover recipient
 policies, send inspection, build diagnostics and Windows storage repair. Selected-source
 checks passed, and publication was verified on
 [PyPI](https://pypi.org/project/telegram-context-mcp/0.8.0/),
@@ -39,7 +60,7 @@ checks passed, and publication was verified on
 The [0.7 validation record](docs/validation-0.7.md) preserves the initial outbound checks.
 Post-release CLI guidance uses `--file-id=ID`, with a deterministic test for IDs starting
 with `-`; this syntax already works in 0.8.0 and does not change the runtime.
-Reviewed dependency and CI action updates remain unreleased. Routine dependency
+0.8.1 includes the reviewed dependency and CI action updates. Routine dependency
 changes now use one brief changelog entry per release, with details retained in PRs
 and the lockfile. The test configuration explicitly selects function-scoped async
 fixture loops to avoid an implicit default that the test plugin plans to change.
@@ -350,7 +371,7 @@ and a disposable MCPB's manifest/rebuild/proxy checks with 0.6.5 in its embedded
 
 ## Later decisions
 
-File drafts, OCR and voice transcription, editing/deleting sent messages and
+File drafts, OCR, voice transcription and broader chat
 administration remain separate decisions with explicit permission contracts.
 
 Broader change journals, multi-source exports, saved searches, local text/semantic

@@ -1,6 +1,6 @@
 ---
 name: telegram-mcp
-description: Read Telegram, prepare source-linked digests, process watches and selected attachments, or prepare explicitly requested drafts and sends through Telegram Context MCP. Use for Telegram messages, channels, folders and outbound workflows with this server.
+description: Read Telegram, prepare source-linked digests, process watches and selected attachments, or perform explicitly requested outbound message actions through Telegram Context MCP. Use for Telegram messages, channels, folders and outbound workflows with this server.
 license: MIT
 ---
 
@@ -31,7 +31,7 @@ allowlist, enabling public access, or creating/deleting subscriptions.
 | --- | --- |
 | Read specific post links | `get_messages(refs=[...])`; use `get_context`, `get_thread` or `get_album` when surrounding messages, replies or album members matter |
 | Summarize a chat or folder for a period | `get_history` with one source selector and fixed dates; follow the period workflow below |
-| Find posts matching words or links | `search_messages` with selected `chat_ids` or `folder_ids`; keyword search, not semantic search. Empty `query` requires `has_link=true`, or a supported direction filter with explicit sources |
+| Find posts matching words or links | Use `search_messages` with selected `chat_ids` or `folder_ids`. An empty `query` can select links or direction. Use `has_link=true` for links in posts. For URLs in buttons, use `include_button_urls=true` when advertised and supply both `date_from` and `date_to`. |
 | Find new public channels | `search_public_channels` or `get_similar_channels` when discovery is enabled; metadata discovery does not grant permission to read their posts |
 | Summarize an existing named subscription | Follow the watch workflow below; recover names through `list_watches` |
 | Read a selected PDF/DOCX or obtain a file | Follow the attachment workflow below |
@@ -113,7 +113,7 @@ For a requested permanent copy, use `save=true` with an enabled archive and retu
 
 ## Explicit outbound actions
 
-Use this workflow only when the user requests a draft, send or bot-button action and
+Use this workflow only when the user requests a draft, send, edit, deletion or bot-button action and
 the server advertises the relevant tools. Check `get_status` capabilities and recipient
 permissions; do not change configuration to bypass a refusal. On supported servers,
 use `search_messages(direction="outgoing", chat_ids=[...], query="")` to check previous
@@ -146,6 +146,12 @@ Use `verify_sent_message` when the user needs the actual sent text/caption check
 Distinguish the stored receipt from the fresh verification and comparison fields.
 This narrow read cannot fetch replies or surrounding history; attachment metadata
 matching does not verify remote bytes, and unavailable does not prove deletion.
+For an explicit edit or deletion, call `preview_message_action` on the selected message
+or its original send operation. Use its revision, the user's chosen deletion visibility
+or exact replacement text, and a stable idempotency key. Ask if the target or visibility
+is ambiguous. Treat an unknown edit or deletion as unresolved and recover the existing
+receipt. A Telegram acknowledgement confirms acceptance of the request.
+
 For `invoke_button`, use the returned button ID and message revision in an allowed
 private bot dialog. Never re-execute an unknown callback with a new key. Its observed
 message references are incomplete and do not prove which changes it caused.

@@ -109,8 +109,7 @@ Each call downloads one current attachment up to **20 MiB**, with a 60-second to
 deadline. Documents include audio, voice and video; photos use the largest available
 still image in Telegram, which may differ from the original upload. For albums, choose
 individual members from `get_album`. IDs identify a message attachment slot, not a
-historical version: a later download may retrieve an edited replacement. Resource reads
-recheck authorization, source access, protection and media identity before returning bytes.
+historical version: a later download may retrieve an edited replacement. Downloads recheck authorization, source access, protection and media identity after transfer, before returning a local path or saving a copy. Resource reads repeat this check before returning bytes.
 
 Protected or self-destructing media, webpage previews, stories, paid media and alternate
 video qualities are unavailable. Downloads never follow a forwarded source or external
@@ -614,18 +613,35 @@ Unknown optional fields are omitted; no additional requests are made to forwardi
 
 Use `search_messages(query="", has_link=true, chat_ids=["-1001234567890"])` to find
 link-bearing messages without a keyword. `has_link=false` excludes links; `null`/omission
-adds no link condition. A nonempty keyword remains required unless `has_link=true`.
-The predicate recognizes URL/TextURL entities and Telegram webpage media, without
-regex guesses or network requests to websites. It can be combined with `content_type`.
+adds no link condition. An explicit direction with selected sources also accepts an empty keyword.
+The default link filter recognizes URL/TextURL entities and Telegram webpage media.
+It can be combined with `content_type`.
+
+Some posts put the application or contact URL only in a keyboard button. To include
+those posts, supply `include_button_urls=true`, selected chats or folders, and both
+ends of a timezone-aware period. This example searches one folder for a week.
+
+```json
+{"query":"","folder_ids":[7],"date_from":"2026-11-09T00:00:00Z","date_to":"2026-11-16T00:00:00Z","include_button_urls":true}
+```
+
+This includes ordinary message links too. Each button URL is in
+`reply_markup.rows[row][column].url`.
+The message's `has_link` flag still describes its text entities and webpage preview.
+With an empty keyword the server may need to page through the selected histories.
+Continue with the same arguments on every cursor, including after an empty page.
+A supplied keyword searches post text. The search reads button metadata without
+visiting the URL or invoking the button.
 
 `web_page` describes available, pending, empty, or not-modified Telegram previews and
 includes supplied URL/display URL, title, description, site, type, author, and pending
 until date. Preview photos/documents are separate from actual message attachments.
 
 URL, photo, voice, and audio filters run on Telegram where their coverage matches the
-requested type. With both link and media conditions, URL is pushed down and the media
-condition is checked locally. Sender searches retain local media filtering because
-Telegram can ignore combined sender/media filters. Text, other, video, and document
+requested type. For ordinary link searches with a media condition, the server uses
+Telegram's URL filter and checks the media type locally. Button-inclusive searches
+use a compatible media filter when available. Sender searches retain local media
+filtering because Telegram can ignore combined sender/media filters. Text, other, video, and document
 categories retain local filtering to avoid omitting animations, round videos, or stickers.
 All paths enforce exact date and content conditions locally.
 

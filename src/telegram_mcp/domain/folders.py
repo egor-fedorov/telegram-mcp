@@ -44,6 +44,11 @@ def allowed_ids(settings: ReadPolicy, chats: list[Chat], folders: list[Folder]) 
     return ids
 
 
+def require_folders(requested: set[int], folders: list[Folder]) -> None:
+    if missing := requested - {folder.id for folder in folders}:
+        raise ToolError("FOLDER_NOT_FOUND", f"Unknown folder IDs: {sorted(missing)}")
+
+
 def select_chats(
     chats: list[Chat],
     folders: list[Folder],
@@ -58,8 +63,7 @@ def select_chats(
             "INVALID_ARGUMENT", "Use null for an unrestricted selector, not an empty list."
         )
     requested = set(folder_ids or [])
-    if missing := requested - {f.id for f in folders}:
-        raise ToolError("FOLDER_NOT_FOUND", f"Unknown folder IDs: {sorted(missing)}")
+    require_folders(requested, folders)
     if chat_ids and set(chat_ids) - allowed:
         raise ToolError(
             "ACCESS_DENIED", "One or more requested chats are outside the access policy."

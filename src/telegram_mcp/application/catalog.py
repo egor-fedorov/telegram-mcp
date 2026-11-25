@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from telegram_mcp.application.access import AccessFactory
 from telegram_mcp.application.common import check_limit, fingerprint
 from telegram_mcp.application.ports import ChatPort, Clock, CursorPort, FolderName
-from telegram_mcp.domain.folders import select_chats
+from telegram_mcp.domain.folders import require_folders, select_chats
 from telegram_mcp.domain.models import Chat, ChatPage, Folder, Scope, ToolError
 
 
@@ -28,8 +28,12 @@ class CatalogService:
         wanted = title.strip().casefold()
         if not wanted or len(wanted) > 128:
             raise ToolError("INVALID_ARGUMENT", "folder_name must contain 1..128 characters.")
+        folders = await self.chats.folder_names()
+        policy = self.access.policies.current()
         matches = [
-            f for f in await self.chats.folder_names() if f.title.strip().casefold() == wanted
+            f
+            for f in folders
+            if policy.allows_folder(f.id) and f.title.strip().casefold() == wanted
         ]
         if not matches:
             raise ToolError("FOLDER_NOT_FOUND", "No folder has this exact title; use folder_id.")
@@ -41,8 +45,24 @@ class CatalogService:
         return matches[0]
 
     async def list_folders(self, query: str | None = None) -> list[Folder]:
-        _, folders = await self.chats.catalog()
-        return [f for f in folders if not query or query.casefold() in f.title.casefold()]
+        access = await self.access.load()
+        return [
+            folder.model_copy(
+                update={
+                    "included_chat_ids": [
+                        cid for cid in folder.included_chat_ids if cid in access.allowed
+                    ],
+                    "excluded_chat_ids": [
+                        cid for cid in folder.excluded_chat_ids if cid in access.allowed
+                    ],
+                    "pinned_chat_ids": [
+                        cid for cid in folder.pinned_chat_ids if cid in access.allowed
+                    ],
+                }
+            )
+            for folder in access.folders
+            if not query or query.casefold() in folder.title.casefold()
+        ]
 
     async def list_chats(
         self,
@@ -57,6 +77,7 @@ class CatalogService:
         chats, folders, allowed = access.chats, access.folders, access.allowed
         fp = fingerprint([query, chat_type, folder_ids])
         if cursor:
+            require_folders(set(folder_ids or []), folders)
             state = self.cursors.get(cursor, "chats", fp)
             if not isinstance(state, ChatState):
                 raise ToolError("INVALID_CURSOR", "Wrong cursor type.")
@@ -76,6 +97,21 @@ class CatalogService:
         for chat in state.chats:
             access.require_access(chat.id)
         page = state.chats[state.index : state.index + limit]
+        if cursor:
+            visible = {folder.id for folder in folders}
+            page = [
+                chat.model_copy(
+                    update={
+                        "matched_folder_ids": [
+                            fid for fid in chat.matched_folder_ids if fid in visible
+                        ],
+                        "pinned_in_folder_ids": [
+                            fid for fid in chat.pinned_in_folder_ids if fid in visible
+                        ],
+                    }
+                )
+                for chat in page
+            ]
         state.index += len(page)
         more = state.index < len(state.chats)
         token = self.cursors.put("chats", fp, state) if more else None

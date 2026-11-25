@@ -1,10 +1,13 @@
 """Outbound gateways share the application's single owned Telegram connection."""
 
+from telegram_mcp.adapters.telegram.action_folders import action_folders
 from telegram_mcp.adapters.telegram.callbacks import CallbackGateway
 from telegram_mcp.adapters.telegram.chats import ChatGateway
 from telegram_mcp.adapters.telegram.drafts import DraftGateway
+from telegram_mcp.adapters.telegram.message_actions import MessageActionGateway
 from telegram_mcp.adapters.telegram.runtime import TelegramRuntime
 from telegram_mcp.adapters.telegram.sending import SendGateway
+from telegram_mcp.application.outbound_ports import ActionSnapshot
 from telegram_mcp.domain.models import Message, MessageRef, ToolError
 from telegram_mcp.domain.outbound import (
     CallbackReceipt,
@@ -21,6 +24,13 @@ class OutboundGateway:
         self.drafts = DraftGateway(runtime)
         self.sends = SendGateway(runtime)
         self.callbacks = CallbackGateway(runtime, chats)
+        self.actions = MessageActionGateway(runtime, chats)
+
+    async def action_folders(self, chat_id: str, account: str, wanted: set[int]) -> set[int]:
+        return await action_folders(self.runtime, chat_id, account, wanted)
+
+    async def action_target(self, ref: MessageRef, account: str) -> ActionSnapshot:
+        return await self.actions.inspect(ref, account)
 
     async def account_id(self) -> str:
         client = await self.runtime.ensure()

@@ -77,6 +77,11 @@ class AccessFactory:
                 return AccessContext([], [], set(policy.allowed_chat_ids), policy, self.chats)
         chats, folders = await self.chats.catalog()
         policy = self.policies.current()
+        visible_folders = [folder for folder in folders if policy.allows_folder(folder.id)]
         return AccessContext(
-            list(chats), folders, allowed_ids(policy, chats, folders), policy, self.chats
+            list(chats),
+            visible_folders,
+            allowed_ids(policy, chats, visible_folders),
+            policy,
+            self.chats,
         )

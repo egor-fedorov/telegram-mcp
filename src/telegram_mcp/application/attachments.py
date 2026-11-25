@@ -101,35 +101,46 @@ class AttachmentService:
         await context.allow_explicit(ref.chat_id)
         self._enabled()
 
+    async def _download(self, attachment_id: str) -> StoredAttachment:
+        ref, kind = parse_attachment_id(attachment_id)
+        await self._authorize(ref)
+        source = await self.backend.prepare_attachment(ref, kind)
+        if source.size is not None and source.size > MAX_ATTACHMENT_BYTES:
+            raise ToolError("ATTACHMENT_TOO_LARGE", "Attachments are limited to 20 MiB.")
+        writer = await self.store.reserve(source)
+        committed = False
+        try:
+            await self.backend.download_attachment(source, writer)
+            self._enabled()
+            stored = await self.store.commit(writer, source)
+            committed = True
+            return stored
+        finally:
+            if not committed:
+                try:
+                    await self.store.discard(writer)
+                except ToolError:
+                    logger.warning("Partial download cleanup failed; cleanup will retry.")
+
     async def download(self, attachment_id: str, save: bool = False) -> DownloadResult:
         if save:
             self.archive.require_enabled()
 
         async def operation() -> DownloadResult:
-            ref, kind = parse_attachment_id(attachment_id)
-            await self._authorize(ref)
-            source = await self.backend.prepare_attachment(ref, kind)
-            if source.size is not None and source.size > MAX_ATTACHMENT_BYTES:
-                raise ToolError("ATTACHMENT_TOO_LARGE", "Attachments are limited to 20 MiB.")
-            writer = await self.store.reserve(source)
-            committed = False
+            stored = await self._download(attachment_id)
+            result = stored.result
+            token = result.resource_uri.removeprefix(RESOURCE_PREFIX)
             delivered = False
-            resource_token = None
             try:
-                await self.backend.download_attachment(source, writer)
-                self._enabled()
-                stored = await self.store.commit(writer, source)
-                committed = True
-                resource_token = stored.result.resource_uri.removeprefix(RESOURCE_PREFIX)
-                if save:
-                    data = await self.store.read(
-                        stored.result.resource_uri.removeprefix(RESOURCE_PREFIX)
-                    )
-                    stored.result.saved_file = await self.archive.save(
+                data = await self.store.read(token) if save else None
+                await self._verify(stored)
+                if data is not None:
+                    ref = result.message_ref
+                    result.saved_file = await self.archive.save(
                         data,
-                        stored.result.name,
-                        stored.result.sha256,
-                        mime_type=stored.result.mime_type,
+                        result.name,
+                        result.sha256,
+                        mime_type=result.mime_type,
                         source=ArchiveSource(
                             tool="download_attachment",
                             chat_id=ref.chat_id,
@@ -142,15 +153,10 @@ class AttachmentService:
                         ),
                     )
                 delivered = True
-                return stored.result
+                return result
             finally:
-                if not committed:
-                    try:
-                        await self.store.discard(writer)
-                    except ToolError:
-                        logger.warning("Partial download cleanup failed; cleanup will retry.")
-                elif not delivered and resource_token is not None:
-                    await self.store.discard_resource(resource_token)
+                if not delivered:
+                    await self.store.discard_resource(token)
 
         return await self._run(operation)
 
@@ -180,17 +186,16 @@ class AttachmentService:
 
     async def extraction_input(self, attachment_id: str) -> tuple[StoredAttachment, bytes]:
         """Read this call's authorized download; extraction revalidates before delivery."""
-        result = await self.download(attachment_id)
-        token = result.resource_uri.removeprefix(RESOURCE_PREFIX)
 
         async def operation() -> tuple[StoredAttachment, bytes]:
-            stored = await self.store.lookup(token)
-            return stored, await self.store.read(token)
+            stored = await self._download(attachment_id)
+            token = stored.result.resource_uri.removeprefix(RESOURCE_PREFIX)
+            try:
+                return stored, await self.store.read(token)
+            finally:
+                await self.store.discard_resource(token)
 
-        try:
-            return await self._run(operation)
-        finally:
-            await self.store.discard_resource(token)
+        return await self._run(operation)
 
     async def close(self) -> None:
         self._closed = True

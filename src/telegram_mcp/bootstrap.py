@@ -74,7 +74,11 @@ def build_service(
         else getattr(backend, "outbound", None),
         outbound_store=outbound_store
         if outbound_store is not None
-        else OutboundStore(settings.session_path, tuple(settings.allowed_upload_directories)),
+        else OutboundStore(
+            settings.session_path,
+            tuple(settings.allowed_upload_directories),
+            private_paths=settings.private_upload_paths(),
+        ),
     )
 
 

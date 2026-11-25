@@ -8,7 +8,7 @@ import pytest
 from telegram_mcp.adapters.config import Settings
 from telegram_mcp.application.ports import GlobalBatch, GlobalOffset
 from telegram_mcp.bootstrap import build_service
-from telegram_mcp.domain.models import Folder, ToolError
+from telegram_mcp.domain.models import Folder, MessageButton, ReplyMarkup, ToolError
 from tests.support.fakes import BASE, FakeBackend, FakeClock, msg
 
 
@@ -53,6 +53,76 @@ async def test_direction_only_search_requires_an_explicit_selector(direction):
     service = build_service(FakeBackend([msg("1", 1)]), Settings(allow_all_chats=True))
     with pytest.raises(ToolError, match="INVALID_ARGUMENT"):
         await service.search_messages(query="", direction=direction)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"chat_ids": None},
+        {"date_from": None},
+        {"date_to": None},
+        {"has_link": False},
+        {"date_to": BASE},
+        {"date_from": BASE.replace(tzinfo=None)},
+    ],
+)
+async def test_button_url_search_rejects_unbounded_or_conflicting_inputs_before_io(change):
+    backend = FakeBackend()
+    service = build_service(backend, Settings(allow_all_chats=True))
+    options: dict[str, Any] = {
+        "chat_ids": ["1"],
+        "date_from": BASE,
+        "date_to": BASE + timedelta(days=1),
+        **change,
+    }
+    with pytest.raises(ToolError, match="INVALID_ARGUMENT"):
+        await service.search_messages(query="", include_button_urls=True, **options)
+    assert backend.backend_calls == []
+
+
+@pytest.mark.parametrize("selector", [{"folder_ids": [7]}, {"chat_ids": ["1"]}])
+async def test_button_url_search_resumes_only_selected_sources_and_binds_the_filter(selector):
+    markup = ReplyMarkup(
+        type="inline",
+        rows=[
+            [
+                MessageButton(
+                    button_id="0:0:test",
+                    text="Apply",
+                    type="url",
+                    url="https://example.test/job",
+                )
+            ]
+        ],
+    )
+    messages = [msg("1", n) for n in range(1, 81)]
+    messages[1].reply_markup = markup
+    messages[4].has_link = True
+    messages[64].reply_markup = markup
+    foreign = msg("2", 2)
+    foreign.reply_markup = markup
+    folder = Folder(id=7, title="Work", position=0, included_chat_ids=["1"])
+    backend = FakeBackend([*messages, foreign], folders=[folder])
+    service = build_service(backend, Settings(allow_all_chats=True, rpc_pages_per_call=1))
+    args: dict[str, Any] = dict(
+        query="", **selector, date_from=BASE, date_to=BASE + timedelta(days=1), limit=10
+    )
+    first = await service.search_messages(**args, include_button_urls=True)
+    assert first.next_cursor
+    with pytest.raises(ToolError, match="CURSOR_MISMATCH"):
+        await service.search_messages(**args, has_link=True, cursor=first.next_cursor)
+    seen = list(first.messages)
+    page = first
+    for _ in range(10):
+        if not page.next_cursor:
+            break
+        page = await service.search_messages(
+            **args, cursor=page.next_cursor, include_button_urls=True
+        )
+        seen.extend(page.messages)
+    assert page.scope.complete and not page.next_cursor
+    assert [m.message_ref.message_id for m in seen] == [65, 5, 2]
+    assert set(backend.fetches) == {"1"} and not backend.global_fetches
 
 
 async def test_unrestricted_search_reads_one_global_page_for_300_sources() -> None:

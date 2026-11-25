@@ -106,6 +106,51 @@ async def test_folder_snapshot_and_permission_revocation() -> None:
         await restricted.search_messages(query="budget", cursor=first.next_cursor)
 
 
+async def test_folder_metadata_follows_current_policy_including_cached_pages() -> None:
+    first = Folder(
+        id=1,
+        title="Work",
+        position=0,
+        pinned_chat_ids=["1", "2", "777000"],
+        included_chat_ids=["1", "2", "777000"],
+        excluded_chat_ids=["3"],
+    )
+    second = Folder(id=2, title="Private", position=1, pinned_chat_ids=["2"])
+    backend = FakeBackend(
+        [msg(cid, 1) for cid in ("1", "2", "3", "777000")], folders=[first, second]
+    )
+    settings = Settings(allow_all_chats=True)
+    service = build_service(backend, settings)
+    try:
+        folders = await service.list_folders()
+        assert [f.id for f in folders] == [1, 2]
+        assert folders[0].pinned_chat_ids == ["1", "2"]
+        assert folders[0].excluded_chat_ids == ["3"]
+        settings.allow_all_chats = False
+        settings.allowed_folder_ids = [1, 2]
+        page = await service.list_chats(limit=1)
+        assert page.next_cursor
+        settings.allowed_folder_ids = [1]
+        (visible,) = await service.list_folders()
+        assert visible.id == 1 and visible.excluded_chat_ids == []
+        assert visible.pinned_chat_ids == visible.included_chat_ids == ["1", "2"]
+        assert await service.list_folders("Private") == []
+        with pytest.raises(ToolError, match="FOLDER_NOT_FOUND"):
+            await service.find_folder("Private")
+        later = await service.list_chats(limit=1, cursor=page.next_cursor)
+        assert later.chats[0].matched_folder_ids == later.chats[0].pinned_in_folder_ids == [1]
+        with pytest.raises(ToolError, match="FOLDER_NOT_FOUND"):
+            await service.list_chats(folder_ids=[2])
+        settings.allowed_folder_ids = []
+        settings.allowed_chat_ids = ["2"]
+        assert await service.list_folders() == []
+        (only,) = (await service.list_chats()).chats
+        assert only.id == "2" and only.matched_folder_ids == only.pinned_in_folder_ids == []
+        assert (await backend.catalog())[1] == [first, second]
+    finally:
+        await service.close()
+
+
 async def test_permanent_failures_are_explicit_and_other_sources_continue() -> None:
     backend = FakeBackend([msg("1", 1), msg("2", 2)])
     backend.faults["2"] = ToolError("ACCESS_DENIED", "Unavailable source")
@@ -255,11 +300,10 @@ async def test_public_reads_require_explicit_scope_and_never_expand_catalog_or_f
     assert public.id in backend.public_checks
     listed = await service.list_chats()
     implicit = await service.search_messages(query="budget")
-    from_folder = await service.search_messages(query="budget", folder_ids=[1])
+    with pytest.raises(ToolError, match="FOLDER_NOT_FOUND"):
+        await service.search_messages(query="budget", folder_ids=[1])
     assert [c.id for c in listed.chats] == ["1"]
     assert implicit.scope.chat_ids == ["1"]
-    assert from_folder.scope.chat_ids == []
-    assert not from_folder.messages
     assert public.id not in {chat.id for chat in backend.chats}
 
 

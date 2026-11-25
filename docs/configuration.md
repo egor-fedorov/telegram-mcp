@@ -54,6 +54,10 @@ and require a server restart. `configure` preserves them. See
 [outbound workflows](outbound.md#recipient-modes-and-independent-forms) for precedence,
 defaults and the read checks retained by drafts, callbacks and replies.
 
+The local `[message_actions]` table enables previews, edits and single-message deletions
+when at least one rule is configured. Set the selector, target class, action and form
+policy together. See the [configuration example and permissions](outbound.md#single-message-actions).
+
 ## QR login
 
 Available in version 0.6 and later. Stop the session-owning server first:
@@ -95,6 +99,11 @@ allow_attachment_downloads = false
 Folder IDs are integers; chat IDs are strings containing Telethon marked peer IDs.
 Run `telegram-mcp catalog` while the server is stopped to inspect your account's
 folder/chat metadata. The local catalog does not output message text.
+
+MCP folder listings and title lookups expose only the configured folders, or all
+folders under `allow_all_chats`. Their explicit peer lists include only readable
+chats. An allowed chat ID on its own makes no folder visible. Use the local catalog
+to find folder IDs when setting up an empty allowlist.
 
 | Setting | Effect |
 | --- | --- |

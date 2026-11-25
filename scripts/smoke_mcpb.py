@@ -76,8 +76,18 @@ def smoke(artifact: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("bundle", type=Path)
+    parser.add_argument(
+        "--audit-only", action="store_true", help="Audit the packaged lockfile against OSV."
+    )
     args = parser.parse_args()
-    smoke(args.bundle.resolve())
+    artifact = args.bundle.resolve()
+    if args.audit_only:
+        with tempfile.TemporaryDirectory(prefix="mcpb-audit-", dir=artifact.parent) as temporary:
+            extension = Path(temporary)
+            extract_bundle(artifact, extension)
+            subprocess.run(["uv", "audit", "--locked"], cwd=extension, check=True, timeout=180)
+    else:
+        smoke(artifact)
 
 
 if __name__ == "__main__":

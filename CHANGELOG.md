@@ -6,9 +6,26 @@ A version entry describes its target artifact. Verify publication on [PyPI](http
 
 ## [Unreleased]
 
+### Message actions
+
+- Preview, edit or delete one permitted message with revision checks, explicit deletion visibility, local confirmation rules and a recoverable operation receipt.
+
+### Search
+
+- Use `search_messages(include_button_urls=true)` to find posts with links in their buttons, text or webpage preview. Supply selected chats or folders and a bounded date range.
+
+## [0.8.1] - 2026-11-20
+
+### Fixes
+
+- Limit MCP folder metadata, name lookups and chat membership fields to permitted folders and peers. Use the local catalog to configure access.
+- Recheck access, content protection and attachment identity after the transfer and before returning a local path or saving a permanent copy.
+- Preserve formatted and reply drafts by reporting `DRAFT_UNSUPPORTED` before replacement. Report temporary source-check failures when listing reusable files.
+- Exclude local credentials and private server storage from file registration. Use a regular file without hard links in an allowed upload directory.
+
 ### Dependencies
 
-- Refresh runtime and development dependencies and CI actions, including upstream security fixes.
+- Refresh runtime and development dependencies and CI actions, raise security floors, and audit the packaged MCPB lockfile before publication. Upgrade the shared server and replace the 0.8.0 client bundle to receive the fixes.
 
 ### Documentation and tests
 

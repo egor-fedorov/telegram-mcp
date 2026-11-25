@@ -23,6 +23,7 @@ from telegram_mcp.adapters.transport import create_http_app, endpoint
 from telegram_mcp.adapters.watches import WatchStore
 from telegram_mcp.application.outbound_ports import OutboundPort
 from telegram_mcp.bootstrap import build_service
+from telegram_mcp.domain.message_actions import ActionPolicy
 from tests.support.fakes import FakeBackend, msg
 from tests.support.resources import (
     ResourceService,
@@ -47,6 +48,7 @@ async def running_server(
     archive: bool = False,
     allow_attachment_downloads: bool = False,
     outbound_backend: OutboundPort | None = None,
+    message_actions: ActionPolicy | None = None,
 ) -> AsyncGenerator[tuple[Settings, FakeBackend]]:
     backend = backend if backend is not None else FakeBackend([msg("1", 1), msg("1", 2)])
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
@@ -59,6 +61,7 @@ async def running_server(
             mcp_schema_mode=schema_mode,
             archive_directory=tmp_path / "archive" if archive else None,
             allow_attachment_downloads=allow_attachment_downloads,
+            message_actions=message_actions or ActionPolicy(),
             allow_drafts=outbound_backend is not None,
             allow_send_messages=outbound_backend is not None,
             allow_send_files=outbound_backend is not None,

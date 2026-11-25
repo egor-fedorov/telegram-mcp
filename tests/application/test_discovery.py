@@ -164,12 +164,11 @@ async def test_discovery_does_not_expand_catalog_implicit_search_or_folder_scope
     await service.get_similar_channels(candidate.url)
     listed = await service.list_chats()
     implicit = await service.search_messages(query="budget")
-    from_folder = await service.search_messages(query="budget", folder_ids=[folder.id])
+    with pytest.raises(ToolError, match="FOLDER_NOT_FOUND"):
+        await service.search_messages(query="budget", folder_ids=[folder.id])
     assert [chat.id for chat in listed.chats] == [local.id]
     assert implicit.scope.chat_ids == [local.id]
     assert [message.message_ref.key for message in implicit.messages] == ["1:1"]
-    assert from_folder.scope.chat_ids == []
-    assert from_folder.messages == []
     assert candidate.id not in backend.fetches
     assert backend.chats == [local]
     assert folder.included_chat_ids == []

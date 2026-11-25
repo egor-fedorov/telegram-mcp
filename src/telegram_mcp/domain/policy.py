@@ -14,3 +14,6 @@ class ReadPolicy:
     allow_public_channel_reads: bool = False
     allow_public_channel_discovery: bool = False
     allow_attachment_downloads: bool = False
+
+    def allows_folder(self, folder_id: int) -> bool:
+        return self.allow_all_chats or folder_id in self.allowed_folder_ids

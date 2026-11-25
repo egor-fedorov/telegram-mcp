@@ -3,6 +3,7 @@ from urllib.parse import urlparse
 
 from pydantic import ValidationError
 
+from telegram_mcp.adapters.telegram.message_filters import matches_filters
 from telegram_mcp.application.attachment_ports import (
     AttachmentKind,
     AttachmentSource,
@@ -273,16 +274,7 @@ class FakeBackend:
                 < (offset.rate, int(offset.peer_id), offset.message_id)
             ]
         raw = candidates[:limit]
-        filtered = [
-            m
-            for m in raw
-            if m.chat.id in chat_ids
-            and (filters.date_from is None or m.sent_at >= filters.date_from)
-            and (filters.date_to is None or m.sent_at < filters.date_to)
-            and (filters.content_type is None or m.content_type == filters.content_type)
-            and (filters.has_link is None or m.has_link == filters.has_link)
-            and (filters.direction == "all" or m.outgoing is (filters.direction == "outgoing"))
-        ]
+        filtered = [m for m in raw if m.chat.id in chat_ids and matches_filters(m, filters)]
         next_offset = (
             GlobalOffset(
                 int(raw[-1].sent_at.timestamp()), raw[-1].chat.id, raw[-1].message_ref.message_id
@@ -439,8 +431,7 @@ class FakeBackend:
         filters = request.filters
         if isinstance(offset, SearchAnchor):
             offset = offset.offset_id
-        date_from, date_to = filters.date_from, filters.date_to
-        content_type, oldest_first = filters.content_type, filters.oldest_first
+        oldest_first = filters.oldest_first
         query = request.query if isinstance(request, SearchRead) else None
         sender_id = request.sender_id if isinstance(request, SearchRead) else None
         thread_id = request.thread_id if isinstance(request, ThreadRead) else None
@@ -481,15 +472,7 @@ class FakeBackend:
                 )
             ]
         raw = candidates[:limit]
-        filtered = [
-            m
-            for m in raw
-            if (date_from is None or m.sent_at >= date_from)
-            and (date_to is None or m.sent_at < date_to)
-            and (content_type is None or m.content_type == content_type)
-            and (filters.has_link is None or m.has_link == filters.has_link)
-            and (filters.direction == "all" or m.outgoing is (filters.direction == "outgoing"))
-        ]
+        filtered = [m for m in raw if matches_filters(m, filters)]
         return Batch(
             filtered, raw[-1].message_ref.message_id if raw else offset, len(candidates) <= limit
         )

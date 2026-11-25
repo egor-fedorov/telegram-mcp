@@ -4,14 +4,17 @@ import asyncio
 import math
 import secrets
 from collections.abc import Awaitable, Callable
+from contextlib import nullcontext
 from datetime import timedelta
 from typing import Literal
 
 from telegram_mcp.application.outbound_access import OutboundContext, require_confirmation
 from telegram_mcp.application.outbound_ports import Confirm, ConfirmationPending
+from telegram_mcp.domain.message_actions import ActionReceipt
 from telegram_mcp.domain.models import MessageRef, ToolError
 from telegram_mcp.domain.outbound import (
     CallbackReceipt,
+    OperationKind,
     OutboundOperation,
     RecipientBinding,
     SendReceipt,
@@ -20,7 +23,8 @@ from telegram_mcp.domain.outbound import (
     text_digest,
 )
 
-Receipt = SendReceipt | CallbackReceipt
+Receipt = SendReceipt | CallbackReceipt | ActionReceipt
+Prepare = Callable[[OutboundOperation], Awaitable[tuple[bool, str]]]
 
 
 class OperationJournal:
@@ -86,6 +90,14 @@ class OperationJournal:
             for scope, until in (await self.context.store.cooldowns(account, now)).items()
         ]
 
+    async def record_cooldown(self, account: str, error: ToolError) -> None:
+        if error.code == "RATE_LIMITED" and error.retry_after:
+            await self.context.store.set_cooldown(
+                account,
+                error.scope or "account",
+                self.context.clock.utc_now() + timedelta(seconds=error.retry_after),
+            )
+
     @staticmethod
     def capability(kind: str) -> str:
         return {
@@ -117,9 +129,12 @@ class OperationJournal:
             or operation.operation_id in self._active
         ):
             return operation.receipt
-        if operation.kind == "callback" and operation.dispatched:
+        if operation.kind in ("callback", "edit", "delete") and operation.dispatched:
             return operation.receipt.model_copy(update={"status": "unknown"})
-        if isinstance(operation.receipt, SendReceipt) and operation.receipt.retry_at:
+        if (
+            isinstance(operation.receipt, (SendReceipt, ActionReceipt))
+            and operation.receipt.retry_at
+        ):
             if operation.receipt.retry_at > self.context.clock.utc_now():
                 return operation.receipt
         return None
@@ -141,93 +156,140 @@ class OperationJournal:
         reply_selector: str | None = None,
         reply_ref: MessageRef | None = None,
     ) -> Receipt:
+        async def prepare(op: OutboundOperation) -> tuple[bool, str]:
+            await self.authorize(op)
+            await validate(op)
+            prompt = description if isinstance(description, str) else description(op)
+            return self._requires_confirmation(op), prompt
+
+        operation_id = secrets.token_urlsafe(32)
+        receipt = (
+            CallbackReceipt(operation_id=operation_id, status="pending")
+            if kind == "callback"
+            else SendReceipt(
+                operation_id=operation_id, status="pending", chat_id=chat, file=payload.get("file")
+            )
+        )
+        operation = self._new(account, chat, kind, key, identity, receipt)
+        operation.payload = payload
+        operation.recipient = recipient
+        operation.reply_selector, operation.reply_ref = reply_selector, reply_ref
+        if kind in ("message", "file"):
+            operation.expected_text_sha256 = text_digest(payload["text"])
+        return await self._run(
+            operation, prepare, confirm, dispatch, "callback" if kind == "callback" else "send"
+        )
+
+    def _new(
+        self,
+        account: str,
+        chat: str,
+        kind: OperationKind,
+        key: str,
+        identity: dict,
+        receipt: Receipt,
+    ) -> OutboundOperation:
         check_key(key)
-        digest = self.digest(kind, chat, identity)
+        now = self.context.clock.utc_now()
+        return OutboundOperation(
+            operation_id=receipt.operation_id,
+            account_id=account,
+            chat_id=chat,
+            kind=kind,
+            idempotency_key=key,
+            request_hash=self.digest(kind, chat, identity),
+            receipt=receipt,
+            random_id=secrets.randbits(63) or 1,
+            created_at=now,
+            updated_at=now,
+        )
+
+    async def run_action(
+        self,
+        account: str,
+        key: str,
+        identity: dict,
+        receipt: ActionReceipt,
+        prepare: Prepare,
+        confirm: Confirm | None,
+        dispatch: Callable[[OutboundOperation], Awaitable[ActionReceipt]],
+        lock: asyncio.Lock,
+    ) -> ActionReceipt:
+        operation = self._new(
+            account,
+            receipt.message_ref.chat_id,
+            "edit" if receipt.action == "edit" else "delete",
+            key,
+            identity,
+            receipt,
+        )
+        result = await self._run(operation, prepare, confirm, dispatch, "message_action", lock)
+        assert isinstance(result, ActionReceipt)
+        return result
+
+    async def _run(
+        self,
+        initial: OutboundOperation,
+        prepare: Prepare,
+        confirm: Confirm | None,
+        dispatch: Callable[[OutboundOperation], Awaitable[Receipt]],
+        scope: str,
+        lock: asyncio.Lock | None = None,
+    ) -> Receipt:
         async with self._lock:
-            operation_id = secrets.token_urlsafe(32)
-            receipt = (
-                CallbackReceipt(operation_id=operation_id, status="pending")
-                if kind == "callback"
-                else SendReceipt(
-                    operation_id=operation_id,
-                    status="pending",
-                    chat_id=chat,
-                    file=payload.get("file"),
-                )
-            )
-            operation = await self.context.store.create_operation(
-                OutboundOperation(
-                    operation_id=operation_id,
-                    account_id=account,
-                    idempotency_key=key,
-                    kind=kind,
-                    request_hash=digest,
-                    payload=payload,
-                    chat_id=chat,
-                    random_id=secrets.randbits(63) or 1,
-                    receipt=receipt,
-                    recipient=recipient,
-                    reply_selector=reply_selector,
-                    reply_ref=reply_ref,
-                    created_at=self.context.clock.utc_now(),
-                    updated_at=self.context.clock.utc_now(),
-                    expected_text_sha256=(
-                        text_digest(payload["text"]) if kind in ("message", "file") else None
-                    ),
-                )
-            )
-            replay = self._replay(operation, digest)
+            operation = await self.context.store.create_operation(initial)
+            replay = self._replay(operation, initial.request_hash)
             if replay is not None:
                 return replay
             self._active.add(operation.operation_id)
         try:
-            text = description if isinstance(description, str) else description(operation)
-            return await self._execute(operation, text, confirm, validate, dispatch)
+            return await self._execute(operation, prepare, confirm, dispatch, scope, lock)
         finally:
             self._active.discard(operation.operation_id)
 
     async def _execute(
         self,
         operation: OutboundOperation,
-        description: str,
+        prepare: Prepare,
         confirm: Confirm | None,
-        validate: Callable[[OutboundOperation], Awaitable[None]],
         dispatch: Callable[[OutboundOperation], Awaitable[Receipt]],
+        scope: str,
+        lock: asyncio.Lock | None,
     ) -> Receipt:
         was_dispatched = operation.dispatched
         try:
-            scope = "callback" if operation.kind == "callback" else "send"
-            await self.context.check_cooldown(operation.account_id, f"{scope}:{operation.chat_id}")
-            await self.authorize(operation)
-            await validate(operation)
-            if not operation.confirmed and self._requires_confirmation(operation):
+            scope = f"{scope}:{operation.chat_id}"
+            await self.context.check_cooldown(operation.account_id, scope)
+            required, description = await prepare(operation)
+            if not operation.confirmed and required:
                 await require_confirmation(
                     confirm, f"{description}\nOperation: {operation.operation_id}"
                 )
                 operation.confirmed = True
             operation.confirmation_source = "form" if operation.confirmed else "config"
-            await self.authorize(operation)
-            await validate(operation)
-            if not operation.confirmed and self._requires_confirmation(operation):
-                raise ToolError(
-                    "CONFIRMATION_REQUIRED", "Confirmation policy changed before dispatch."
-                )
-            if await self.context.backend.account_id() != operation.account_id:
-                raise ToolError("ACCOUNT_CHANGED", "Account changed while confirming this action.")
-            operation.dispatched = True
-            await self._save(operation)
-            operation.receipt = await dispatch(operation)
+            async with lock if lock is not None else nullcontext():
+                await self.context.check_cooldown(operation.account_id, scope)
+                required, _ = await prepare(operation)
+                if not operation.confirmed and required:
+                    raise ToolError(
+                        "CONFIRMATION_REQUIRED", "Confirmation policy changed before dispatch."
+                    )
+                if await self.context.backend.account_id() != operation.account_id:
+                    raise ToolError(
+                        "ACCOUNT_CHANGED", "Account changed while confirming this action."
+                    )
+                operation.dispatched = True
+                if isinstance(operation.receipt, ActionReceipt):
+                    operation.receipt.error = None
+                    operation.receipt.retry_at = None
+                await self._save(operation)
+                operation.receipt = await dispatch(operation)
         except ConfirmationPending:
             await self._save(operation)
             raise
         except ToolError as exc:
             self._failure(operation, exc, was_dispatched)
-            if exc.code == "RATE_LIMITED" and exc.retry_after:
-                await self.context.store.set_cooldown(
-                    operation.account_id,
-                    exc.scope or "account",
-                    self.context.clock.utc_now() + timedelta(seconds=exc.retry_after),
-                )
+            await self.record_cooldown(operation.account_id, exc)
         except BaseException:
             self._failure(
                 operation,
@@ -256,6 +318,7 @@ class OperationJournal:
             "OPERATION_INTERRUPTED",
             "SEND_UNCERTAIN",
             "CALLBACK_UNCERTAIN",
+            "ACTION_UNCERTAIN",
         )
         if uncertain or was_dispatched:
             operation.receipt.status = "unknown"
@@ -265,7 +328,7 @@ class OperationJournal:
         else:
             operation.receipt.status = "failed"
         operation.receipt.error = error.issue(chat_id=operation.chat_id)
-        if error.retry_after and isinstance(operation.receipt, SendReceipt):
+        if error.retry_after and isinstance(operation.receipt, (SendReceipt, ActionReceipt)):
             operation.receipt.retry_at = self.context.clock.utc_now() + timedelta(
                 seconds=error.retry_after
             )
