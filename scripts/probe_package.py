@@ -22,6 +22,9 @@ import telegram_mcp
 from telegram_mcp.adapters.version import get_build_info, get_version
 
 OUTBOUND_TOOLS = {
+    "preview_message_action",
+    "edit_message",
+    "delete_message",
     "register_file",
     "list_files",
     "get_draft",
@@ -263,7 +266,11 @@ def main() -> None:
     # Discover every optional tool from the installed wheel/sdist without credentials
     # or dispatching an outbound action. Default transport probes remain read-only.
     config = Path.cwd() / "outbound.toml"
-    config.write_text('mcp_schema_mode = "full"\nallow_drafts = true\n', encoding="utf-8")
+    config.write_text(
+        'mcp_schema_mode = "full"\nallow_drafts = true\n'
+        '[[message_actions.rules]]\nchat_ids = ["1"]\ntargets = ["own"]\nactions = ["edit"]\n',
+        encoding="utf-8",
+    )
     asyncio.run(probe_stdio(executable, config, args.version, contract, "full", outbound=True))
     assert not list(Path.cwd().glob("*.session*"))
     print(

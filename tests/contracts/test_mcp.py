@@ -9,14 +9,24 @@ from mcp.client import Client
 from telegram_mcp.adapters.config import Settings
 from telegram_mcp.adapters.mcp import create_server
 from telegram_mcp.bootstrap import build_service as Service
+from telegram_mcp.domain.message_actions import ActionPolicy, ActionRule
 from tests.support.fakes import FakeBackend
 from tests.support.paths import FIXTURES_DIR
+
+
+def advertised_settings() -> Settings:
+    return Settings(
+        allow_drafts=True,
+        message_actions=ActionPolicy(
+            rules=(ActionRule(chat_ids=("1",), targets=("own",), actions=("edit",)),)
+        ),
+    )
 
 
 @pytest.mark.parametrize("mode", ["auto", "legacy"])
 async def test_mcp_contract_matches_versioned_fixture(mode: str) -> None:
     async with Client(
-        create_server(Service(FakeBackend(), Settings(allow_drafts=True)), schema_mode="full"),
+        create_server(Service(FakeBackend(), advertised_settings()), schema_mode="full"),
         mode=mode,
     ) as client:
         listing = await client.list_tools()
@@ -47,7 +57,7 @@ async def advertised_listing(mode: str) -> dict[str, object]:
     compared after the same cleanup on every supported version.
     """
     async with Client(
-        create_server(Service(FakeBackend(), Settings(allow_drafts=True))), mode=mode
+        create_server(Service(FakeBackend(), advertised_settings())), mode=mode
     ) as client:
         tools = (await client.list_tools()).tools
         prompts = (await client.list_prompts()).prompts

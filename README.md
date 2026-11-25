@@ -130,11 +130,12 @@ its own capability flag and explicit recipient permission:
 | `create_draft` / `update_draft` | Prepare plain-text drafts with conflict checks and local confirmation policy |
 | `register_file` / `list_files` | Register and discover immutable files for reuse in sends |
 | `send_message` / `send_file` | Send one text or file under local permission/form policy with a durable idempotency key |
-| `get_send_status` | Read a stored send/callback receipt by operation ID or idempotency key |
+| `get_send_status` | Read an outbound operation receipt by ID or idempotency key |
 | `resolve_recipient` | Exact recipient metadata and local send/form policy without history |
 | `verify_sent_message` | Reread only this MCP's sent message and compare text/attachment metadata |
 | `list_operations` | Filter and page through this account's MCP journal; excludes manual sends |
 | `invoke_button` | Invoke one ordinary callback in a selected private bot dialog under local form policy |
+| `preview_message_action` / `edit_message` / `delete_message` | Inspect and act on one revision under [local action rules](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/outbound.md#single-message-actions) (development version) |
 
 For recipient permissions, confirmation settings and send recovery, see [outbound policies](https://github.com/egor-fedorov/telegram-mcp/blob/main/docs/outbound.md#recipient-modes-and-independent-forms).
 

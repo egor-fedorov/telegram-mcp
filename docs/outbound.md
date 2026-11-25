@@ -2,7 +2,8 @@
 
 The default server remains read-only. These tools require server and proxy version
 0.7.0 or later, explicit capability flags and permitted recipients. No OCR, joining channels, folder edits,
-bulk sends, scheduled sends or editing/deleting sent messages are included.
+bulk sends or scheduled sends are included. Single-message edits and deletions use the
+[separate local rules](#single-message-actions) in the development version.
 
 The additional recipient modes, inspection tools and per-action confirmation settings below
 require server and proxy version **0.8.0**. Version 0.7.0 supports only the original
@@ -68,8 +69,8 @@ Only actual TOML booleans are accepted. There are no MCP arguments, CLI switches
 environment overrides for these six policies. `configure` preserves them without prompting
 to broaden access. Proxy settings never override the session-owning server's policy.
 
-With every write flag off, the extra thirteen tools are absent from `tools/list`. With any
-write flag on, refresh client tool discovery. Each tool still checks its own flag.
+With no outbound capabilities or action rules enabled, the server advertises its read-only tool set.
+After enabling a capability, refresh client tool discovery. Each operation checks its own grant.
 `get_status` reports `read_write`, individual flags, write IDs, active cooldown scopes
 and whether the current MCP client advertises form confirmation. This is server policy,
 not a guarantee that Telegram will accept a particular action.
@@ -165,7 +166,7 @@ current account's journal without resolving a recipient or dispatching anything.
 Supply exactly one selector. These local receipts remain inspectable after recipient
 or action permission is revoked, including legacy records. Its
 response is `{"result": {...}}`, where `result` is a send or callback receipt; inspect
-`result.status`, `result.error` and `result.retry_at`. Direct send/callback calls return
+`result.status`, `result.error` and `result.retry_at`. Direct send, callback and message-action calls return
 the receipt at the top level. This envelope matches the advertised MCP union schema.
 
 `list_operations(chat_id?, date_from?, date_to?, kind?, status?, limit=30, cursor?)`
@@ -296,3 +297,66 @@ confirmation UI coverage.
 The earlier [PR #32](https://github.com/egor-fedorov/telegram-mcp/pull/32) supplied a
 useful write-permission/confirmation proposal. Its documentation-only design was
 adapted to the current layered server; it was not merged as an implementation.
+
+
+## Single-message actions
+
+Configure the session-owning server and restart it. Empty rules are the default. This
+example permits edits and deletions of the account's own messages in one readable chat.
+
+```toml
+[message_actions]
+confirmation = "per_rule"
+
+[[message_actions.rules]]
+chat_ids = ["123456789"]
+targets = ["own"]
+actions = ["edit", "delete_for_me", "delete_for_everyone"]
+require_confirmation = true
+```
+
+Each rule binds one selector (`chat_ids`, `folder_ids`, or `all_chats = true`) to its
+own targets and actions. The target classes are `own`, `mcp_sent` (a successful send
+from this server), `group_others` (other authors in groups and channels), and
+`private_incoming`. Revoking an incoming private message for both participants requires
+a rule containing both `private_incoming` and `delete_for_everyone`. Existing send grants
+provide no message-action permissions.
+
+For each available action, a matching chat rule takes precedence over matching folder
+rules, followed by all-chat rules. A tie requires a form if any rule at that level
+requires one. The global `confirmation` setting accepts `always`, `never` or `per_rule`.
+Each rule defaults to requiring a form. Folder membership is checked for the selected
+dialog using current Telegram settings, including dynamic unread, archive and mute rules.
+
+1. Call `preview_message_action(message_ref="123456789:42")` and choose an advertised action.
+   The preview includes the sender when available, a 240-character excerpt, the revision
+   and each action's confirmation requirement.
+2. Call `delete_message(message_ref="123456789:42", visibility="for_me",
+   expected_revision=REVISION, idempotency_key=KEY)` or pass the new plain text to
+   `edit_message` with the same target and revision. Use a new key for each distinct intent.
+3. If the response is lost, recover the original receipt with `get_send_status` or
+   `list_operations(kind="delete")`. A completed receipt with `rpc_accepted=true`
+   records Telegram's acknowledgement. The other participant can independently check
+   visibility in their client. After an uncertain result, the original key returns
+   `unknown` without repeating the RPC. Observe the returned retry time after a FloodWait.
+
+A direct reference requires ordinary read access. A successful local send operation
+can be selected with `source_operation_id` in place of `message_ref`. Outside readable
+dialogs this requires a matching `mcp_sent` rule and applies only to the exact outgoing
+message. The original send receipt remains available. The action journal stores the
+target, revision and outcome without copying the old or replacement text.
+
+Private human dialogs and basic groups support local deletion and can permit revocation
+for everyone under Telegram's current rights and time limits. Saved Messages and private
+bots offer local deletion. Supergroups and channels support deletion for everyone only.
+Edits cover the account's own plain text or simple media caption and retain its attachment.
+Service and authentication messages, topic roots, paid or scheduled messages and automatic
+linked discussion copies are excluded. The server checks the revision again after the form
+and serializes changes to the same message. Another Telegram client can still change
+the message between the final check and Telegram's RPC. Deletion leaves local exports,
+downloaded files and copies held by others intact.
+
+Telegram defines different deletion methods for ordinary and channel peers. In ordinary
+dialogs the RPC contains only message IDs, so the server verifies the returned message's
+peer before dispatch. [Ordinary dialogs](https://core.telegram.org/method/messages.deleteMessages)
+and [channels and supergroups](https://core.telegram.org/method/channels.deleteMessages).

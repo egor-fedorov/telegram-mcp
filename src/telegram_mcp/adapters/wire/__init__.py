@@ -54,6 +54,9 @@ from telegram_mcp.adapters.wire.messages import (
     WebPage,
 )
 from telegram_mcp.adapters.wire.outbound import (
+    ActionPreview,
+    ActionReceipt,
+    AvailableAction,
     CallbackReceipt,
     Draft,
     DraftList,
@@ -80,6 +83,9 @@ from telegram_mcp.adapters.wire.watches import (
 )
 
 __all__ = [
+    "ActionPreview",
+    "ActionReceipt",
+    "AvailableAction",
     "CallbackReceipt",
     "Draft",
     "DraftList",

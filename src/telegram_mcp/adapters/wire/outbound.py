@@ -6,6 +6,8 @@ from pydantic import AwareDatetime, with_config
 from typing_extensions import TypedDict
 
 from telegram_mcp.adapters.wire.common import CONFIG, ChatID, Issue, MessageKey
+from telegram_mcp.adapters.wire.messages import Sender
+from telegram_mcp.domain.message_actions import Action, Visibility
 from telegram_mcp.domain.models import ChatType, ContentType
 from telegram_mcp.domain.outbound import JournalState, OperationKind, WriteGrant
 
@@ -139,6 +141,8 @@ class OperationSummary(TypedDict):
     operation_id: str
     idempotency_key: str
     kind: OperationKind
+    action: NotRequired[Action]
+    source_operation_id: NotRequired[str]
     status: JournalState
     chat_id: ChatID
     recipient: NotRequired[RecipientBinding]
@@ -154,3 +158,36 @@ class OperationPage(TypedDict):
     scope: Literal["mcp_journal"]
     operations: list[OperationSummary]
     next_cursor: str | None
+
+
+@with_config(CONFIG)
+class ActionReceipt(TypedDict):
+    operation_id: str
+    action: Action
+    visibility: NotRequired[Visibility]
+    message_ref: MessageKey
+    source_operation_id: NotRequired[str]
+    expected_revision: str
+    status: Literal["pending", "completed", "failed", "unknown"]
+    rpc_accepted: bool
+    error: NotRequired[Issue]
+    retry_at: NotRequired[AwareDatetime]
+
+
+@with_config(CONFIG)
+class AvailableAction(TypedDict):
+    action: Action
+    confirmation_required: bool
+
+
+@with_config(CONFIG)
+class ActionPreview(TypedDict):
+    message_ref: MessageKey
+    source_operation_id: NotRequired[str]
+    chat_title: str
+    chat_type: ChatType
+    sender: NotRequired[Sender]
+    text_preview: str
+    text_truncated: bool
+    revision: str
+    actions: list[AvailableAction]

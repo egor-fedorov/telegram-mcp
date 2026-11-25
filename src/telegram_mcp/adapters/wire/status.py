@@ -6,6 +6,7 @@ from pydantic import AwareDatetime, Field, with_config
 from typing_extensions import TypedDict
 
 from telegram_mcp.adapters.wire.common import CONFIG, ChatID, Issue
+from telegram_mcp.domain.message_actions import ConfirmationPolicy
 
 
 @with_config(CONFIG)
@@ -44,6 +45,8 @@ class Status(TypedDict):
     require_send_file_confirmation: bool
     require_bot_callback_confirmation: bool
     require_draft_overwrite_confirmation: bool
+    message_actions_enabled: bool
+    message_action_confirmation: ConfirmationPolicy
     confirmation_required: bool
     confirmation_supported: bool | None
     cooldowns: list[Cooldown]

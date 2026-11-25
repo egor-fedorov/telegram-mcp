@@ -88,6 +88,8 @@ async def routed_call(
         "send_message",
         "send_file",
         "invoke_button",
+        "edit_message",
+        "delete_message",
         "get_status",
         "resolve_recipient",
     }:

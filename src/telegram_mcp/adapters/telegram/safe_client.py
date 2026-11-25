@@ -7,6 +7,7 @@ from telethon import TelegramClient, errors, functions
 # Explicit request types prevent a future Get* mutation from becoming retryable.
 READ_REQUESTS = (
     functions.updates.GetStateRequest,
+    functions.help.GetConfigRequest,
     functions.users.GetUsersRequest,
     functions.users.GetFullUserRequest,
     functions.channels.GetChannelsRequest,

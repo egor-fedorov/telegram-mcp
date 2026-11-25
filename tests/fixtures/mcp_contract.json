@@ -1,5 +1,66 @@
 {
   "definitions": {
+    "ActionReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "enum": [
+            "edit",
+            "delete_for_me",
+            "delete_for_everyone"
+          ],
+          "type": "string"
+        },
+        "error": {
+          "$ref": "#/$defs/Issue"
+        },
+        "expected_revision": {
+          "type": "string"
+        },
+        "message_ref": {
+          "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
+          "type": "string"
+        },
+        "operation_id": {
+          "type": "string"
+        },
+        "retry_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "rpc_accepted": {
+          "type": "boolean"
+        },
+        "source_operation_id": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "completed",
+            "failed",
+            "unknown"
+          ],
+          "type": "string"
+        },
+        "visibility": {
+          "enum": [
+            "for_me",
+            "for_everyone"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation_id",
+        "action",
+        "message_ref",
+        "expected_revision",
+        "status",
+        "rpc_accepted"
+      ],
+      "type": "object"
+    },
     "Attachment": {
       "additionalProperties": false,
       "properties": {
@@ -31,6 +92,27 @@
       "required": [
         "id",
         "type"
+      ],
+      "type": "object"
+    },
+    "AvailableAction": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "enum": [
+            "edit",
+            "delete_for_me",
+            "delete_for_everyone"
+          ],
+          "type": "string"
+        },
+        "confirmation_required": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "action",
+        "confirmation_required"
       ],
       "type": "object"
     },
@@ -835,6 +917,14 @@
     "OperationSummary": {
       "additionalProperties": false,
       "properties": {
+        "action": {
+          "enum": [
+            "edit",
+            "delete_for_me",
+            "delete_for_everyone"
+          ],
+          "type": "string"
+        },
         "chat_id": {
           "pattern": "^-?[1-9]\\d*$",
           "type": "string"
@@ -853,7 +943,9 @@
           "enum": [
             "message",
             "file",
-            "callback"
+            "callback",
+            "edit",
+            "delete"
           ],
           "type": "string"
         },
@@ -869,6 +961,9 @@
         },
         "sent_at": {
           "format": "date-time",
+          "type": "string"
+        },
+        "source_operation_id": {
           "type": "string"
         },
         "status": {
@@ -1996,6 +2091,127 @@
         "type": "object"
       }
     },
+    "delete_message": {
+      "annotations": {
+        "destructive_hint": true,
+        "idempotent_hint": true,
+        "open_world_hint": true,
+        "read_only_hint": false,
+        "title": null
+      },
+      "input": {
+        "properties": {
+          "expected_revision": {
+            "title": "Expected Revision",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "message_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Message Ref"
+          },
+          "source_operation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Source Operation Id"
+          },
+          "visibility": {
+            "enum": [
+              "for_me",
+              "for_everyone"
+            ],
+            "title": "Visibility",
+            "type": "string"
+          }
+        },
+        "required": [
+          "visibility",
+          "expected_revision",
+          "idempotency_key"
+        ],
+        "title": "delete_messageArguments",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "edit",
+              "delete_for_me",
+              "delete_for_everyone"
+            ],
+            "type": "string"
+          },
+          "error": {
+            "$ref": "#/$defs/Issue"
+          },
+          "expected_revision": {
+            "type": "string"
+          },
+          "message_ref": {
+            "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
+            "type": "string"
+          },
+          "operation_id": {
+            "type": "string"
+          },
+          "retry_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "rpc_accepted": {
+            "type": "boolean"
+          },
+          "source_operation_id": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "completed",
+              "failed",
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "visibility": {
+            "enum": [
+              "for_me",
+              "for_everyone"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id",
+          "action",
+          "message_ref",
+          "expected_revision",
+          "status",
+          "rpc_accepted"
+        ],
+        "type": "object"
+      }
+    },
     "delete_watch": {
       "annotations": {
         "destructive_hint": true,
@@ -2108,6 +2324,123 @@
           "local_path",
           "resource_uri",
           "expires_at"
+        ],
+        "type": "object"
+      }
+    },
+    "edit_message": {
+      "annotations": {
+        "destructive_hint": true,
+        "idempotent_hint": true,
+        "open_world_hint": true,
+        "read_only_hint": false,
+        "title": null
+      },
+      "input": {
+        "properties": {
+          "expected_revision": {
+            "title": "Expected Revision",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "message_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Message Ref"
+          },
+          "source_operation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Source Operation Id"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "expected_revision",
+          "idempotency_key"
+        ],
+        "title": "edit_messageArguments",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "edit",
+              "delete_for_me",
+              "delete_for_everyone"
+            ],
+            "type": "string"
+          },
+          "error": {
+            "$ref": "#/$defs/Issue"
+          },
+          "expected_revision": {
+            "type": "string"
+          },
+          "message_ref": {
+            "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
+            "type": "string"
+          },
+          "operation_id": {
+            "type": "string"
+          },
+          "retry_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "rpc_accepted": {
+            "type": "boolean"
+          },
+          "source_operation_id": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "completed",
+              "failed",
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "visibility": {
+            "enum": [
+              "for_me",
+              "for_everyone"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id",
+          "action",
+          "message_ref",
+          "expected_revision",
+          "status",
+          "rpc_accepted"
         ],
         "type": "object"
       }
@@ -3420,6 +3753,9 @@
               },
               {
                 "$ref": "#/$defs/CallbackReceipt"
+              },
+              {
+                "$ref": "#/$defs/ActionReceipt"
               }
             ],
             "title": "Result"
@@ -3629,6 +3965,17 @@
           "error": {
             "$ref": "#/$defs/Issue"
           },
+          "message_action_confirmation": {
+            "enum": [
+              "per_rule",
+              "always",
+              "never"
+            ],
+            "type": "string"
+          },
+          "message_actions_enabled": {
+            "type": "boolean"
+          },
           "mode": {
             "enum": [
               "read_only",
@@ -3682,6 +4029,8 @@
           "require_send_file_confirmation",
           "require_bot_callback_confirmation",
           "require_draft_overwrite_confirmation",
+          "message_actions_enabled",
+          "message_action_confirmation",
           "confirmation_required",
           "confirmation_supported",
           "cooldowns",
@@ -4346,7 +4695,9 @@
                 "enum": [
                   "message",
                   "file",
-                  "callback"
+                  "callback",
+                  "edit",
+                  "delete"
                 ],
                 "type": "string"
               },
@@ -4545,6 +4896,98 @@
         },
         "required": [
           "watches"
+        ],
+        "type": "object"
+      }
+    },
+    "preview_message_action": {
+      "annotations": {
+        "destructive_hint": null,
+        "idempotent_hint": null,
+        "open_world_hint": true,
+        "read_only_hint": true,
+        "title": null
+      },
+      "input": {
+        "properties": {
+          "message_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Message Ref"
+          },
+          "source_operation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Source Operation Id"
+          }
+        },
+        "title": "preview_message_actionArguments",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": false,
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/$defs/AvailableAction"
+            },
+            "type": "array"
+          },
+          "chat_title": {
+            "type": "string"
+          },
+          "chat_type": {
+            "enum": [
+              "private",
+              "group",
+              "channel",
+              "bot",
+              "saved"
+            ],
+            "type": "string"
+          },
+          "message_ref": {
+            "pattern": "^-?[1-9]\\d*:[1-9]\\d*$",
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "sender": {
+            "$ref": "#/$defs/Sender"
+          },
+          "source_operation_id": {
+            "type": "string"
+          },
+          "text_preview": {
+            "type": "string"
+          },
+          "text_truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "message_ref",
+          "chat_title",
+          "chat_type",
+          "text_preview",
+          "text_truncated",
+          "revision",
+          "actions"
         ],
         "type": "object"
       }

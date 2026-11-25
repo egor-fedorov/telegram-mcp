@@ -12,6 +12,7 @@ from typing import Literal
 from platformdirs import user_cache_path, user_config_path, user_data_path
 from pydantic import Field, PrivateAttr, SecretStr, ValidationError, field_validator
 
+from telegram_mcp.domain.message_actions import ActionPolicy
 from telegram_mcp.domain.models import Model, ToolError
 from telegram_mcp.domain.outbound import WritePolicy
 from telegram_mcp.domain.periods import load_zone
@@ -43,6 +44,7 @@ class Settings(Model):
     require_send_file_confirmation: bool = Field(default=True, strict=True)
     require_bot_callback_confirmation: bool = Field(default=True, strict=True)
     require_draft_overwrite_confirmation: bool = Field(default=True, strict=True)
+    message_actions: ActionPolicy = Field(default_factory=ActionPolicy)
     allowed_upload_directories: list[Path] = Field(default_factory=list)
     archive_directory: Path | None = None
     mcp_schema_mode: Literal["compact", "full"] = "compact"
@@ -97,6 +99,7 @@ class Settings(Model):
 
     def write_policy(self) -> WritePolicy:
         return WritePolicy(
+            message_actions=self.message_actions,
             allow_drafts=self.allow_drafts,
             allow_send_messages=self.allow_send_messages,
             allow_send_files=self.allow_send_files,
@@ -215,10 +218,17 @@ def save_settings(settings: Settings, path: Path) -> None:
     data = settings.model_dump(mode="json", exclude_none=True)
     if settings.api_hash:
         data["api_hash"] = settings.api_hash.get_secret_value()
-    text = (
-        "\n".join(f"{key} = {json.dumps(value, ensure_ascii=False)}" for key, value in data.items())
-        + "\n"
-    )
+    actions = data.pop("message_actions")
+    lines = [f"{key} = {json.dumps(value, ensure_ascii=False)}" for key, value in data.items()]
+    lines.extend(["", "[message_actions]", f"confirmation = {json.dumps(actions['confirmation'])}"])
+    for rule in actions["rules"]:
+        lines.append("[[message_actions.rules]]")
+        lines.extend(
+            f"{key} = {json.dumps(value)}"
+            for key, value in rule.items()
+            if value or key == "require_confirmation"
+        )
+    text = "\n".join(lines) + "\n"
     try:
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         fd, temporary = tempfile.mkstemp(prefix=".config-", dir=path.parent)

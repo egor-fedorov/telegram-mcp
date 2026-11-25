@@ -151,7 +151,7 @@ def register(server: MCPServer[None], service: Service, expose: Expose, gate: To
     async def get_send_status(
         operation_id: str | None = None,
         idempotency_key: str | None = None,
-    ) -> Annotated[CallToolResult, dto.SendReceipt | dto.CallbackReceipt]:
+    ) -> Annotated[CallToolResult, dto.SendReceipt | dto.CallbackReceipt | dto.ActionReceipt]:
         """Read this account's MCP receipt in result. Supply operation_id XOR idempotency_key.
 
         Never dispatches or retries. A receipt is not a fresh verification of the message.
