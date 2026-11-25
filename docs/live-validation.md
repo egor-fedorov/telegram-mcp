@@ -9,6 +9,18 @@ Global search is excluded from live validation. The harness also excludes dialog
 catalogs, folders, discovery, similar channels, linked discussions, and reply-chain
 traversal. Global search behavior remains covered by offline tests.
 
+## Testing message actions alongside an installed server
+
+For a pre-release probe using an existing Telegram session, give `build_service` a
+separate `outbound_store=OutboundStore(private_directory / "validation.session")`.
+Use the same private directory throughout receipt lookup and restart checks. A 0.8.1
+server cannot decode edit and deletion receipts written by a newer checkout.
+
+Use disposable messages in an agreed dialog. Record each reference, expected text and
+chosen visibility before opening the MCP forms. Verify the edit by rereading it.
+For deletion, check the sender's view and ask the other participant which labeled
+message remains. Record the outcomes without publishing private identifiers or content.
+
 ## Selected monitoring metadata
 
 `--monitoring` is a separate opt-in mode for one to 40 explicitly approved `--chat`

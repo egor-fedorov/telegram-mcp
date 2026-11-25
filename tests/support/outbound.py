@@ -6,8 +6,11 @@ from dataclasses import dataclass
 
 from telegram_mcp.adapters.config import Settings
 from telegram_mcp.adapters.outbound_store import OutboundStore
+from telegram_mcp.application.outbound_ports import ActionSnapshot
 from telegram_mcp.application.service import Service
 from telegram_mcp.bootstrap import build_service
+from telegram_mcp.domain.changes import content_revision
+from telegram_mcp.domain.message_actions import Action, Target
 from telegram_mcp.domain.models import Chat, Message, MessageRef, ToolError
 from telegram_mcp.domain.outbound import (
     CallbackReceipt,
@@ -22,6 +25,11 @@ from tests.support.fakes import BASE, FakeBackend, FakeClock
 class FakeOutbound:
     def __init__(self):
         self.account = "101"
+        self.action_messages: dict[str, Message] = {}
+        self.action_calls: list[tuple[str, Action, str | None]] = []
+        self.action_error: ToolError | None = None
+        self.folder_ids: set[int] = set()
+        self.supported_actions: set[Action] = {"edit", "delete_for_me", "delete_for_everyone"}
         self.drafts: dict[str, Draft] = {}
         self.sent: dict[int, SendReceipt] = {}
         self.send_calls: list[tuple[int, SendRequest, bytes | None]] = []
@@ -32,6 +40,34 @@ class FakeOutbound:
 
     async def account_id(self) -> str:
         return self.account
+
+    async def action_folders(self, chat_id: str, account: str, wanted: set[int]) -> set[int]:
+        return self.folder_ids & wanted
+
+    async def action_target(self, ref: MessageRef, account: str) -> ActionSnapshot:
+        message = self.action_messages.get(ref.key)
+        if message is None:
+            raise ToolError("MESSAGE_UNAVAILABLE", "Exact message unavailable.")
+        target: Target = "own" if message.outgoing else "private_incoming"
+
+        async def dispatch(action: Action, text: str | None) -> None:
+            self.action_calls.append((ref.key, action, text))
+            if self.action_error is not None:
+                raise self.action_error
+            if action == "edit":
+                assert text is not None
+                message.text = text
+                message.revision = content_revision(message)
+            else:
+                del self.action_messages[ref.key]
+
+        return ActionSnapshot(
+            message.model_copy(deep=True),
+            target,
+            self.supported_actions.copy(),
+            bool(message.attachments),
+            dispatch,
+        )
 
     async def draft(self, chat_id: str) -> Draft:
         return self.drafts.get(chat_id, Draft(chat_id=chat_id, revision="empty")).model_copy(

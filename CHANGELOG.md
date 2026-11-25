@@ -6,6 +6,10 @@ A version entry describes its target artifact. Verify publication on [PyPI](http
 
 ## [Unreleased]
 
+### Message actions
+
+- Preview, edit or delete one permitted message with revision checks, explicit deletion visibility, local confirmation rules and a recoverable operation receipt.
+
 ### Search
 
 - Use `search_messages(include_button_urls=true)` to find posts with links in their buttons, text or webpage preview. Supply selected chats or folders and a bounded date range.

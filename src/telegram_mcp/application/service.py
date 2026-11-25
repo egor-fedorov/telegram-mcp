@@ -26,6 +26,7 @@ from telegram_mcp.application.files import FileService
 from telegram_mcp.application.global_search import GlobalSearchPager
 from telegram_mcp.application.history_export import HistoryExportService
 from telegram_mcp.application.incremental import IncrementalContext
+from telegram_mcp.application.message_actions import MessageActions
 from telegram_mcp.application.message_pager import MessagePager
 from telegram_mcp.application.messages import MessageReader
 from telegram_mcp.application.outbound_access import OutboundContext
@@ -60,6 +61,7 @@ from telegram_mcp.domain.changes import (
     ExportHistoryResult,
 )
 from telegram_mcp.domain.extraction import ExtractionResult
+from telegram_mcp.domain.message_actions import ActionPreview, ActionReceipt, Visibility
 from telegram_mcp.domain.models import (
     AlbumResult,
     ChatPage,
@@ -162,6 +164,7 @@ class Service:
             self._files = FileService(self._outbound, self._attachments)
             self._drafts = DraftService(self._outbound)
             self._journal = OperationJournal(self._outbound)
+            self._actions = MessageActions(self._outbound, self._journal, backend)
             self._inspection = OutboundInspection(self._outbound, self._journal, backend, cursors)
             self._sending = SendService(self._outbound, self._files, self._journal, backend)
             self._callbacks = CallbackService(self._outbound, self._journal, backend)
@@ -169,6 +172,58 @@ class Service:
     @property
     def writes_enabled(self) -> bool:
         return self._write_policy().enabled
+
+    @property
+    def message_actions_enabled(self) -> bool:
+        return bool(self._write_policy().message_actions.rules)
+
+    async def preview_message_action(
+        self, message_ref: str | None = None, source_operation_id: str | None = None
+    ) -> ActionPreview:
+        self._require_outbound()
+        return await self._actions.preview(message_ref, source_operation_id)
+
+    async def edit_message(
+        self,
+        text: str,
+        expected_revision: str,
+        idempotency_key: str,
+        message_ref: str | None = None,
+        source_operation_id: str | None = None,
+        confirm: Confirm | None = None,
+    ) -> ActionReceipt:
+        self._require_outbound()
+        return await self._actions.apply(
+            "edit",
+            expected_revision,
+            idempotency_key,
+            message_ref,
+            source_operation_id,
+            text,
+            confirm,
+        )
+
+    async def delete_message(
+        self,
+        visibility: Visibility,
+        expected_revision: str,
+        idempotency_key: str,
+        message_ref: str | None = None,
+        source_operation_id: str | None = None,
+        confirm: Confirm | None = None,
+    ) -> ActionReceipt:
+        self._require_outbound()
+        if visibility not in ("for_me", "for_everyone"):
+            raise ToolError("INVALID_ARGUMENT", "Choose for_me or for_everyone explicitly.")
+        return await self._actions.apply(
+            "delete_for_me" if visibility == "for_me" else "delete_for_everyone",
+            expected_revision,
+            idempotency_key,
+            message_ref,
+            source_operation_id,
+            None,
+            confirm,
+        )
 
     def _require_outbound(self) -> None:
         if self._outbound is None:
@@ -238,7 +293,7 @@ class Service:
 
     async def get_send_status(
         self, operation_id: str | None = None, idempotency_key: str | None = None
-    ) -> SendReceipt | CallbackReceipt:
+    ) -> SendReceipt | CallbackReceipt | ActionReceipt:
         self._require_outbound()
         return await self._journal.status(operation_id, idempotency_key)
 
@@ -406,7 +461,9 @@ class Service:
             "require_send_file_confirmation": writes.require_send_file_confirmation,
             "require_bot_callback_confirmation": writes.require_bot_callback_confirmation,
             "require_draft_overwrite_confirmation": writes.require_draft_overwrite_confirmation,
-            "confirmation_required": self._write_policy().confirmation_required,
+            "confirmation_required": writes.confirmation_required,
+            "message_actions_enabled": self.message_actions_enabled,
+            "message_action_confirmation": writes.message_actions.confirmation,
             "confirmation_supported": None,
             "cooldowns": cooldowns,
             "allow_all_chats": policy.allow_all_chats,

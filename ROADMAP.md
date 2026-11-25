@@ -23,6 +23,14 @@ After 0.8.1, selected-source link search adds URL buttons for callers that opt i
 and supply a bounded period. This is in the unreleased changelog. Other follow-ups
 are repeat registration of identical files and batched draft retrieval.
 
+Single-message edits and deletions are implemented for the next release. The tools use
+local per-chat or folder rules, current Telegram rights, revision checks and the existing
+operation journal. On 2026-11-25, a selected private two-person dialog verified editing,
+sender-only deletion and revocation for both participants through MCP forms. The sender
+reread the edited text and recovered the action receipts. The other participant confirmed
+the edited text and both deletion visibility choices. Group moderation and channel deletion
+have offline RPC coverage. See [single-message actions](docs/outbound.md#single-message-actions).
+
 ## Milestones
 
 | ID | Status | Outcome |
@@ -363,7 +371,7 @@ and a disposable MCPB's manifest/rebuild/proxy checks with 0.6.5 in its embedded
 
 ## Later decisions
 
-File drafts, OCR and voice transcription, editing/deleting sent messages and
+File drafts, OCR, voice transcription and broader chat
 administration remain separate decisions with explicit permission contracts.
 
 Broader change journals, multi-source exports, saved searches, local text/semantic

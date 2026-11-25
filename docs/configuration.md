@@ -54,6 +54,10 @@ and require a server restart. `configure` preserves them. See
 [outbound workflows](outbound.md#recipient-modes-and-independent-forms) for precedence,
 defaults and the read checks retained by drafts, callbacks and replies.
 
+The local `[message_actions]` table enables previews, edits and single-message deletions
+when at least one rule is configured. Set the selector, target class, action and form
+policy together. See the [configuration example and permissions](outbound.md#single-message-actions).
+
 ## QR login
 
 Available in version 0.6 and later. Stop the session-owning server first:

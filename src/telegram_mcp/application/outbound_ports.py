@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
+from telegram_mcp.domain.message_actions import Action, Target
 from telegram_mcp.domain.models import Message, MessageRef
 from telegram_mcp.domain.outbound import (
     CallbackReceipt,
@@ -18,6 +19,17 @@ from telegram_mcp.domain.outbound import (
 )
 
 Confirm = Callable[[str], Awaitable[bool]]
+
+
+@dataclass(frozen=True)
+class ActionSnapshot:
+    """The dispatch function is bound to the exact peer and message that were inspected."""
+
+    message: Message
+    target: Target
+    supported: set[Action]
+    caption: bool
+    dispatch: Callable[[Action, str | None], Awaitable[None]]
 
 
 @dataclass(frozen=True)
@@ -41,6 +53,8 @@ class ConfirmationPending(Exception):
 
 class OutboundPort(Protocol):
     async def account_id(self) -> str: ...
+    async def action_folders(self, chat_id: str, account: str, wanted: set[int]) -> set[int]: ...
+    async def action_target(self, ref: MessageRef, account: str) -> ActionSnapshot: ...
     async def draft(self, chat_id: str) -> Draft: ...
     async def save_draft(self, chat_id: str, text: str) -> None: ...
     async def send(
@@ -67,6 +81,7 @@ class OutboundStorePort(Protocol):
     async def files(self, account: str) -> list[RegisteredFile]: ...
     async def file(self, account: str, file_id: str) -> tuple[RegisteredFile, bytes]: ...
     async def operation(self, account: str, key: str) -> OutboundOperation | None: ...
+    async def sent_source(self, account: str, ref: MessageRef) -> str | None: ...
     async def lookup_operation(self, account: str, operation_id: str) -> OutboundOperation: ...
     async def save_operation(self, operation: OutboundOperation) -> None: ...
     async def create_operation(self, operation: OutboundOperation) -> OutboundOperation: ...

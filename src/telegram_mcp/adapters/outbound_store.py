@@ -13,7 +13,7 @@ from telegram_mcp.adapters.local_uploads import read_allowed_file
 from telegram_mcp.adapters.outbound_queries import index_values, prepare_indexes, query_operations
 from telegram_mcp.adapters.state_database import open_private_database
 from telegram_mcp.application.outbound_ports import OperationBatch, OperationFilter
-from telegram_mcp.domain.models import ToolError
+from telegram_mcp.domain.models import MessageRef, ToolError
 from telegram_mcp.domain.outbound import Draft, OutboundOperation, RegisteredFile
 
 MAX_FILE = 20 * 1024 * 1024
@@ -186,6 +186,19 @@ class OutboundStore:
                 "SELECT value FROM operations WHERE account=? AND key=?", (account, key)
             ).fetchone()
             return OutboundOperation.model_validate_json(row[0]) if row else None
+
+        return await self._run(read)
+
+    async def sent_source(self, account: str, ref: MessageRef) -> str | None:
+        def read(db: sqlite3.Connection) -> str | None:
+            row = db.execute(
+                "SELECT id FROM operations WHERE account=? AND chat_id=? "
+                "AND kind IN ('message','file') AND status='sent' "
+                "AND json_extract(value, '$.receipt.message_ref.chat_id')=? "
+                "AND json_extract(value, '$.receipt.message_ref.message_id')=? LIMIT 1",
+                (account, ref.chat_id, ref.chat_id, ref.message_id),
+            ).fetchone()
+            return row[0] if row else None
 
         return await self._run(read)
 
