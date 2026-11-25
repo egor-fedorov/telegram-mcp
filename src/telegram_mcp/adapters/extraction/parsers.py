@@ -241,7 +241,7 @@ def extract_document(data: bytes) -> ExtractedDocument:
     from docx.opc.exceptions import OpcError
 
     # lxml's binary extension does not ship type stubs.
-    from lxml import etree  # ty: ignore[unresolved-import]
+    from lxml import etree  # ty: ignore[import-not-found]
     from pypdf.errors import FileNotDecryptedError, LimitReachedError, PyPdfError
 
     try:
