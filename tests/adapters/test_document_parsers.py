@@ -273,7 +273,7 @@ def test_docx_budgets_count_actual_decompressed_bytes(
 
 
 def test_xml_memory_error_is_not_reported_as_document_damage(monkeypatch) -> None:
-    from lxml import etree  # ty: ignore[unresolved-import]
+    from lxml import etree  # ty: ignore[import-not-found]
 
     error = etree.XMLSyntaxError("private-canary", 0, 0, 0)
     error.error_log = [SimpleNamespace(type=etree.ErrorTypes.ERR_NO_MEMORY)]
