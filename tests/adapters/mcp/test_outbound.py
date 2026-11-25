@@ -1,6 +1,5 @@
 """MCP-native confirmation, capability reporting, and non-blocking human waits."""
 
-import asyncio
 import json
 from types import SimpleNamespace
 from typing import Any, cast
@@ -185,23 +184,21 @@ async def test_client_must_explicitly_approve(tmp_path, mode, answer):
 
 
 async def test_confirmation_releases_tool_capacity_for_reads(tmp_path):
-    entered, release = asyncio.Event(), asyncio.Event()
+    status = None
 
     async def confirm(context, params):
-        entered.set()
-        await release.wait()
-        return ElicitResult(action="accept", content={"approve": True})
+        nonlocal status
+        status = await context.session.call_tool("get_status", {})
+        return ElicitResult(action="accept", content={"approve": not status.is_error})
 
     async with outbound_fixture(tmp_path) as env:
-        server = create_server(env.service, owns_service=False, gate=ToolCallGate(capacity=1))
+        gate = ToolCallGate(capacity=1, timeout_seconds=1)
+        server = create_server(env.service, owns_service=False, gate=gate)
         async with Client(server, mode="legacy", elicitation_callback=confirm) as client:
-            task = asyncio.create_task(
-                client.call_tool(
-                    "send_message", {"chat_ref": "1", "text": "One", "idempotency_key": "key"}
-                )
+            result = await client.call_tool(
+                "send_message", {"chat_ref": "1", "text": "One", "idempotency_key": "key"}
             )
-            await asyncio.wait_for(entered.wait(), 2)
-            status = await asyncio.wait_for(client.call_tool("get_status", {}), 2)
-            assert status.structured_content["authorized"] is True
-            release.set()
-            assert (await task).structured_content["status"] == "sent"
+        assert status is not None, result
+        assert not status.is_error, status.model_dump_json()
+        assert status.structured_content["authorized"] is True
+        assert result.structured_content["status"] == "sent", result
