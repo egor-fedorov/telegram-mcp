@@ -32,8 +32,9 @@ the edited text and both deletion visibility choices. Group moderation and chann
 have offline RPC coverage. See [single-message actions](docs/outbound.md#single-message-actions)
 and the [0.9.0 validation record](docs/validation-0.9.0.md).
 
-The confirmation concurrency test now reads server status from the open MCP form
-before approving a send, so the check tolerates slow startup on Windows runners.
+Outbound tests check server status while a confirmation form is open and inspect
+the journal during dispatch. A simulated interruption before the receipt is saved
+verifies that reopening the journal reports an unknown outcome.
 
 ## Milestones
 
